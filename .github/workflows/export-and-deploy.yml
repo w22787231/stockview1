@@ -66,14 +66,28 @@ jobs:
           cd engine
           python export_macro.py
 
+      - name: Export per-stock detail (top names per pool)
+        # 先限各池主表 Top N，避免一次跑全 1700 檔(會很久)。要擴大改下面數字/池。
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_stock.py --from-pool tw150 40
+          python export_stock.py --from-pool ndx100 40
+          python export_stock.py --from-pool sp500 40
+
       - name: Stage web output
         run: |
           mkdir -p public
           cp -r web/* public/
           mkdir -p public/data
           cp data/*.json public/data/
+          # 個股詳情在 data/stock/ 子目錄，整包複製
+          if [ -d data/stock ]; then mkdir -p public/data/stock && cp data/stock/*.json public/data/stock/; fi
           echo "Built files:"
           ls -la public public/data
+          ls -la public/data/stock || true
 
       - name: Ensure Cloudflare Pages project exists
         # 專案不存在才建立；已存在就靜默跳過（不再讓 GitHub 顯示假紅叉）。

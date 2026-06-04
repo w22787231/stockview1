@@ -107,6 +107,8 @@
     text-align:right;font-size:11px;letter-spacing:.4px;z-index:1}
   th:first-child,td:first-child{text-align:right;color:var(--ink3);width:38px}
   td.sym{text-align:left;color:var(--ink);font-weight:700}
+  td.sym.clickable{cursor:pointer}
+  td.sym.clickable:hover{color:var(--blue);text-decoration:underline}
   td.sym .nm{color:var(--ink2);font-weight:400;margin-left:6px;font-size:11.5px}
   tbody tr:nth-child(even) td{background:#fafbfd}
   tr:hover td{background:#eef3fb}
@@ -166,7 +168,41 @@
   .skel{display:inline-block;height:12px;width:60px;background:linear-gradient(90deg,#eef1f6,#e2e7f0,#eef1f6);
     background-size:200% 100%;animation:sk 1.2s infinite;border-radius:3px}
   @keyframes sk{to{background-position:-200% 0}}
+
+  /* 個股詳情頁 */
+  .stk-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .stk-head .ssym{font-size:26px;font-weight:820;letter-spacing:-.5px}
+  .stk-head .snm{font-size:14px;color:var(--ink2)}
+  .stk-head .ssec{font-size:11.5px;color:var(--ink3);border:1px solid var(--line);
+    background:var(--panel2);padding:2px 8px;border-radius:6px}
+  .stk-price{font-family:var(--mono);font-size:30px;font-weight:780;margin:2px 0 2px}
+  .stk-metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin:14px 0}
+  .stk-metrics .mc{border:1px solid var(--line);border-radius:9px;padding:8px 11px;background:var(--panel)}
+  .stk-metrics .mc .k{font-size:10.5px;color:var(--ink3);margin-bottom:2px}
+  .stk-metrics .mc .v{font-family:var(--mono);font-size:15px;font-weight:700}
+  .rating{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:8px;font-size:13px;
+    font-weight:700;margin:2px 0 6px}
+  .rating.r強{background:#e6f6ec;color:var(--green)} .rating.r中{background:#fff5db;color:var(--amber)}
+  .rating.r弱{background:#fdf0f3;color:var(--red)}
+  .notes-list{display:flex;flex-direction:column;gap:7px}
+  .note-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-left-width:4px;
+    border-radius:8px;padding:8px 12px;background:var(--panel);font-size:12.5px}
+  .note-row .ntag{font-family:var(--mono);font-size:11px;font-weight:700;background:var(--ink);color:#fff;
+    padding:2px 8px;border-radius:5px;flex:none;min-width:42px;text-align:center}
+  .note-row.good{border-left-color:var(--green)} .note-row.good{background:#f3fbf6}
+  .note-row.mid{border-left-color:var(--amber);background:#fffdf5}
+  .note-row.warn{border-left-color:var(--red);background:#fef5f7}
+  #chart{width:100%;height:360px;border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    box-shadow:var(--shadow);overflow:hidden}
+  .chart-legend{font-family:var(--mono);font-size:11.5px;color:var(--ink3);margin:6px 2px 0;display:flex;gap:16px}
+  .chart-legend .lg{display:inline-flex;align-items:center;gap:5px}
+  .chart-legend .sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .backbtn{font-size:13px;color:var(--blue);cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+    margin-bottom:10px;font-weight:600}
+  .backbtn:hover{text-decoration:underline}
+  .fin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
 </style>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -239,7 +275,7 @@ const volrCls = n => n==null?"dim":(n>=1.5?"pos":(n<0.7?"neg":"dim"));
 const esc = s => (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 
 function symCell(sym,name){
-  return '<td class="sym">'+esc(sym)+(name?'<span class="nm">'+esc(name)+'</span>':'')+'</td>';
+  return '<td class="sym clickable" data-stk="'+esc(sym)+'">'+esc(sym)+(name?'<span class="nm">'+esc(name)+'</span>':'')+'</td>';
 }
 function flagCell(f){
   const map={up:'<span class="up">▲加速</span>',down:'<span class="down">▼退溫</span>',flat:'<span class="flat">持平</span>'};
@@ -322,6 +358,13 @@ document.addEventListener("click", function(e){
   else { SORT_STATE[tid] = {key: key, dir: 'desc'}; }   // 第一次點：降序
   const wrap = document.getElementById(tid);
   if(wrap) wrap.innerHTML = tableInner(tid);
+});
+
+// 全域委派：點代號 → 開個股詳情
+document.addEventListener("click", function(e){
+  const cell = e.target.closest && e.target.closest("td.sym.clickable");
+  if(!cell || !cell.dataset.stk) return;
+  if(typeof openStock==="function") openStock(cell.dataset.stk);
 });
 
 // ── 各表欄位定義 ──
@@ -569,6 +612,126 @@ async function loadMacro(){
   }
 }
 
+// ── 個股詳情頁 ──
+let STOCK_IDX = null;   // {syms:[...]} 哪些股有詳情
+async function loadStockIndex(){
+  if(STOCK_IDX) return STOCK_IDX;
+  try{ STOCK_IDX = await (await fetch("data/stock/_index.json?t="+Date.now(),{cache:"no-store"})).json(); }
+  catch(e){ STOCK_IDX = {syms:[]}; }
+  return STOCK_IDX;
+}
+function stkFile(sym){ return "data/stock/"+sym.replace(/\./g,"_").toUpperCase()+".json"; }
+function bigNum(n){
+  if(n==null) return "–";
+  const a=Math.abs(n);
+  if(a>=1e12) return (n/1e12).toFixed(2)+"T";
+  if(a>=1e9)  return (n/1e9).toFixed(2)+"B";
+  if(a>=1e6)  return (n/1e6).toFixed(2)+"M";
+  return fmtNum(n,0);
+}
+function pct(n){ return n==null?"–":(n*100).toFixed(1)+"%"; }
+
+function metricCard(k,v){ return '<div class="mc"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div></div>'; }
+
+function stmtTable(title,st){
+  if(!st) return '<div class="diff card"><h3>'+esc(title)+'</h3><div class="desc">（無資料）</div></div>';
+  const head='<th style="text-align:left">'+esc(title)+'</th>'+st.periods.map(p=>'<th>'+esc(p)+'</th>').join("");
+  const body=st.rows.map(r=>'<tr><td class="sym">'+esc(r.label)+'</td>'+
+    r.vals.map(v=>'<td class="'+(v!=null&&v<0?"neg":"dim")+'">'+bigNum(v)+'</td>').join("")+'</tr>').join("");
+  return '<div class="tbl-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function renderStock(d){
+  const m=d.metrics||{};
+  const chg = (m.price!=null&&d.candles.length>1) ? (m.price/d.candles[d.candles.length-2].c-1)*100 : null;
+  const chgc = chg==null?"dim":(chg>0?"pos":(chg<0?"neg":"dim"));
+  const nm = d.name_zh ? d.name_zh : (m.name||"");
+  $("#content").innerHTML =
+    '<div class="backbtn" id="backBtn">← 返回</div>'+
+    '<div class="stk-head"><span class="ssym">'+esc(d.sym)+'</span>'+
+      (nm?'<span class="snm">'+esc(nm)+'</span>':'')+
+      (m.sector?'<span class="ssec">'+esc(m.sector)+(m.industry?' · '+esc(m.industry):'')+'</span>':'')+'</div>'+
+    '<div class="stk-price '+chgc+'">'+(m.price!=null?fmtNum(m.price,2):"–")+
+      (chg!=null?' <span style="font-size:16px">'+sgn(chg,2)+'%</span>':'')+'</div>'+
+    '<div class="stk-metrics">'+
+      metricCard("市值", bigNum(m.mktcap))+
+      metricCard("PE", m.pe!=null?m.pe.toFixed(1):"–")+
+      metricCard("Forward PE", m.forwardPe!=null?m.forwardPe.toFixed(1):"–")+
+      metricCard("PS", m.ps!=null?m.ps.toFixed(1):"–")+
+      metricCard("PB", m.pb!=null?m.pb.toFixed(1):"–")+
+      metricCard("ROE", pct(m.roe))+
+      metricCard("淨利率", pct(m.profit_margin))+
+      metricCard("營收成長", pct(m.rev_growth))+
+      metricCard("52週高", m.high52!=null?fmtNum(m.high52,2):"–")+
+      metricCard("52週低", m.low52!=null?fmtNum(m.low52,2):"–")+
+    '</div>'+
+    '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA20/MA60 · 近1年</span></div>'+
+      '<div id="chart"></div>'+
+      '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#16a34a"></span>MA20</span>'+
+      '<span class="lg"><span class="sw" style="background:#2563eb"></span>MA60</span>'+
+      '<span class="lg">綠漲紅跌</span></div></section>'+
+    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+
+      '<div class="rating r'+esc(d.overall)+'">整體評等 '+esc(d.overall)+' — '+
+        (d.overall==="強"?"基本面強健":(d.overall==="中"?"基本面中性，需配合題材或技術面":"基本面偏弱，留意"))+'</div>'+
+      '<div class="notes-list">'+(d.notes||[]).map(n=>'<div class="note-row '+esc(n.level)+'">'+
+        '<span class="ntag">'+esc(n.tag)+'</span><span>'+esc(n.text)+'</span></div>').join("")+'</div></section>'+
+    '<section><div class="sec-head"><h2>財務三表</h2><span class="tag">最近數期</span></div>'+
+      '<div class="fin-grid">'+
+        stmtTable("損益表", d.statements&&d.statements.income)+
+        stmtTable("資產負債表", d.statements&&d.statements.balance)+
+        stmtTable("現金流量表", d.statements&&d.statements.cashflow)+
+      '</div>'+
+      '<div class="legend">數字為各期值(T兆/B十億/M百萬)，紅字為負。來源 yfinance，年報為主。</div></section>';
+
+  $("#backBtn").onclick = ()=> switchView(VIEW==="macro"?"macro":"trend");
+  drawChart(d);
+}
+
+function drawChart(d){
+  const el=document.getElementById("chart");
+  if(!el || !window.LightweightCharts){ if(el) el.innerHTML='<div class="loading-screen">圖表庫載入失敗</div>'; return; }
+  const chart=LightweightCharts.createChart(el,{
+    layout:{background:{color:"#ffffff"},textColor:"#5a6678"},
+    grid:{vertLines:{color:"#eef1f6"},horzLines:{color:"#eef1f6"}},
+    rightPriceScale:{borderColor:"#e3e8f0"}, timeScale:{borderColor:"#e3e8f0"},
+    crosshair:{mode:0}, height:360,
+  });
+  const cs=chart.addCandlestickSeries({upColor:"#16a34a",downColor:"#e11d48",
+    borderUpColor:"#16a34a",borderDownColor:"#e11d48",wickUpColor:"#16a34a",wickDownColor:"#e11d48"});
+  cs.setData(d.candles.filter(c=>c.o!=null).map(c=>({time:c.t,open:c.o,high:c.h,low:c.l,close:c.c})));
+  const ma20=chart.addLineSeries({color:"#16a34a",lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
+  ma20.setData((d.ma.ma20||[]).filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
+  const ma60=chart.addLineSeries({color:"#2563eb",lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
+  ma60.setData((d.ma.ma60||[]).filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
+  chart.timeScale().fitContent();
+  // 視窗縮放
+  const ro=()=>chart.applyOptions({width:el.clientWidth});
+  ro(); window.addEventListener("resize",ro);
+}
+
+async function openStock(sym){
+  await loadStockIndex();
+  $("#content").innerHTML = '<div class="loading-screen">載入 '+esc(sym)+' 詳情 …</div>';
+  document.querySelector(".search").style.display="flex";
+  $(".toolbar").style.display="none";
+  document.querySelectorAll(".mtab").forEach(t=>t.classList.remove("active"));
+  try{
+    const res=await fetch(stkFile(sym)+"?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const d=await res.json();
+    $("#meta").innerHTML='<div><b>'+esc(d.sym)+'</b> 個股詳情</div><div><b>更新</b> '+esc(fmtTime(d.generated_at))+'</div>';
+    $("#poolNote").innerHTML="";
+    renderStock(d);
+  }catch(e){
+    const has=(STOCK_IDX&&STOCK_IDX.syms||[]);
+    $("#content").innerHTML='<div class="backbtn" id="backBtn">← 返回</div>'+
+      '<div class="loading-screen">⚠️「'+esc(sym)+'」目前沒有詳情資料。<br>'+
+      '個股詳情僅涵蓋已產生的清單('+has.length+' 檔)，未涵蓋全市場。<br>'+
+      '可在上方搜尋有詳情的代號，或回榜單頁。</div>';
+    const b=document.getElementById("backBtn"); if(b) b.onclick=()=>switchView("trend");
+  }
+}
+
 // ── 主分頁切換 ──
 let VIEW = "trend";
 function switchView(v){
@@ -576,7 +739,7 @@ function switchView(v){
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   // 池分頁列只在趨勢頁顯示
   $(".toolbar").style.display = (v==="trend") ? "flex" : "none";
-  document.querySelector(".search").style.display = (v==="trend") ? "flex" : "none";
+  document.querySelector(".search").style.display = "flex";
   if(v==="macro") loadMacro(); else load();
 }
 document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
@@ -603,26 +766,27 @@ async function load(){
 }
 
 // ── 搜尋代號：高亮主表該檔並捲動過去 ──
-function doSearch(){
+async function doSearch(){
   const q = ($("#searchInput").value||"").trim().toUpperCase();
-  // 先清掉舊高亮
-  document.querySelectorAll("tr.hit").forEach(tr=>tr.classList.remove("hit"));
   if(!q) return;
-  // 在所有表格找 data-sym 開頭符合的列（主表優先）
-  const rows = Array.from(document.querySelectorAll("tr[data-sym]"));
-  const exact = rows.filter(tr=>tr.dataset.sym.toUpperCase()===q
-    || tr.dataset.sym.toUpperCase()===q+".TW" || tr.dataset.sym.toUpperCase()===q+".TWO");
-  const partial = rows.filter(tr=>tr.dataset.sym.toUpperCase().startsWith(q));
-  const hits = exact.length ? exact : partial;
-  if(!hits.length){
-    $("#searchInput").style.borderColor="";
-    const b=$("#banner"); b.className="banner show";
-    b.style.color="var(--ink2)"; b.style.borderColor="var(--line)"; b.style.background="var(--panel2)";
-    b.innerHTML="🔍 本池找不到「"+esc(q)+"」。試試其他池(上方分頁)，或確認代號(台股輸 2330 即可)。";
-    return;
-  }
-  hits.forEach(tr=>tr.classList.add("hit"));
-  hits[0].scrollIntoView({behavior:"smooth", block:"center"});
+  await loadStockIndex();
+  const syms = (STOCK_IDX&&STOCK_IDX.syms)||[];
+  // 解析：精確 > 加台股後綴 > 開頭符合
+  let target = null;
+  if(syms.includes(q)) target=q;
+  else if(syms.includes(q+".TW")) target=q+".TW";
+  else if(syms.includes(q+".TWO")) target=q+".TWO";
+  else { const p=syms.find(s=>s.startsWith(q)); if(p) target=p; }
+  if(target){ openStock(target); return; }
+  // 沒詳情 → 退而求其次：在當前榜單高亮該列
+  document.querySelectorAll("tr.hit").forEach(tr=>tr.classList.remove("hit"));
+  const rows=Array.from(document.querySelectorAll("tr[data-sym]"));
+  const hit=rows.find(tr=>{const s=tr.dataset.sym.toUpperCase();return s===q||s===q+".TW"||s===q+".TWO"||s.startsWith(q);});
+  const b=$("#banner"); b.className="banner show";
+  b.style.color="var(--ink2)"; b.style.borderColor="var(--line)"; b.style.background="var(--panel2)";
+  if(hit){ hit.classList.add("hit"); hit.scrollIntoView({behavior:"smooth",block:"center"});
+    b.innerHTML="🔍「"+esc(q)+"」尚無個股詳情，已在榜單中高亮。詳情僅涵蓋已產生的清單。"; }
+  else b.innerHTML="🔍 找不到「"+esc(q)+"」。個股詳情僅涵蓋已產生清單("+syms.length+"檔)；榜單搜尋請先切到對應池。";
 }
 const _si = $("#searchInput");
 if(_si){

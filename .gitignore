@@ -1,0 +1,11 @@
+# 本地產生的資料（CI 會在雲端重新產生並部署，不需 commit）
+/data/*.json
+/web/data/*.json
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# 系統
+.DS_Store
+Thumbs.db

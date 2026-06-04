@@ -1,0 +1,75 @@
+name: export-and-deploy
+
+# 跑 trend 引擎 → 產生 5 池 JSON → 部署到 Cloudflare Pages。
+#
+# 觸發方式：
+#   1. schedule   — 每日定時自動更新（見下方 cron，UTC 時間）。
+#   2. workflow_dispatch — 在 GitHub Actions 頁面手動按「Run workflow」。
+#   3. repository_dispatch (event_type: refresh-data)
+#                 — 網頁「🔄 更新資料」按鈕透過 GitHub API 觸發。
+#
+# 需要的 Secrets（repo Settings → Secrets and variables → Actions）：
+#   CLOUDFLARE_API_TOKEN   — Cloudflare API token（Pages:Edit 權限）
+#   CLOUDFLARE_ACCOUNT_ID  — Cloudflare 帳號 ID
+# 以及一個 Variable（非 secret）：
+#   CF_PAGES_PROJECT       — Cloudflare Pages 專案名稱（例: adr-trend）
+
+on:
+  schedule:
+    # 台股收盤 13:30 (UTC+8) → 05:30 UTC；美股收盤 16:00 ET。
+    # 取兩個時間各跑一次，確保台美都拿到當日收盤。可自行增減。
+    - cron: "30 6 * * 1-5"    # 14:30 台北，台股收盤後
+    - cron: "30 21 * * 1-5"   # 美東 16:30/17:30(夏令)，美股收盤後
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: [refresh-data]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: export-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas
+
+      - name: Export all pools to JSON
+        env:
+          PYTHONUTF8: "1"            # 關鍵：讓引擎以 UTF-8 讀原始碼，中文趨勢字串才正確
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"             # 關閉 ANSI 顏色（JSON 不需要）
+        run: |
+          cd engine
+          python export_json.py all 50
+
+      - name: Stage web output
+        run: |
+          mkdir -p public
+          cp -r web/* public/
+          mkdir -p public/data
+          cp data/*.json public/data/
+          echo "Built files:"
+          ls -la public public/data
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR Trend Screener · 趨勢效率動能榜</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#121722; --panel2:#0f131c; --line:#1e2636;
+    --ink:#e6edf6; --ink2:#9aa7b8; --ink3:#5e6b7e;
+    --green:#27d796; --red:#ff5d6c; --amber:#ffc24b; --blue:#5aa0ff;
+    --accent:#27d796; --mono:'SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif;
+    font-feature-settings:"tnum";-webkit-font-smoothing:antialiased}
+  a{color:var(--blue)}
+  .wrap{max-width:1280px;margin:0 auto;padding:24px 20px 80px}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;
+    gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:6px}
+  .title{display:flex;flex-direction:column;gap:4px}
+  .title h1{margin:0;font-size:22px;letter-spacing:.3px;font-weight:680}
+  .title h1 .dot{color:var(--accent)}
+  .title .sub{color:var(--ink2);font-size:13px}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--ink3);text-align:right;line-height:1.7}
+  .meta b{color:var(--ink2);font-weight:600}
+
+  .toolbar{display:flex;align-items:center;justify-content:space-between;
+    gap:12px;flex-wrap:wrap;margin:18px 0 14px}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tab{font-family:var(--mono);font-size:13px;padding:7px 14px;border-radius:8px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--ink2);
+    cursor:pointer;transition:.12s;letter-spacing:.5px}
+  .tab:hover{color:var(--ink);border-color:#2c3650}
+  .tab.active{background:var(--accent);color:#04130c;border-color:var(--accent);font-weight:700}
+  .tab .cur{opacity:.6;font-size:11px;margin-left:5px}
+
+  .btn{font-family:var(--mono);font-size:13px;padding:8px 16px;border-radius:8px;
+    border:1px solid #2c3650;background:linear-gradient(180deg,#18203040,#0f131c);
+    color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:.12s}
+  .btn:hover{border-color:var(--accent);color:#fff}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn .spin{width:13px;height:13px;border:2px solid #ffffff30;border-top-color:var(--accent);
+    border-radius:50%;animation:sp .7s linear infinite;display:none}
+  .btn.loading .spin{display:inline-block}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .note{font-size:12px;color:var(--ink3);margin:2px 0 18px;line-height:1.6}
+  .banner{background:#1a1410;border:1px solid #4a3416;color:var(--amber);
+    padding:10px 14px;border-radius:8px;font-size:13px;margin:12px 0;display:none}
+  .banner.show{display:block}
+
+  section{margin:26px 0}
+  .sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+  .sec-head h2{margin:0;font-size:15px;font-weight:650;letter-spacing:.3px}
+  .sec-head .tag{font-family:var(--mono);font-size:11px;color:var(--ink3);
+    border:1px solid var(--line);padding:2px 7px;border-radius:5px}
+  .sec-head .hint{color:var(--ink3);font-size:12px}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+  table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px}
+  th,td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--panel2)}
+  th{position:sticky;top:0;background:var(--panel2);color:var(--ink2);font-weight:600;
+    text-align:right;font-size:11px;letter-spacing:.4px;z-index:1}
+  th:first-child,td:first-child{text-align:right;color:var(--ink3);width:38px}
+  td.sym{text-align:left;color:var(--ink);font-weight:600}
+  td.sym .nm{color:var(--ink2);font-weight:400;margin-left:6px;font-size:11.5px}
+  tr:hover td{background:#161d2b}
+  tr:last-child td{border-bottom:none}
+  .pos{color:var(--green)} .neg{color:var(--red)} .dim{color:var(--ink3)}
+  .up{color:var(--green)} .down{color:var(--red)} .flat{color:var(--ink3)}
+  .badge{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600}
+  .badge.in{background:#10271d;color:var(--green)} .badge.add{background:#2a2410;color:var(--amber)}
+  .bar{display:inline-block;height:8px;border-radius:2px;background:var(--accent);vertical-align:middle;margin-left:6px;opacity:.55}
+
+  .diff{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:4px}
+  .diff .card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel)}
+  .diff .card h3{margin:0 0 6px;font-size:13px;font-family:var(--mono)}
+  .diff .both h3{color:var(--green)} .diff .onlya h3{color:var(--blue)} .diff .onlyb h3{color:var(--amber)}
+  .diff .card .desc{color:var(--ink3);font-size:11.5px;margin-bottom:8px;line-height:1.5}
+  .diff .card .syms{font-family:var(--mono);font-size:12.5px;color:var(--ink);line-height:1.8;word-break:break-word}
+
+  .legend{color:var(--ink3);font-size:11.5px;line-height:1.7;margin-top:8px;
+    border-left:2px solid var(--line);padding-left:12px}
+  .loading-screen{text-align:center;padding:80px 0;color:var(--ink3);font-family:var(--mono)}
+  .fail{color:var(--red);font-size:12px;font-family:var(--mono);margin-top:8px}
+  footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);
+    color:var(--ink3);font-size:12px;line-height:1.8}
+  .skel{display:inline-block;height:12px;width:60px;background:linear-gradient(90deg,#1a2130,#222c40,#1a2130);
+    background-size:200% 100%;animation:sk 1.2s infinite;border-radius:3px}
+  @keyframes sk{to{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">
+      <h1>ADR Trend Screener<span class="dot">.</span></h1>
+      <div class="sub">趨勢效率動能榜 · 漲幅÷振幅，看「真的在漲、漲得乾不乾淨」</div>
+    </div>
+    <div class="meta" id="meta">
+      <div><b>資料</b> <span class="skel"></span></div>
+      <div><b>更新</b> <span class="skel"></span></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" id="tabs"></div>
+    <button class="btn" id="refreshBtn" title="觸發雲端重抓最新資料">
+      <span class="spin"></span><span id="refreshLabel">🔄 更新資料</span>
+    </button>
+  </div>
+  <div class="note" id="poolNote"></div>
+  <div class="banner" id="banner"></div>
+
+  <div id="content"><div class="loading-screen">載入中 …</div></div>
+
+  <footer>
+    <div>口徑：效率N = N日漲幅% / (ADRN% × N)。&gt;0.4 單向強漲(趨勢盤)；0.15–0.4 震盪偏多；&lt;0.15 高震盪沒淨幅(白跳)；&lt;0 回檔。</div>
+    <div>5日評分(0–100) = 5日漲幅40% + 效率5(35%) + 加速25%。Score = ADR20% × avg$Vol/1e6，<b>跨幣別不可比</b>(美股USD/台股TWD)。</div>
+    <div>來源 yfinance 日線快照。非真·全市場掃描，僅在股票池清單內排序。靜態快照會過時，按「更新資料」觸發雲端重抓。</div>
+  </footer>
+</div>
+
+<script>
+// ── 設定 ─────────────────────────────────────────────
+// 部署後把這兩個填上，啟用「更新資料」按鈕（見 DEPLOY.md）。留空則按鈕只提示手動更新。
+const GH_OWNER = "";        // 例: "yourname"
+const GH_REPO  = "";        // 例: "adr-trend-web"
+// 觸發用的細粒度 token。⚠️ 公開站把 token 寫死在前端等於公開它，風險見 DEPLOY.md。
+// 預設留空 → 按鈕改為「請到 Actions 手動跑」，最安全。
+const GH_DISPATCH_TOKEN = "";
+
+const POOLS = ["tw150","ndx100","sp500","sp400","sp600"];
+let current = location.hash.replace("#","") || "tw150";
+if(!POOLS.includes(current)) current = "tw150";
+
+const $ = s => document.querySelector(s);
+const fmtNum = (n,d=0)=> n==null?"–":Number(n).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const sgn = (n,d=2)=> n==null?"–":(n>=0?"+":"")+Number(n).toFixed(d);
+const cls = n => n==null?"dim":(n>0?"pos":(n<0?"neg":"dim"));
+const dvfmt = n => n==null?"–":"$"+fmtNum(n/1e6,0)+"M";
+const esc = s => (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function symCell(sym,name){
+  return '<td class="sym">'+esc(sym)+(name?'<span class="nm">'+esc(name)+'</span>':'')+'</td>';
+}
+function flagCell(f){
+  const map={up:'<span class="up">▲加速</span>',down:'<span class="down">▼退溫</span>',flat:'<span class="flat">持平</span>'};
+  return '<td>'+(map[f]||'–')+'</td>';
+}
+
+function renderTabs(idx){
+  const map={}; (idx&&idx.pools||[]).forEach(p=>map[p.pool]=p);
+  $("#tabs").innerHTML = POOLS.map(p=>{
+    const info=map[p]; const cur=info?(info.currencies||[]).join("/"):"";
+    return '<button class="tab '+(p===current?"active":"")+'" data-pool="'+p+'">'+p.toUpperCase()+(cur?'<span class="cur">'+cur+'</span>':'')+'</button>';
+  }).join("");
+  document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+    current=t.dataset.pool; location.hash=current;
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+    load();
+  });
+}
+
+function mainTable(rows){
+  const head=["#","代號/名稱","效率3","效率5","效率10","效率20","5日漲%","5日評分","ADR5%","ADR10%","ADR20%","5-20差","avg$Vol","Score","單向性"];
+  const maxSc=Math.max.apply(null,rows.map(r=>r.sc5||0).concat([1]));
+  const body=rows.map(r=>'<tr>'+
+    '<td>'+r.rank+'</td>'+symCell(r.sym,r.name)+
+    '<td class="'+cls(r.e3)+'">'+sgn(r.e3)+'</td><td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'+
+    '<td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
+    '<td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'+
+    '<td>'+fmtNum(r.sc5)+'<span class="bar" style="width:'+Math.round((r.sc5||0)/maxSc*34)+'px"></span></td>'+
+    '<td class="dim">'+fmtNum(r.a5,1)+'</td><td class="dim">'+fmtNum(r.a10,1)+'</td><td class="dim">'+fmtNum(r.a20,1)+'</td>'+
+    '<td class="'+cls(r.ad520)+'">'+sgn(r.ad520,1)+'</td>'+
+    '<td class="dim">'+dvfmt(r.dv)+'</td><td>'+fmtNum(r.score)+'</td>'+
+    '<td style="text-align:left" class="dim">'+esc(r.trend)+'</td></tr>').join("");
+  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function crossTable(rows){
+  if(!rows.length) return '<div class="note">（全池無 5日評分≥80 者）</div>';
+  const head=["#","代號/名稱","5日評分","5日漲%","效率5","效率20","ADR20%","avg$Vol","Score","範圍","單向性"];
+  const body=rows.map(r=>'<tr>'+
+    '<td>'+r.rank+'</td>'+symCell(r.sym,r.name)+
+    '<td>'+fmtNum(r.sc5)+'</td><td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'+
+    '<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
+    '<td class="dim">'+fmtNum(r.a20,1)+'</td><td class="dim">'+dvfmt(r.dv)+'</td><td>'+fmtNum(r.score)+'</td>'+
+    '<td>'+(r.scope==="in_top"?'<span class="badge in">Top內</span>':'<span class="badge add">補進</span>')+'</td>'+
+    '<td style="text-align:left" class="dim">'+esc(r.trend)+'</td></tr>').join("");
+  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function abTable(rows,kind){
+  let head,body;
+  if(kind==="A"){
+    head=["#","代號/名稱","效率5","效率20","A(5-20)"];
+    body=rows.map((r,i)=>'<tr><td>'+(i+1)+'</td>'+symCell(r.sym,r.name)+
+      '<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
+      '<td class="'+cls(r.A)+'">'+sgn(r.A)+'</td></tr>').join("");
+  }else{
+    head=["#","代號/名稱","效率5","效率10","效率20","B"];
+    body=rows.map((r,i)=>'<tr><td>'+(i+1)+'</td>'+symCell(r.sym,r.name)+
+      '<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td><td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td>'+
+      '<td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td><td class="'+cls(r.B)+'">'+sgn(r.B)+'</td></tr>').join("");
+  }
+  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function e3Table(rows){
+  const head=["#","代號/名稱","效率3","效率5","效率10","效率20","3vs5","3vs10"];
+  const body=rows.map((r,i)=>'<tr><td>'+(i+1)+'</td>'+symCell(r.sym,r.name)+
+    '<td class="'+cls(r.e3)+'">'+sgn(r.e3)+'</td><td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'+
+    '<td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
+    flagCell(r.flag_3v5)+flagCell(r.flag_3v10)+'</tr>').join("");
+  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function diffCards(d){
+  const j = a => a&&a.length? a.map(esc).join("、") : "（無）";
+  return '<div class="diff">'+
+    '<div class="card both"><h3>共同 · 最確定剛轉強</h3>'+
+      '<div class="desc">A、B 都入榜＝又乾淨又剛加速。</div><div class="syms">'+j(d.both)+'</div></div>'+
+    '<div class="card onlya"><h3>僅 A · 穩定強</h3>'+
+      '<div class="desc">5 與 20 都強但加速度不陡＝穩定強、非剛點火。</div><div class="syms">'+j(d.only_a)+'</div></div>'+
+    '<div class="card onlyb"><h3>僅 B · 剛發動</h3>'+
+      '<div class="desc">效率10低、效率5突拉高＝最近一週才剛發動（較早期/波動大；效率20&lt;0 為反彈非趨勢）。</div><div class="syms">'+j(d.only_b)+'</div></div>'+
+  '</div>';
+}
+
+function render(d){
+  const r=d.rankings||{};
+  $("#content").innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>① 趨勢效率主表</h2><span class="tag">Top '+d.topn+' · 依 Score 排序</span>'+
+        '<span class="hint">會動(效率/單向)＋振幅(ADR)＋有量($Vol)＋誰大(Score) 一張表</span></div>'+
+      mainTable(d.main)+
+      ((d.failed&&d.failed.length)?'<div class="fail">[失敗 '+d.failed.length+'] '+d.failed.slice(0,12).map(f=>esc(f.sym)).join(", ")+(d.failed.length>12?" …":"")+'</div>':'')+
+    '</section>'+
+    '<section>'+
+      '<div class="sec-head"><h2>② 交叉過濾 · 確實強勢中誰量最大</h2><span class="tag">全池 5日評分≥80 · 依 Score</span></div>'+
+      crossTable(d.cross_filter||[])+
+      '<div class="legend">掃全池(非僅主表)，留方向確實強(5日評分≥80)再依 Score(量級)排序。<b>Top內</b>＝量最大那批；<b>補進</b>＝量中型但超強、排不進主表。</div>'+
+    '</section>'+
+    '<section>'+
+      '<div class="sec-head"><h2>③ 近期轉強排行 A</h2><span class="tag">A = 效率5 − 效率20</span>'+
+        '<span class="hint">近期單向性相對 20 日基準的躍升＝剛轉強</span></div>'+
+      abTable(r.turn_strong_A||[],"A")+
+    '</section>'+
+    '<section>'+
+      '<div class="sec-head"><h2>④ 近期轉強排行 B</h2><span class="tag">B = 2×(效率5−效率10)+(效率10−效率20)</span>'+
+        '<span class="hint">加權加速度，抓最近這一週才剛加速者</span></div>'+
+      abTable(r.turn_strong_B||[],"B")+
+    '</section>'+
+    '<section>'+
+      '<div class="sec-head"><h2>⑤ 兩表差異判讀</h2></div>'+
+      diffCards(r.diff||{both:[],only_a:[],only_b:[]})+
+      '<div class="legend">要乾淨續強看 A；要早期爆發看 B。名次接近(差&lt;0.05)對四捨五入敏感，勿過度解讀先後。</div>'+
+    '</section>'+
+    '<section>'+
+      '<div class="sec-head"><h2>⑥ 最早期點火榜</h2><span class="tag">效率3 = 近3日漲幅/(ADR3×3)</span>'+
+        '<span class="hint">比效率5更短更敏感，抓最近3天剛點火</span></div>'+
+      e3Table(r.earliest_ignition||[])+
+      '<div class="legend">3vs5＝最近2天還在不在加速(短vs短)；3vs10＝最近3天相對中短基準強不強。<b>兩欄皆▲＝延續性最強</b>；皆▼＝動能全面收斂最該留意。3日樣本小、單日跳空就暴衝，務必配合效率5/10 確認。</div>'+
+    '</section>';
+}
+
+function fmtTime(iso){
+  if(!iso) return "–";
+  try{
+    const d=new Date(iso);
+    return d.toLocaleString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  }catch(e){return iso}
+}
+
+async function load(){
+  $("#content").innerHTML = '<div class="loading-screen">載入 '+current.toUpperCase()+' …</div>';
+  try{
+    const res = await fetch("data/"+current+".json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const d = await res.json();
+    const cur=(d.currencies||[]).join("/");
+    $("#meta").innerHTML = '<div><b>池</b> '+esc(d.pool_label)+' · '+d.n_ok+'/'+d.n_list+' 檔 · '+esc(cur)+'</div>'+
+      '<div><b>更新</b> '+esc(fmtTime(d.generated_at))+' · '+esc(d.source||"yfinance")+'</div>';
+    $("#poolNote").innerHTML = (d.currencies||[]).length>1
+      ? '⚠️ 本池含多幣別，Score / avg$Vol 跨幣別不可直接比（TWD 金額天生大於 USD）。'
+      : '本池幣別 '+esc(cur)+'。Score 同幣別內比較有意義。';
+    render(d);
+  }catch(e){
+    $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/'+current+'.json 失敗（'+esc(e.message)+'）。<br>'+
+      '首次部署或尚未產生資料時會這樣，請先在 GitHub Actions 跑一次 export，或按「更新資料」。</div>';
+  }
+}
+
+// ── 更新按鈕：觸發 GitHub Actions repository_dispatch ──
+$("#refreshBtn").onclick = async ()=>{
+  const btn=$("#refreshBtn"), banner=$("#banner");
+  if(!GH_OWNER||!GH_REPO||!GH_DISPATCH_TOKEN){
+    banner.className="banner show";
+    banner.innerHTML="ℹ️ 尚未設定雲端觸發。請到 GitHub repo 的 Actions 手動跑 <b>export-and-deploy</b>，或依 DEPLOY.md 填入 GH_OWNER / GH_REPO / token 啟用一鍵更新。";
+    return;
+  }
+  btn.classList.add("loading"); btn.disabled=true; $("#refreshLabel").textContent="觸發中…";
+  try{
+    const res=await fetch("https://api.github.com/repos/"+GH_OWNER+"/"+GH_REPO+"/dispatches",{
+      method:"POST",
+      headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer "+GH_DISPATCH_TOKEN,"Content-Type":"application/json"},
+      body:JSON.stringify({event_type:"refresh-data"})
+    });
+    banner.className="banner show";
+    if(res.status===204){
+      banner.style.color="var(--green)"; banner.style.borderColor="#1f5b3f"; banner.style.background="#0d2018";
+      banner.innerHTML="✅ 已觸發雲端重抓。約 3–8 分鐘後資料更新完成，屆時重新整理本頁即可看到最新（標題列「更新」時間會變新）。";
+    }else{
+      banner.style.color="var(--red)"; banner.style.borderColor="#5b1f28"; banner.style.background="#200d10";
+      banner.innerHTML="❌ 觸發失敗（HTTP "+res.status+"）。檢查 token 權限與 repo 名稱，詳見 DEPLOY.md。";
+    }
+  }catch(e){
+    banner.className="banner show"; banner.innerHTML="❌ 觸發錯誤："+esc(e.message);
+  }finally{
+    btn.classList.remove("loading"); btn.disabled=false; $("#refreshLabel").textContent="🔄 更新資料";
+  }
+};
+
+// ── 啟動 ──
+(async function init(){
+  let idx=null;
+  try{ idx=await (await fetch("data/index.json?t="+Date.now(),{cache:"no-store"})).json(); }catch(e){}
+  renderTabs(idx);
+  load();
+})();
+</script>
+</body>
+</html>

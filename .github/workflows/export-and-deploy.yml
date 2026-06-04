@@ -66,6 +66,14 @@ jobs:
           cd engine
           python export_macro.py
 
+      - name: Export Taiwan themes (sector/theme baskets)
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_themes.py
+
       - name: Export per-stock detail (top names per pool)
         # 先限各池主表 Top N，避免一次跑全 1700 檔(會很久)。要擴大改下面數字/池。
         env:

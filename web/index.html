@@ -201,6 +201,25 @@
     margin-bottom:10px;font-weight:600}
   .backbtn:hover{text-decoration:underline}
   .fin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+
+  /* 台股主題 */
+  .tg-group{margin-bottom:16px}
+  .tg-group .tg-gname{font-size:13px;font-weight:720;color:var(--ink2);margin:14px 0 8px;
+    padding-left:10px;border-left:3px solid var(--bluebar)}
+  .theme-card{border:1px solid var(--line);border-radius:11px;background:var(--panel);
+    box-shadow:var(--shadow);margin-bottom:8px;overflow:hidden}
+  .theme-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;transition:.1s}
+  .theme-row:hover{background:var(--panel2)}
+  .theme-row .tr-caret{color:var(--ink3);font-size:11px;width:12px;flex:none;transition:transform .15s}
+  .theme-card.open .tr-caret{transform:rotate(90deg)}
+  .theme-row .tr-name{font-weight:700;font-size:13.5px;flex:none;min-width:130px}
+  .theme-row .tr-desc{color:var(--ink3);font-size:11px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .theme-row .tr-rets{display:flex;gap:14px;font-family:var(--mono);font-size:12.5px;flex:none}
+  .theme-row .tr-rets .rr{text-align:right;min-width:62px}
+  .theme-row .tr-rets .rr .rl{display:block;font-size:9px;color:var(--ink3);font-family:-apple-system,sans-serif}
+  .theme-members{display:none;border-top:1px solid var(--line);padding:2px 0}
+  .theme-card.open .theme-members{display:block}
+  @media(max-width:680px){.theme-row .tr-desc{display:none}.theme-row .tr-name{min-width:90px}}
 </style>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -592,7 +611,72 @@ function renderMacro(d){
         '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
       etfTable(d.etfs||[])+
       '<div class="legend"><span class="badge in">類股</span> 11 大 SPDR 類股；<span class="badge add">主題</span> 熱門產業主題。今日領漲的類股＝資金當日流入處；連續多日領漲才是趨勢輪動。</div>'+
+    '</section>'+
+    '<section id="twThemesSec">'+
+      '<div class="sec-head"><h2>台股主題 / 類股</h2><span class="tag">成分股平均 1/5/20 日漲跌</span>'+
+        '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
+      '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
+  loadThemes();
+}
+
+function retCell(v){
+  const c = v==null?"dim":(v>0?"pos":(v<0?"neg":"dim"));
+  return '<span class="'+c+'">'+(v==null?"–":sgn(v,2)+"%")+'</span>';
+}
+
+function themeMembers(members){
+  // 成分股小表(代號可點)
+  const head=["代號","名稱","現價","今日","5日","20日"];
+  const body=members.map(m=>'<tr>'+
+    '<td class="sym clickable" data-stk="'+esc(m.sym)+'">'+esc(m.sym.replace(/\.(TW|TWO)$/,""))+'</td>'+
+    '<td style="text-align:left">'+esc(m.name)+'</td>'+
+    '<td class="dim">'+(m.last!=null?fmtNum(m.last,2):"–")+'</td>'+
+    '<td class="'+cls(m.r1)+'">'+sgn(m.r1,2)+'%</td>'+
+    '<td class="'+cls(m.r5)+'">'+sgn(m.r5,2)+'%</td>'+
+    '<td class="'+cls(m.r20)+'">'+sgn(m.r20,2)+'%</td></tr>').join("");
+  return '<div class="tbl-wrap" style="border:none;box-shadow:none;border-radius:0"><table><thead><tr>'+
+    head.map((h,i)=>'<th'+(i<2?' style="text-align:left"':'')+'>'+h+'</th>').join("")+
+    '</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function themeCard(t){
+  const rr=(lbl,v)=>'<span class="rr"><span class="rl">'+lbl+'</span>'+retCell(v)+'</span>';
+  return '<div class="theme-card">'+
+    '<div class="theme-row">'+
+      '<span class="tr-caret">▶</span>'+
+      '<span class="tr-name">'+esc(t.name)+'</span>'+
+      '<span class="tr-desc">'+esc(t.desc||"")+' · '+t.n+'檔</span>'+
+      '<span class="tr-rets">'+rr("今日",t.r1)+rr("5日",t.r5)+rr("20日",t.r20)+'</span>'+
+    '</div>'+
+    '<div class="theme-members">'+themeMembers(t.members||[])+'</div>'+
+  '</div>';
+}
+
+function renderThemes(d){
+  const html=(d.groups||[]).map(g=>'<div class="tg-group">'+
+    '<div class="tg-gname">'+esc(g.group)+'</div>'+
+    (g.themes||[]).map(themeCard).join("")+
+  '</div>').join("");
+  $("#twThemes").innerHTML = html + '<div class="legend">主題漲跌＝成分股平均。成分股清單為人工維護，可能不完整或過時。'+
+    (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
+  // 展開/收合
+  document.querySelectorAll("#twThemes .theme-row").forEach(row=>{
+    row.onclick=(e)=>{
+      if(e.target.closest("td.sym.clickable")) return;  // 點代號交給詳情處理
+      row.parentElement.classList.toggle("open");
+    };
+  });
+}
+
+async function loadThemes(){
+  try{
+    const res=await fetch("data/tw_themes.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    renderThemes(await res.json());
+  }catch(e){
+    const el=$("#twThemes"); if(el) el.innerHTML='<div class="legend">⚠️ 台股主題資料尚未產生（data/tw_themes.json）。請在 GitHub Actions 跑一次 export。</div>';
+  }
 }
 
 async function loadMacro(){

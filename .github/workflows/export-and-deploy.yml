@@ -58,6 +58,14 @@ jobs:
           cd engine
           python export_json.py all 50
 
+      - name: Export macro market (indices + sector ETFs)
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_macro.py
+
       - name: Stage web output
         run: |
           mkdir -p public

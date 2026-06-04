@@ -42,6 +42,25 @@
   .meta{font-family:var(--mono);font-size:11.5px;color:var(--ink3);text-align:right;line-height:1.7}
   .meta b{color:var(--ink2);font-weight:600}
 
+  /* 主分頁(總體市場 | 趨勢動能榜)：底線式分頁，模仿參考站 */
+  .mainnav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0 4px}
+  .mtab{background:none;border:none;cursor:pointer;font-size:14.5px;font-weight:650;
+    color:var(--ink2);padding:10px 16px;position:relative;letter-spacing:.3px;transition:.12s}
+  .mtab:hover{color:var(--ink)}
+  .mtab.active{color:var(--blue)}
+  .mtab.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2.5px;
+    border-radius:2px;background:var(--blue)}
+
+  /* 指數總覽卡 */
+  .idx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:4px}
+  .idx-card{border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:var(--panel);
+    box-shadow:var(--shadow)}
+  .idx-card .ic-label{font-size:12.5px;color:var(--ink2);font-weight:650;margin-bottom:2px}
+  .idx-card .ic-note{font-size:10.5px;color:var(--ink3);margin-bottom:7px}
+  .idx-card .ic-val{font-family:var(--mono);font-size:21px;font-weight:740;letter-spacing:-.3px;line-height:1.1}
+  .idx-card .ic-chg{font-family:var(--mono);font-size:13px;font-weight:700;margin-top:3px}
+  .idx-card .ic-sub{font-size:10.5px;color:var(--ink3);margin-top:2px}
+
   .toolbar{display:flex;align-items:center;justify-content:space-between;
     gap:12px;flex-wrap:wrap;margin:16px 0 14px}
   .tabs{display:flex;gap:6px;flex-wrap:wrap}
@@ -170,6 +189,11 @@
       </div>
     </div>
   </header>
+
+  <nav class="mainnav" id="mainnav">
+    <button class="mtab" data-view="macro">總體市場</button>
+    <button class="mtab active" data-view="trend">趨勢動能榜</button>
+  </nav>
 
   <div class="toolbar">
     <div class="tabs" id="tabs"></div>
@@ -480,6 +504,82 @@ function fmtTime(iso){
     return d.toLocaleString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
   }catch(e){return iso}
 }
+
+// ── 總體市場頁 ──
+function idxCard(r){
+  if(r.mode==="yield"){
+    const c = r.diff>0?"pos":(r.diff<0?"neg":"dim");
+    const sign = r.diff>0?"+":"";
+    return '<div class="idx-card">'+
+      '<div class="ic-label">'+esc(r.label)+'</div><div class="ic-note">'+esc(r.note||"")+'</div>'+
+      '<div class="ic-val">'+(r.level!=null?r.level.toFixed(2):"–")+(r.unit==="bps"?'<span class="ic-sub" style="font-size:12px"> %</span>':'')+'</div>'+
+      '<div class="ic-chg '+c+'">'+sign+(r.diff!=null?r.diff:"–")+' '+esc(r.unit||"")+'</div>'+
+    '</div>';
+  }
+  const c = r.chg>0?"pos":(r.chg<0?"neg":"dim");
+  const sign = r.chg>0?"+":"";
+  return '<div class="idx-card">'+
+    '<div class="ic-label">'+esc(r.label)+'</div><div class="ic-note">'+esc(r.note||"")+'</div>'+
+    '<div class="ic-val">'+(r.last!=null?Number(r.last).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"–")+'</div>'+
+    '<div class="ic-chg '+c+'">'+sign+(r.chg!=null?r.chg.toFixed(2):"–")+'%</div>'+
+  '</div>';
+}
+
+function etfTable(rows){
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號", key:"sym", type:"str", cell:r=>'<td class="sym">'+esc(r.sym)+'</td>'},
+    {h:"名稱", key:"label", type:"str", cell:r=>'<td style="text-align:left">'+esc(r.label)+'</td>'},
+    {h:"類型", key:"type", type:"str", cell:r=>'<td><span class="badge '+(r.type==="類股"?"in":"add")+'">'+esc(r.type)+'</span></td>'},
+    {h:"今日漲跌%", key:"chg", cell:r=>'<td class="'+cls(r.chg)+'">'+sgn(r.chg,2)+'%</td>'},
+    {h:"收盤", key:"last", cell:r=>'<td class="dim">'+(r.last!=null?fmtNum(r.last,2):"–")+'</td>'},
+  ];
+  return buildTable("t-etf", rows, cols, {empty:"（無 ETF 資料）"});
+}
+
+function renderMacro(d){
+  $("#content").innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>指數總覽</h2><span class="tag">今日漲跌</span>'+
+        '<span class="hint">收益率/VIX 顯示水準 + 與昨日差(bps／點)</span></div>'+
+      '<div class="idx-grid">'+(d.indices||[]).map(idxCard).join("")+'</div>'+
+    '</section>'+
+    '<section>'+
+      '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
+        '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
+      etfTable(d.etfs||[])+
+      '<div class="legend"><span class="badge in">類股</span> 11 大 SPDR 類股；<span class="badge add">主題</span> 熱門產業主題。今日領漲的類股＝資金當日流入處；連續多日領漲才是趨勢輪動。</div>'+
+    '</section>';
+}
+
+async function loadMacro(){
+  for(const k in SORT_STATE) delete SORT_STATE[k];
+  $("#content").innerHTML = '<div class="loading-screen">載入 總體市場 …</div>';
+  try{
+    const res = await fetch("data/macro.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const d = await res.json();
+    $("#meta").innerHTML = '<div><b>指數</b> '+(d.indices||[]).length+' · <b>ETF</b> '+(d.etfs||[]).length+'</div>'+
+      '<div><b>更新</b> '+esc(fmtTime(d.generated_at))+' · '+esc(d.source||"yfinance")+'</div>';
+    $("#poolNote").innerHTML = '美股總體市場快照。指數價格用收盤、收益率/VIX 用水準＋日差。';
+    renderMacro(d);
+  }catch(e){
+    $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/macro.json 失敗（'+esc(e.message)+'）。<br>'+
+      '首次部署或尚未產生資料時會這樣，請先在 GitHub Actions 跑一次 export。</div>';
+  }
+}
+
+// ── 主分頁切換 ──
+let VIEW = "trend";
+function switchView(v){
+  VIEW = v;
+  document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  // 池分頁列只在趨勢頁顯示
+  $(".toolbar").style.display = (v==="trend") ? "flex" : "none";
+  document.querySelector(".search").style.display = (v==="trend") ? "flex" : "none";
+  if(v==="macro") loadMacro(); else load();
+}
+document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
 
 async function load(){
   // 切池/重新整理 → 清掉排序狀態，回到各表預設順序。

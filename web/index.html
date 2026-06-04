@@ -126,12 +126,14 @@
 
 <script>
 // ── 設定 ─────────────────────────────────────────────
-// 部署後把這兩個填上，啟用「更新資料」按鈕（見 DEPLOY.md）。留空則按鈕只提示手動更新。
-const GH_OWNER = "";        // 例: "yourname"
-const GH_REPO  = "";        // 例: "adr-trend-web"
-// 觸發用的細粒度 token。⚠️ 公開站把 token 寫死在前端等於公開它，風險見 DEPLOY.md。
-// 預設留空 → 按鈕改為「請到 Actions 手動跑」，最安全。
+const GH_OWNER = "w22787231";     // GitHub 帳號
+const GH_REPO  = "stockview1";    // repo 名稱
+// ⚠️ 公開站把 token 寫死在前端 = 公開它。只能用「只對此 repo、只給 Contents:write」的
+// fine-grained token（最壞情況別人也只能多觸發幾次更新）。要啟用一鍵更新，
+// 把下面 "" 中間貼上你的 token（github_pat_...）。留空 = 按鈕只提示手動。
+//                          ▼▼▼ 在這對引號中間貼 token ▼▼▼
 const GH_DISPATCH_TOKEN = "";
+//                          ▲▲▲ 例: "github_pat_11ABC...xyz" ▲▲▲
 
 const POOLS = ["tw150","ndx100","sp500","sp400","sp600"];
 let current = location.hash.replace("#","") || "tw150";

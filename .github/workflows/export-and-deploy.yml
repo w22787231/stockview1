@@ -67,6 +67,16 @@ jobs:
           echo "Built files:"
           ls -la public public/data
 
+      - name: Ensure Cloudflare Pages project exists
+        # 第一次跑時自動建立 Pages 專案（若已存在，create 會回非零，用 || true 忽略）。
+        # 這樣完全不必在 Cloudflare 後台手動建專案，避免誤建成 Workers。
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create ${{ vars.CF_PAGES_PROJECT }} --production-branch=main
+        continue-on-error: true
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

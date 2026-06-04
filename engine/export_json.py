@@ -111,6 +111,82 @@ def build_volume_surge(rows, topn):
     return out
 
 
+def _disp(sym):
+    """美股回代號，台股回『代號 中文名』。"""
+    nm = _name(sym)
+    return f"{sym} {nm}" if nm else sym
+
+
+def build_highlights(rows, main_rows, topn):
+    """由數據自動歸納『快速重點』(複刻對話版邏輯，純規則、不靠 AI)。
+    回傳 list of {type, label, syms, note}。前端依序顯示成卡片。"""
+    if not rows:
+        return []
+    K = min(20, len(rows))
+    top_syms = set(r["sym"] for r in main_rows)
+    A = sorted(rows, key=lambda r: r["e5"] - r["e20"], reverse=True)[:K]
+    B = sorted(rows, key=lambda r: 2*(r["e5"]-r["e10"]) + (r["e10"]-r["e20"]), reverse=True)[:K]
+    sa = [r["sym"] for r in A]; sb = [r["sym"] for r in B]
+    both = [s for s in sa if s in sb]
+    E3 = sorted(rows, key=lambda r: r["e3"], reverse=True)[:K]
+    by_sym = {r["sym"]: r for r in rows}
+
+    out = []
+
+    # ① 量大又方向最確定：交叉過濾(5日評分>=80) 且在主表 Top 內(量最大)
+    strong = sorted([r for r in rows if r["sc5"] >= 80 and r["sym"] in top_syms],
+                    key=lambda r: r["score"], reverse=True)
+    if strong:
+        out.append({
+            "type": "strong", "label": "量大又方向最確定",
+            "syms": [_disp(r["sym"]) for r in strong[:8]],
+            "note": "交叉過濾 Top內、5日評分≥80 且 Score 最高——又強又有量。",
+        })
+
+    # ② 最確定剛轉強 A∩B
+    if both:
+        out.append({
+            "type": "turn", "label": "最確定剛轉強 (A∩B)",
+            "syms": [_disp(s) for s in both[:10]],
+            "note": "A、B 兩定義都入榜＝又乾淨又剛加速，訊號最完整。",
+        })
+
+    # ③ 最早期點火：效率3 全榜中 3vs5 與 3vs10 皆▲(延續性最強)
+    ign = []
+    for r in E3:
+        f5 = r["e3"] > r["e5"]; f10 = r["e3"] > r["e10"]
+        if f5 and f10:
+            ign.append(r["sym"])
+    if ign:
+        out.append({
+            "type": "ignition", "label": "最早期點火 (效率3全榜▲▲延續最強)",
+            "syms": [_disp(s) for s in ign[:8]],
+            "note": "效率3 領先且 3vs5、3vs10 皆加速＝剛點火又仍在加速。3日樣本小，配合效率5/10 確認。",
+        })
+
+    # ④ 今日資金流入：量比高(>=1.5) 且 5日漲幅為正(量價同向)
+    inflow = sorted([r for r in rows if r.get("volr", 0) >= 1.5 and r["r5"] > 0],
+                    key=lambda r: r["volr"], reverse=True)
+    if inflow:
+        out.append({
+            "type": "inflow", "label": "今日資金流入 (爆量+上漲)",
+            "syms": [f"{_disp(r['sym'])}({r['volr']:.1f}×)" for r in inflow[:8]],
+            "note": "量比≥1.5× 且 5日上漲＝量價同向，資金實質流入。爆量但下跌者不列入(可能出貨)。",
+        })
+
+    # ⑤ 極端值警示：效率5 絕對值過大(很可能單日跳空/極窄 ADR)
+    extreme = [r for r in rows if abs(r["e5"]) >= 3.0]
+    if extreme:
+        extreme.sort(key=lambda r: abs(r["e5"]), reverse=True)
+        out.append({
+            "type": "warn", "label": "⚠️ 極端值留意",
+            "syms": [f"{_disp(r['sym'])}(效率5={r['e5']:+.2f})" for r in extreme[:6]],
+            "note": "效率5 絕對值≥3 多為單日跳空/極窄 ADR 造成，A/B 榜可能因此霸榜，需個別查財報事件，勿純看數字追高。",
+        })
+
+    return out
+
+
 def build_cross_filter(rows, main_rows, topn):
     """交叉過濾：全池 5日評分>=80 依 Score 排序，標 [Top內]/[補進]。"""
     top_syms = set(r["sym"] for r in main_rows)
@@ -148,6 +224,7 @@ def run_pool(pool, topn):
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": "yfinance (daily)",
         "main": main,
+        "highlights": build_highlights(rows, main_rows, topn),
         "cross_filter": build_cross_filter(rows, main_rows, topn),
         "volume_surge": build_volume_surge(rows, topn),
         "rankings": build_rankings(rows, topn),

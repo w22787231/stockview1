@@ -89,6 +89,19 @@
 
   .legend{color:var(--ink3);font-size:11.5px;line-height:1.7;margin-top:8px;
     border-left:2px solid var(--line);padding-left:12px}
+  .highlights{background:linear-gradient(135deg,#101826,#0d1320);border:1px solid #233149;
+    border-radius:12px;padding:16px 18px;margin:18px 0 8px}
+  .highlights .hl-title{font-size:14px;font-weight:680;letter-spacing:.3px;margin-bottom:12px;
+    display:flex;align-items:center;gap:8px}
+  .highlights .hl-title .spark{color:var(--accent)}
+  .hl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+  .hl-item{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:#0b101a}
+  .hl-item h4{margin:0 0 5px;font-size:12.5px;font-family:var(--mono);display:flex;gap:6px;align-items:center}
+  .hl-item.strong h4{color:var(--green)} .hl-item.turn h4{color:var(--blue)}
+  .hl-item.ignition h4{color:var(--amber)} .hl-item.inflow h4{color:var(--green)}
+  .hl-item.warn h4{color:var(--red)} .hl-item.warn{border-color:#4a2630}
+  .hl-item .hl-syms{font-family:var(--mono);font-size:12.5px;color:var(--ink);line-height:1.8;word-break:break-word}
+  .hl-item .hl-note{color:var(--ink3);font-size:11px;line-height:1.5;margin-top:6px}
   .loading-screen{text-align:center;padding:80px 0;color:var(--ink3);font-family:var(--mono)}
   .fail{color:var(--red);font-size:12px;font-family:var(--mono);margin-top:8px}
   footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);
@@ -344,9 +357,22 @@ function diffCards(d){
   '</div>';
 }
 
+function highlightsCard(items){
+  if(!items||!items.length) return '';
+  const cards=items.map(it=>'<div class="hl-item '+esc(it.type)+'">'+
+    '<h4>'+esc(it.label)+'</h4>'+
+    '<div class="hl-syms">'+(it.syms&&it.syms.length?it.syms.map(esc).join("、"):"（無）")+'</div>'+
+    (it.note?'<div class="hl-note">'+esc(it.note)+'</div>':'')+
+  '</div>').join("");
+  return '<div class="highlights">'+
+    '<div class="hl-title"><span class="spark">⚡</span>快速重點 · 一眼看該關注誰</div>'+
+    '<div class="hl-grid">'+cards+'</div></div>';
+}
+
 function render(d){
   const r=d.rankings||{};
   $("#content").innerHTML =
+    highlightsCard(d.highlights)+
     '<section>'+
       '<div class="sec-head"><h2>① 趨勢效率主表</h2><span class="tag">Top '+d.topn+' · 依 Score 排序</span>'+
         '<span class="hint">會動(效率/單向)＋振幅(ADR)＋有量($Vol)＋誰大(Score) 一張表</span></div>'+

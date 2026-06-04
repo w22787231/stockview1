@@ -74,6 +74,11 @@
   .badge{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600}
   .badge.in{background:#10271d;color:var(--green)} .badge.add{background:#2a2410;color:var(--amber)}
   .bar{display:inline-block;height:8px;border-radius:2px;background:var(--accent);vertical-align:middle;margin-left:6px;opacity:.55}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--ink);background:#161d2b}
+  th .arr{opacity:.9;margin-left:3px;font-size:9px;color:var(--accent)}
+  th.sortable:not(.sorted) .arr{opacity:0}
+  th.sortable:hover:not(.sorted) .arr{opacity:.35;color:var(--ink3)}
 
   .diff{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:4px}
   .diff .card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel)}
@@ -167,58 +172,146 @@ function renderTabs(idx){
   });
 }
 
+// ── 可排序表格引擎 ───────────────────────────────────
+// 每張表用「欄位定義陣列」描述；點欄頭→依該欄重排重繪（降序→升序切換，▼/▲ 箭頭）。
+// 不可排序欄（#序號、代號、單向性、範圍、旗標）sortKey 設 null。
+// flag 旗標排序權重：up(2) > flat(1) > down(0)。
+const SORT_STATE = {};   // tableId -> {key, dir}  dir: 'desc'|'asc'
+const TABLE_CACHE = {};  // tableId -> {rows, cols, opts}
+const FLAG_RANK = {up:2, flat:1, down:0};
+
+function buildTable(tableId, rows, cols, opts){
+  opts = opts || {};
+  TABLE_CACHE[tableId] = {rows: rows, cols: cols, opts: opts};
+  if(opts.empty && !rows.length) return '<div class="note">'+opts.empty+'</div>';
+  return '<div class="tbl-wrap" id="'+tableId+'">'+tableInner(tableId)+'</div>';
+}
+
+function tableInner(tableId){
+  const c = TABLE_CACHE[tableId];
+  const rows = c.rows, cols = c.cols, opts = c.opts;
+  const st = SORT_STATE[tableId];
+
+  // 排序（不動原陣列）。有 st 用 st；否則用預設順序（rows 既有順序）。
+  let view = rows.slice();
+  if(st){
+    const col = cols.find(x=>x.key===st.key);
+    if(col){
+      const dir = st.dir==='asc' ? 1 : -1;
+      view.sort((a,b)=>{
+        let va=col.sortVal?col.sortVal(a):a[col.key];
+        let vb=col.sortVal?col.sortVal(b):b[col.key];
+        if(col.type==='str'){ va=(va==null?'':String(va)); vb=(vb==null?'':String(vb)); return va<vb?-1*dir:(va>vb?dir:0); }
+        va=(va==null?-Infinity:Number(va)); vb=(vb==null?-Infinity:Number(vb));
+        return (va-vb)*dir;
+      });
+    }
+  }
+
+  // 表頭
+  const ths = cols.map((col,ci)=>{
+    if(col.key==null) return '<th>'+col.h+'</th>';
+    const sorted = st && st.key===col.key;
+    const arr = sorted ? (st.dir==='asc'?'▲':'▼') : '▼';
+    return '<th class="sortable'+(sorted?' sorted':'')+'" data-tid="'+tableId+'" data-key="'+col.key+'">'+col.h+'<span class="arr">'+arr+'</span></th>';
+  }).join("");
+
+  // 表身（#序號永遠是顯示順序 1..n；其餘呼叫 col.cell(r)）
+  const body = view.map((r,i)=>'<tr>'+cols.map(col=>{
+    if(col.rownum) return '<td>'+(i+1)+'</td>';
+    return col.cell(r,i);
+  }).join("")+'</tr>').join("");
+
+  return '<table><thead><tr>'+ths+'</tr></thead><tbody>'+body+'</tbody></table>';
+}
+
+// 全域委派：點任何 sortable 欄頭
+document.addEventListener("click", function(e){
+  const th = e.target.closest && e.target.closest("th.sortable");
+  if(!th) return;
+  const tid = th.dataset.tid, key = th.dataset.key;
+  const cur = SORT_STATE[tid];
+  if(cur && cur.key===key){ cur.dir = cur.dir==='desc' ? 'asc' : 'desc'; }
+  else { SORT_STATE[tid] = {key: key, dir: 'desc'}; }   // 第一次點：降序
+  const wrap = document.getElementById(tid);
+  if(wrap) wrap.innerHTML = tableInner(tid);
+});
+
+// ── 各表欄位定義 ──
 function mainTable(rows){
-  const head=["#","代號/名稱","效率3","效率5","效率10","效率20","5日漲%","5日評分","ADR5%","ADR10%","ADR20%","5-20差","avg$Vol","Score","單向性"];
   const maxSc=Math.max.apply(null,rows.map(r=>r.sc5||0).concat([1]));
-  const body=rows.map(r=>'<tr>'+
-    '<td>'+r.rank+'</td>'+symCell(r.sym,r.name)+
-    '<td class="'+cls(r.e3)+'">'+sgn(r.e3)+'</td><td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'+
-    '<td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
-    '<td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'+
-    '<td>'+fmtNum(r.sc5)+'<span class="bar" style="width:'+Math.round((r.sc5||0)/maxSc*34)+'px"></span></td>'+
-    '<td class="dim">'+fmtNum(r.a5,1)+'</td><td class="dim">'+fmtNum(r.a10,1)+'</td><td class="dim">'+fmtNum(r.a20,1)+'</td>'+
-    '<td class="'+cls(r.ad520)+'">'+sgn(r.ad520,1)+'</td>'+
-    '<td class="dim">'+dvfmt(r.dv)+'</td><td>'+fmtNum(r.score)+'</td>'+
-    '<td style="text-align:left" class="dim">'+esc(r.trend)+'</td></tr>').join("");
-  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"效率3", key:"e3", cell:r=>'<td class="'+cls(r.e3)+'">'+sgn(r.e3)+'</td>'},
+    {h:"效率5", key:"e5", cell:r=>'<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'},
+    {h:"效率10", key:"e10", cell:r=>'<td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td>'},
+    {h:"效率20", key:"e20", cell:r=>'<td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'},
+    {h:"5日漲%", key:"r5", cell:r=>'<td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'},
+    {h:"5日評分", key:"sc5", cell:r=>'<td>'+fmtNum(r.sc5)+'<span class="bar" style="width:'+Math.round((r.sc5||0)/maxSc*34)+'px"></span></td>'},
+    {h:"ADR5%", key:"a5", cell:r=>'<td class="dim">'+fmtNum(r.a5,1)+'</td>'},
+    {h:"ADR10%", key:"a10", cell:r=>'<td class="dim">'+fmtNum(r.a10,1)+'</td>'},
+    {h:"ADR20%", key:"a20", cell:r=>'<td class="dim">'+fmtNum(r.a20,1)+'</td>'},
+    {h:"5-20差", key:"ad520", cell:r=>'<td class="'+cls(r.ad520)+'">'+sgn(r.ad520,1)+'</td>'},
+    {h:"avg$Vol", key:"dv", cell:r=>'<td class="dim">'+dvfmt(r.dv)+'</td>'},
+    {h:"Score", key:"score", cell:r=>'<td>'+fmtNum(r.score)+'</td>'},
+    {h:"單向性", key:null, cell:r=>'<td style="text-align:left" class="dim">'+esc(r.trend)+'</td>'},
+  ];
+  return buildTable("t-main", rows, cols);
 }
 
 function crossTable(rows){
-  if(!rows.length) return '<div class="note">（全池無 5日評分≥80 者）</div>';
-  const head=["#","代號/名稱","5日評分","5日漲%","效率5","效率20","ADR20%","avg$Vol","Score","範圍","單向性"];
-  const body=rows.map(r=>'<tr>'+
-    '<td>'+r.rank+'</td>'+symCell(r.sym,r.name)+
-    '<td>'+fmtNum(r.sc5)+'</td><td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'+
-    '<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
-    '<td class="dim">'+fmtNum(r.a20,1)+'</td><td class="dim">'+dvfmt(r.dv)+'</td><td>'+fmtNum(r.score)+'</td>'+
-    '<td>'+(r.scope==="in_top"?'<span class="badge in">Top內</span>':'<span class="badge add">補進</span>')+'</td>'+
-    '<td style="text-align:left" class="dim">'+esc(r.trend)+'</td></tr>').join("");
-  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"5日評分", key:"sc5", cell:r=>'<td>'+fmtNum(r.sc5)+'</td>'},
+    {h:"5日漲%", key:"r5", cell:r=>'<td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'},
+    {h:"效率5", key:"e5", cell:r=>'<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'},
+    {h:"效率20", key:"e20", cell:r=>'<td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'},
+    {h:"ADR20%", key:"a20", cell:r=>'<td class="dim">'+fmtNum(r.a20,1)+'</td>'},
+    {h:"avg$Vol", key:"dv", cell:r=>'<td class="dim">'+dvfmt(r.dv)+'</td>'},
+    {h:"Score", key:"score", cell:r=>'<td>'+fmtNum(r.score)+'</td>'},
+    {h:"範圍", key:null, cell:r=>'<td>'+(r.scope==="in_top"?'<span class="badge in">Top內</span>':'<span class="badge add">補進</span>')+'</td>'},
+    {h:"單向性", key:null, cell:r=>'<td style="text-align:left" class="dim">'+esc(r.trend)+'</td>'},
+  ];
+  return buildTable("t-cross", rows, cols, {empty:"（全池無 5日評分≥80 者）"});
 }
 
 function abTable(rows,kind){
-  let head,body;
+  let cols;
   if(kind==="A"){
-    head=["#","代號/名稱","效率5","效率20","A(5-20)"];
-    body=rows.map((r,i)=>'<tr><td>'+(i+1)+'</td>'+symCell(r.sym,r.name)+
-      '<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
-      '<td class="'+cls(r.A)+'">'+sgn(r.A)+'</td></tr>').join("");
-  }else{
-    head=["#","代號/名稱","效率5","效率10","效率20","B"];
-    body=rows.map((r,i)=>'<tr><td>'+(i+1)+'</td>'+symCell(r.sym,r.name)+
-      '<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td><td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td>'+
-      '<td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td><td class="'+cls(r.B)+'">'+sgn(r.B)+'</td></tr>').join("");
+    cols=[
+      {h:"#", key:null, rownum:true},
+      {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+      {h:"效率5", key:"e5", cell:r=>'<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'},
+      {h:"效率20", key:"e20", cell:r=>'<td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'},
+      {h:"A(5-20)", key:"A", cell:r=>'<td class="'+cls(r.A)+'">'+sgn(r.A)+'</td>'},
+    ];
+    return buildTable("t-ab-a", rows, cols);
   }
-  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"效率5", key:"e5", cell:r=>'<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'},
+    {h:"效率10", key:"e10", cell:r=>'<td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td>'},
+    {h:"效率20", key:"e20", cell:r=>'<td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'},
+    {h:"B", key:"B", cell:r=>'<td class="'+cls(r.B)+'">'+sgn(r.B)+'</td>'},
+  ];
+  return buildTable("t-ab-b", rows, cols);
 }
 
 function e3Table(rows){
-  const head=["#","代號/名稱","效率3","效率5","效率10","效率20","3vs5","3vs10"];
-  const body=rows.map((r,i)=>'<tr><td>'+(i+1)+'</td>'+symCell(r.sym,r.name)+
-    '<td class="'+cls(r.e3)+'">'+sgn(r.e3)+'</td><td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'+
-    '<td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td><td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'+
-    flagCell(r.flag_3v5)+flagCell(r.flag_3v10)+'</tr>').join("");
-  return '<div class="tbl-wrap"><table><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"效率3", key:"e3", cell:r=>'<td class="'+cls(r.e3)+'">'+sgn(r.e3)+'</td>'},
+    {h:"效率5", key:"e5", cell:r=>'<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'},
+    {h:"效率10", key:"e10", cell:r=>'<td class="'+cls(r.e10)+'">'+sgn(r.e10)+'</td>'},
+    {h:"效率20", key:"e20", cell:r=>'<td class="'+cls(r.e20)+'">'+sgn(r.e20)+'</td>'},
+    {h:"3vs5", key:"flag_3v5", sortVal:r=>FLAG_RANK[r.flag_3v5], cell:r=>flagCell(r.flag_3v5)},
+    {h:"3vs10", key:"flag_3v10", sortVal:r=>FLAG_RANK[r.flag_3v10], cell:r=>flagCell(r.flag_3v10)},
+  ];
+  return buildTable("t-e3", rows, cols);
 }
 
 function diffCards(d){
@@ -279,6 +372,8 @@ function fmtTime(iso){
 }
 
 async function load(){
+  // 切池/重新整理 → 清掉排序狀態，回到各表預設順序。
+  for(const k in SORT_STATE) delete SORT_STATE[k];
   $("#content").innerHTML = '<div class="loading-screen">載入 '+current.toUpperCase()+' …</div>';
   try{
     const res = await fetch("data/"+current+".json?t="+Date.now(),{cache:"no-store"});

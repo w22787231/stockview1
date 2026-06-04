@@ -149,6 +149,9 @@ const fmtNum = (n,d=0)=> n==null?"–":Number(n).toLocaleString("en-US",{minimum
 const sgn = (n,d=2)=> n==null?"–":(n>=0?"+":"")+Number(n).toFixed(d);
 const cls = n => n==null?"dim":(n>0?"pos":(n<0?"neg":"dim"));
 const dvfmt = n => n==null?"–":"$"+fmtNum(n/1e6,0)+"M";
+const volrFmt = n => n==null?"–":Number(n).toFixed(2)+"×";
+// 量比上色：≥2 強放量(綠)、≥1.5 放量(綠淡)、<0.7 縮量(紅)、其餘中性。
+const volrCls = n => n==null?"dim":(n>=1.5?"pos":(n<0.7?"neg":"dim"));
 const esc = s => (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 
 function symCell(sym,name){
@@ -254,6 +257,7 @@ function mainTable(rows){
     {h:"ADR20%", key:"a20", cell:r=>'<td class="dim">'+fmtNum(r.a20,1)+'</td>'},
     {h:"5-20差", key:"ad520", cell:r=>'<td class="'+cls(r.ad520)+'">'+sgn(r.ad520,1)+'</td>'},
     {h:"avg$Vol", key:"dv", cell:r=>'<td class="dim">'+dvfmt(r.dv)+'</td>'},
+    {h:"量比", key:"volr", cell:r=>'<td class="'+volrCls(r.volr)+'">'+volrFmt(r.volr)+'</td>'},
     {h:"Score", key:"score", cell:r=>'<td>'+fmtNum(r.score)+'</td>'},
     {h:"單向性", key:null, cell:r=>'<td style="text-align:left" class="dim">'+esc(r.trend)+'</td>'},
   ];
@@ -314,6 +318,20 @@ function e3Table(rows){
   return buildTable("t-e3", rows, cols);
 }
 
+function surgeTable(rows){
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"量比", key:"volr", cell:r=>'<td class="'+volrCls(r.volr)+'">'+volrFmt(r.volr)+'</td>'},
+    {h:"今日$Vol", key:"dv1", cell:r=>'<td class="dim">'+dvfmt(r.dv1)+'</td>'},
+    {h:"20日均$Vol", key:"dv", cell:r=>'<td class="dim">'+dvfmt(r.dv)+'</td>'},
+    {h:"5日漲%", key:"r5", cell:r=>'<td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'},
+    {h:"效率5", key:"e5", cell:r=>'<td class="'+cls(r.e5)+'">'+sgn(r.e5)+'</td>'},
+    {h:"5日評分", key:"sc5", cell:r=>'<td>'+fmtNum(r.sc5)+'</td>'},
+  ];
+  return buildTable("t-surge", rows, cols, {empty:"（無爆量資料）"});
+}
+
 function diffCards(d){
   const j = a => a&&a.length? a.map(esc).join("、") : "（無）";
   return '<div class="diff">'+
@@ -360,6 +378,12 @@ function render(d){
         '<span class="hint">比效率5更短更敏感，抓最近3天剛點火</span></div>'+
       e3Table(r.earliest_ignition||[])+
       '<div class="legend">3vs5＝最近2天還在不在加速(短vs短)；3vs10＝最近3天相對中短基準強不強。<b>兩欄皆▲＝延續性最強</b>；皆▼＝動能全面收斂最該留意。3日樣本小、單日跳空就暴衝，務必配合效率5/10 確認。</div>'+
+    '</section>'+
+    '<section>'+
+      '<div class="sec-head"><h2>⑦ 今日爆量榜 · 超短期資金流向</h2><span class="tag">量比 = 今日$Vol ÷ 20日均$Vol</span>'+
+        '<span class="hint">抓今天資金突然湧入哪檔（依量比排序）</span></div>'+
+      surgeTable(d.volume_surge||[])+
+      '<div class="legend"><b>量比 ≥2×</b>＝今天爆量(資金大量進出)。務必<b>搭配 5日漲% 看方向</b>：爆量<b>且</b>上漲＝資金流入(最強)；爆量但下跌＝出貨/換手/恐慌賣壓(留意)。量比 &lt;0.7×＝縮量。量不受跳空汙染，是超短期資金流向最直接的證據(優於效率1/2)。</div>'+
     '</section>';
 }
 

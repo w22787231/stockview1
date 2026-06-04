@@ -241,10 +241,15 @@ def compute_trend(symbols):
             r20 = _ret_n(sub, 20)
             r5 = _ret_n(sub, 5)
             sc5 = _score5(r5, e5, e5 - e20)
+            # 量比 volr = 最近 1 日成交金額 / 20 日均成交金額。
+            # 超短期資金流向：>1 今天放量(錢湧入)，<1 縮量。分母用 20 日均，
+            # 不受單日跳空汙染(量不因跳空失真，反而爆量+跳空正是進場訊號)。
+            dv1 = float(last20["Close"].iloc[-1] * last20["Volume"].iloc[-1])
+            volr = (dv1 / dv) if dv > 0 else 0.0
             rows.append({"sym": sym, "e3": e3, "e5": e5, "e10": e10, "e20": e20,
                          "d520": e5 - e20, "r20": r20, "r5": r5, "sc5": sc5,
                          "a5": a5, "a10": a10, "a20": a20, "ad520": a5 - a20,
-                         "dv": dv, "score": score,
+                         "dv": dv, "dv1": dv1, "volr": volr, "score": score,
                          "cur": "TWD" if is_tw(sym) else "USD"})
         except Exception as e:
             failed.append((sym, repr(e)[:40]))

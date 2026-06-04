@@ -86,11 +86,29 @@ def build_main(rows, topn):
             "r5": _round(r["r5"], 1), "sc5": _round(r["sc5"], 0),
             "a5": _round(r["a5"], 1), "a10": _round(r["a10"], 1),
             "a20": _round(r["a20"], 1), "ad520": _round(r["ad520"], 1),
-            "dv": _round(r["dv"], 0), "score": _round(r["score"], 0),
+            "dv": _round(r["dv"], 0), "volr": _round(r.get("volr"), 2),
+            "score": _round(r["score"], 0),
             "trend": eng._eff_trend(r["e5"], r["e10"], r["e20"]),
             "cur": r["cur"],
         })
     return main_rows, out
+
+
+def build_volume_surge(rows, topn):
+    """今日爆量榜：依量比 volr(當日$Vol/20日均$Vol) 由高到低。
+    超短期資金流向——抓今天突然放量的標的。附 5日漲%/效率5 看量價是否同向。"""
+    surge = sorted([r for r in rows if r.get("volr") is not None],
+                   key=lambda r: r["volr"], reverse=True)[:min(20, len(rows))]
+    out = []
+    for i, r in enumerate(surge, 1):
+        out.append({
+            "rank": i, "sym": r["sym"], "name": _name(r["sym"]),
+            "volr": _round(r["volr"], 2),
+            "dv1": _round(r.get("dv1"), 0), "dv": _round(r["dv"], 0),
+            "r5": _round(r["r5"], 1), "e5": _round(r["e5"], 2),
+            "sc5": _round(r["sc5"], 0), "cur": r["cur"],
+        })
+    return out
 
 
 def build_cross_filter(rows, main_rows, topn):
@@ -131,6 +149,7 @@ def run_pool(pool, topn):
         "source": "yfinance (daily)",
         "main": main,
         "cross_filter": build_cross_filter(rows, main_rows, topn),
+        "volume_surge": build_volume_surge(rows, topn),
         "rankings": build_rankings(rows, topn),
         "failed": [{"sym": s, "why": why} for s, why in failed],
     }

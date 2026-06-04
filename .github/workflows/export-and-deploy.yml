@@ -68,14 +68,19 @@ jobs:
           ls -la public public/data
 
       - name: Ensure Cloudflare Pages project exists
-        # 第一次跑時自動建立 Pages 專案（若已存在，create 會回非零，用 || true 忽略）。
-        # 這樣完全不必在 Cloudflare 後台手動建專案，避免誤建成 Workers。
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create ${{ vars.CF_PAGES_PROJECT }} --production-branch=main
-        continue-on-error: true
+        # 專案不存在才建立；已存在就靜默跳過（不再讓 GitHub 顯示假紅叉）。
+        # 用 npx 直接呼叫 wrangler，先列出現有專案，grep 不到才 create。
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.CF_PAGES_PROJECT }}
+        run: |
+          if npx --yes wrangler@3 pages project list 2>/dev/null | grep -qw "$PROJECT"; then
+            echo "Pages 專案 '$PROJECT' 已存在，跳過建立。"
+          else
+            echo "Pages 專案 '$PROJECT' 不存在，建立中…"
+            npx --yes wrangler@3 pages project create "$PROJECT" --production-branch=main
+          fi
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

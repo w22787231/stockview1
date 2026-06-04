@@ -14,6 +14,8 @@ DATA_DIR = os.path.join(HERE, "..", "data")
 
 # 指數總覽。yield_like=True 者以「水準 + bps差」呈現(不是 %漲跌)。
 INDICES = [
+    {"sym": "^TWII",     "label": "台股加權",        "note": "台灣加權指數 TAIEX"},
+    {"sym": "^TWOII",    "label": "櫃買指數",        "note": "台灣櫃買 OTC/TPEx"},
     {"sym": "^GSPC",     "label": "S&P 500",        "note": "標普500指數"},
     {"sym": "^IXIC",     "label": "Nasdaq",         "note": "那斯達克綜合"},
     {"sym": "^SOX",      "label": "SOX 半導體",      "note": "費城半導體指數"},

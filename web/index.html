@@ -231,6 +231,11 @@
     padding-left:9px;border-left:2px solid var(--line)}
   .nw-meta{font-size:11px;color:var(--ink3);display:flex;gap:10px;align-items:center}
   .nw-meta .nw-pub{font-weight:600;color:var(--ink2)}
+  .news-frame-wrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    background:var(--panel);box-shadow:var(--shadow);min-height:720px}
+  .news-frame{width:100%;height:720px;border:none;display:block;background:#fff}
+  .frame-fallback{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:30px;background:var(--panel)}
 
   /* 台股主題 */
   .tg-group{margin-bottom:16px}
@@ -278,6 +283,7 @@
   <nav class="mainnav" id="mainnav">
     <button class="mtab" data-view="macro">總體市場</button>
     <button class="mtab active" data-view="trend">趨勢動能榜</button>
+    <button class="mtab" data-view="news">即時快訊</button>
   </nav>
 
   <div class="toolbar">
@@ -1214,12 +1220,47 @@ let VIEW = "trend";
 function switchView(v){
   VIEW = v;
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  // 池分頁列只在趨勢頁顯示
+  // 池分頁列只在趨勢頁顯示；搜尋框在快訊頁隱藏
   $(".toolbar").style.display = (v==="trend") ? "flex" : "none";
-  document.querySelector(".search").style.display = "flex";
-  if(v==="macro") loadMacro(); else load();
+  document.querySelector(".search").style.display = (v==="news") ? "none" : "flex";
+  if(v==="macro") loadMacro();
+  else if(v==="news") loadNewsFeed();
+  else load();
 }
 document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
+
+function loadNewsFeed(){
+  for(const k in SORT_STATE) delete SORT_STATE[k];
+  $("#meta").innerHTML='<div><b>即時快訊</b> FinancialJuice</div><div>市場即時新聞牆</div>';
+  $("#poolNote").innerHTML="";
+  const FJ="https://www.financialjuice.com/home";
+  $("#content").innerHTML=
+    '<section><div class="sec-head"><h2>即時快訊</h2><span class="tag">FinancialJuice · 即時市場新聞</span>'+
+      '<span class="hint">即時快訊牆，內容由 FinancialJuice 提供</span></div>'+
+      '<div class="events-box" style="margin-bottom:12px">'+
+        '<span class="ev-date">FinancialJuice 即時財經新聞快訊（英文）。下方為嵌入牆，若空白請點右側按鈕開完整版。</span>'+
+        '<a class="ev-link" href="'+FJ+'" target="_blank" rel="noopener">開完整版 ↗</a>'+
+      '</div>'+
+      '<div class="news-frame-wrap">'+
+        '<iframe id="fjFrame" class="news-frame" src="https://www.financialjuice.com/widgets/news-widget?backColor=ffffff&fontColor=1a2433&newsColor=2563eb&width=100%25&height=720&mode=Light" '+
+          'title="FinancialJuice 即時快訊" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>'+
+        '<div class="frame-fallback" id="fjFallback">'+
+          '<div style="font-size:14px;font-weight:700;margin-bottom:6px">即時快訊牆無法在此嵌入</div>'+
+          '<div class="legend" style="border:none">FinancialJuice 可能不允許被嵌入(X-Frame-Options)。請直接開完整版查看即時快訊。</div>'+
+          '<a class="btn" href="'+FJ+'" target="_blank" rel="noopener" style="margin-top:10px;display:inline-flex">前往 FinancialJuice ↗</a>'+
+        '</div>'+
+      '</div>'+
+      '<div class="legend">即時快訊由 <a href="'+FJ+'" target="_blank" rel="noopener">FinancialJuice</a> 提供，為即時內容(不受本站每日更新影響)。本站僅嵌入/連結，不轉載。</div>'+
+    '</section>';
+  // iframe 載入失敗或被擋 → 顯示後備
+  const f=document.getElementById("fjFrame"), fb=document.getElementById("fjFallback");
+  let loaded=false;
+  if(f){
+    f.onload=()=>{ loaded=true; if(fb) fb.style.display="none"; };
+    // 6 秒內沒成功載入(被 X-Frame 擋通常 onload 不觸發或空白)→ 顯示後備
+    setTimeout(()=>{ if(!loaded && fb) fb.style.display="flex"; }, 6000);
+  }
+}
 
 async function load(){
   // 切池/重新整理 → 清掉排序狀態，回到各表預設順序。

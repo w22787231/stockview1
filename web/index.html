@@ -804,6 +804,7 @@ function renderStock(d){
       '<span class="lg">綠漲紅跌</span></div></section>';
     })()+
     signalsBlock(d.signals,(d.ma&&d.ma.short_n)||5,(d.ma&&d.ma.long_n)||50)+
+    backtestBlock(d.backtest)+
     notesBlock+
     '<section><div class="sec-head"><h2>財務三表</h2><span class="tag">最近數期</span></div>'+
       '<div class="fin-grid">'+
@@ -817,6 +818,32 @@ function renderStock(d){
 
   $("#backBtn").onclick = ()=> switchView(VIEW==="macro"?"macro":"trend");
   drawChart(d);
+}
+
+function backtestBlock(bt){
+  if(!bt || !bt.horizons) return '';
+  const small = bt.total_signals < 30;   // 樣本不足警示門檻
+  const rows=["5","10","20"].map(hz=>{
+    const r=bt.horizons[hz];
+    if(!r) return '<tr><td class="sym" style="cursor:default">'+hz+'日</td><td colspan="6" class="dim">樣本不足</td></tr>';
+    return '<tr><td class="sym" style="cursor:default">'+hz+'日後</td>'+
+      '<td class="dim">'+r.n+'</td>'+
+      '<td class="'+(r.win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+r.win_rate.toFixed(0)+'%</td>'+
+      '<td class="'+cls(r.avg)+'">'+sgn(r.avg,1)+'%</td>'+
+      '<td class="'+cls(r.median)+'">'+sgn(r.median,1)+'%</td>'+
+      '<td class="pos">'+sgn(r.best,1)+'%</td>'+
+      '<td class="neg">'+sgn(r.worst,1)+'%</td></tr>';
+  }).join("");
+  return '<section><div class="sec-head"><h2>金叉歷史回測</h2><span class="tag">'+esc(bt.signal)+' · 近'+bt.years+'年</span>'+
+      '<span class="hint">過去金叉後持有 N 日的歷史統計</span></div>'+
+    '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 10px">'+
+      '⚠️ <b>這是歷史統計，不是未來保證、更非買賣建議。</b>過去表現無法預測未來；未含手續費/滑價；'+
+      '進場口徑為金叉隔日收盤(避免未來函數)。'+(small?'<b>本檔樣本僅 '+bt.total_signals+' 個，統計上偏少，參考價值有限。</b>':'樣本 '+bt.total_signals+' 個。')+
+    '</div>'+
+    '<div class="tbl-wrap"><table><thead><tr>'+
+      '<th style="text-align:left">持有期</th><th>樣本</th><th>勝率</th><th>平均報酬</th><th>中位報酬</th><th>最佳</th><th>最差</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="legend">勝率＝該持有期正報酬的訊號占比。<b>看「最差」欄</b>了解最大單次虧損——勝率高不代表不會大賠。樣本<30 視為不足。</div></section>';
 }
 
 function signalsBlock(signals,sn,ln){

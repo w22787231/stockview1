@@ -111,6 +111,65 @@ def candles(tk):
     return out, mas, signals
 
 
+def backtest_golden(tk, years=5, horizons=(5, 10, 20)):
+    """金叉訊號歷史回測(誠實版)。
+    口徑：金叉當天收盤後才知訊號 → 用「隔一天收盤」當進場基準(避免未來函數)；
+          後 N 日報酬 = N日後收盤 / 進場收盤 - 1。回傳各 horizon 的勝率/平均/中位/樣本數。
+    """
+    try:
+        h = tk.history(period=f"{years}y", interval="1d", auto_adjust=False)
+    except Exception:
+        return None
+    if h is None or h.empty or len(h) < MA_LONG + max(horizons) + 5:
+        return None
+    closes = list(h["Close"])
+    n = len(closes)
+
+    def ma_at(i, w):
+        if i + 1 < w:
+            return None
+        return sum(closes[i + 1 - w:i + 1]) / w
+
+    # 找金叉日 index
+    golden_idx = []
+    for i in range(1, n):
+        ps, pl = ma_at(i - 1, MA_SHORT), ma_at(i - 1, MA_LONG)
+        cs, cl = ma_at(i, MA_SHORT), ma_at(i, MA_LONG)
+        if None in (ps, pl, cs, cl):
+            continue
+        if (ps - pl) <= 0 and (cs - cl) > 0:
+            golden_idx.append(i)
+
+    results = {}
+    for hz in horizons:
+        rets = []
+        for gi in golden_idx:
+            entry_i = gi + 1           # 隔天進場(避免未來函數)
+            exit_i = entry_i + hz
+            if exit_i >= n:
+                continue
+            entry, exit_ = closes[entry_i], closes[exit_i]
+            if entry in (0, None):
+                continue
+            rets.append((exit_ / entry - 1.0) * 100.0)
+        if not rets:
+            results[str(hz)] = None
+            continue
+        rets_sorted = sorted(rets)
+        wins = sum(1 for r in rets if r > 0)
+        results[str(hz)] = {
+            "n": len(rets),
+            "win_rate": _safe(wins / len(rets) * 100.0),
+            "avg": _safe(sum(rets) / len(rets)),
+            "median": _safe(rets_sorted[len(rets_sorted) // 2]),
+            "best": _safe(max(rets)),
+            "worst": _safe(min(rets)),
+        }
+    total_signals = len(golden_idx)
+    return {"signal": f"MA{MA_SHORT}金叉", "years": years,
+            "total_signals": total_signals, "horizons": results}
+
+
 def fundamentals(info):
     """從 yfinance .info 抽關鍵基本面 + 規則式評語。"""
     g = lambda k: info.get(k)
@@ -303,6 +362,7 @@ def export_one(sym):
     cdl, mas, signals = candles(tk)
     if not cdl:
         return False, "no price"
+    backtest = backtest_golden(tk, years=5)
     info, info_ok = fetch_info(tk)
     metrics, notes, overall = fundamentals(info)
     stmts = statements(tk)
@@ -317,8 +377,8 @@ def export_one(sym):
         "source": "yfinance",
         "has_fundamentals": bool(has_fund),
         "metrics": metrics, "notes": notes, "overall": overall,
-        "candles": cdl, "ma": mas, "signals": signals, "statements": stmts,
-        "news": news, "events": events,
+        "candles": cdl, "ma": mas, "signals": signals, "backtest": backtest,
+        "statements": stmts, "news": news, "events": events,
     }
     os.makedirs(OUT_DIR, exist_ok=True)
     with io.open(os.path.join(OUT_DIR, _fname(sym)), "w", encoding="utf-8") as f:

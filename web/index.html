@@ -919,8 +919,11 @@ function drawChart(d){
 
   const cdl=d.candles.filter(c=>c.o!=null);
   const dates=cdl.map(c=>c.t);
-  // K棒資料 ECharts 格式：[open, close, low, high]
-  const kdata=cdl.map(c=>[c.o,c.c,c.l,c.h]);
+  const r2=v=>v==null?null:+Number(v).toFixed(2);
+  // K棒資料 ECharts 格式：[open, close, low, high]，全部四捨五入到 2 位
+  const kdata=cdl.map(c=>[r2(c.o),r2(c.c),r2(c.l),r2(c.h)]);
+  // 各日相對前一日收盤的漲跌%(給 tooltip 用)
+  const chgArr=cdl.map((c,i)=> i>0 && cdl[i-1].c ? +((c.c/cdl[i-1].c-1)*100).toFixed(2) : null);
 
   // 均線對齊到日期軸(用 map 補 null)
   const ma=d.ma||{};
@@ -952,7 +955,24 @@ function drawChart(d){
     animation:false,
     grid:{left:8,right:56,top:14,bottom:48,containLabel:true},
     tooltip:{trigger:"axis",axisPointer:{type:"cross"},
-      backgroundColor:"#fff",borderColor:"#e3e8f0",textStyle:{color:"#1a2433",fontSize:11}},
+      backgroundColor:"#fff",borderColor:"#e3e8f0",textStyle:{color:"#1a2433",fontSize:11},
+      formatter:function(ps){
+        if(!ps||!ps.length) return "";
+        const i=ps[0].dataIndex, k=kdata[i], chg=chgArr[i];
+        if(!k) return ps[0].axisValue;
+        const fx=n=>n==null?"–":Number(n).toFixed(2);
+        const chgTxt = chg==null?"" :
+          '<span style="color:'+(chg>0?"#16a34a":(chg<0?"#e11d48":"#9aa6b6"))+'">'+
+          (chg>0?"+":"")+chg.toFixed(2)+'%</span>';
+        let html='<b>'+ps[0].axisValue+'</b>　今日 '+chgTxt+'<br>'+
+          '開 '+fx(k[0])+'　收 '+fx(k[1])+'<br>高 '+fx(k[3])+'　低 '+fx(k[2]);
+        // 均線值
+        ps.forEach(p=>{
+          if(p.seriesName&&p.seriesName.indexOf("MA")===0&&p.value!=null)
+            html+='<br><span style="color:'+p.color+'">'+p.seriesName+'</span> '+fx(p.value);
+        });
+        return html;
+      }},
     legend:{data:["K線","MA"+sn,"MA"+ln],top:0,right:8,itemWidth:14,itemHeight:8,
       textStyle:{fontSize:11,color:"#5a6678"}},
     xAxis:{type:"category",data:dates,boundaryGap:true,

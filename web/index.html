@@ -283,6 +283,7 @@
   <nav class="mainnav" id="mainnav">
     <button class="mtab" data-view="macro">總體市場</button>
     <button class="mtab active" data-view="trend">趨勢動能榜</button>
+    <button class="mtab" data-view="cross">交叉訊號</button>
     <button class="mtab" data-view="news">即時快訊</button>
   </nav>
 
@@ -1325,16 +1326,17 @@ async function openStock(sym){
 }
 
 // ── 主分頁切換 ──
+let TREND_SUB = "trend";  // 趨勢分頁群內目前子頁："trend" 或 "cross"，共用同一份 pool JSON
 let VIEW = "trend";
 function switchView(v){
   VIEW = v;
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  // 池分頁列只在趨勢頁顯示；搜尋框在快訊頁隱藏
-  $(".toolbar").style.display = (v==="trend") ? "flex" : "none";
+  const isPoolView = (v==="trend"||v==="cross");  // 交叉分頁與趨勢共用池分頁列
+  $(".toolbar").style.display = isPoolView ? "flex" : "none";
   document.querySelector(".search").style.display = (v==="news") ? "none" : "flex";
   if(v==="macro") loadMacro();
   else if(v==="news") loadNewsFeed();
-  else load();
+  else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
 
@@ -1385,7 +1387,7 @@ async function load(){
     $("#poolNote").innerHTML = (d.currencies||[]).length>1
       ? '⚠️ 本池含多幣別，Score / avg$Vol 跨幣別不可直接比（TWD 金額天生大於 USD）。'
       : '本池幣別 '+esc(cur)+'。Score 同幣別內比較有意義。';
-    render(d);
+    if(TREND_SUB==="cross") renderCross(d); else render(d);
   }catch(e){
     $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/'+current+'.json 失敗（'+esc(e.message)+'）。<br>'+
       '首次部署或尚未產生資料時會這樣，請先在 GitHub Actions 跑一次 export，或按「更新資料」。</div>';

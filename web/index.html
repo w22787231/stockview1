@@ -537,6 +537,36 @@ function surgeGuide(){
   '</div>';
 }
 
+function btRankTable(rows,kind){
+  const head=["#","代號/名稱","勝率","平均","中位","最佳","最差","樣本"];
+  const body=rows.map((r,i)=>'<tr>'+
+    '<td>'+(i+1)+'</td>'+
+    '<td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(r.sym)+(r.name?'<span class="nm">'+esc(r.name)+'</span>':'')+'</td>'+
+    '<td class="'+(r.win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+r.win_rate.toFixed(0)+'%</td>'+
+    '<td class="'+cls(r.avg)+'">'+sgn(r.avg,1)+'%</td>'+
+    '<td class="'+cls(r.median)+'" style="font-weight:700">'+sgn(r.median,1)+'%</td>'+
+    '<td class="pos">'+sgn(r.best,1)+'%</td>'+
+    '<td class="neg">'+sgn(r.worst,1)+'%</td>'+
+    '<td class="dim">'+r.n+'</td></tr>').join("");
+  return '<div class="tbl-wrap"><table><thead><tr>'+head.map((h,i)=>'<th'+(i===1?' style="text-align:left"':'')+'>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function backtestRankBlock(br){
+  if(!br || !br.by_win_rate || !br.by_win_rate.length) return '';
+  return '<section>'+
+    '<div class="sec-head"><h2>金叉回測排行</h2><span class="tag">MA5金叉 · 持有20日 · 近5年</span>'+
+      '<span class="hint">僅本池主表股('+(br.n_tested||0)+'檔)，過去歷史統計</span></div>'+
+    '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 10px">'+
+      '⚠️ <b>歷史統計，非未來保證、非買賣建議。</b>進場口徑為金叉隔日收盤(避免未來函數)，未含手續費。樣本<10 者參考價值有限，務必看「最差」欄。'+
+    '</div>'+
+    '<div class="fin-grid">'+
+      '<div><div class="tg-gname">🏆 20日勝率 前10</div>'+btRankTable(br.by_win_rate,"win")+'</div>'+
+      '<div><div class="tg-gname">📊 20日中位報酬 前10</div>'+btRankTable(br.by_median,"med")+'</div>'+
+    '</div>'+
+    '<div class="legend">勝率＝20日後正報酬占比；<b>中位報酬</b>＝排序正中間那次(比平均更代表常態，不被極端值拉歪)。代號可點進個股看完整回測。</div>'+
+  '</section>';
+}
+
 function highlightsCard(items){
   if(!items||!items.length) return '';
   const cards=items.map(it=>'<div class="hl-item '+esc(it.type)+'">'+
@@ -553,6 +583,7 @@ function render(d){
   const r=d.rankings||{};
   $("#content").innerHTML =
     highlightsCard(d.highlights)+
+    backtestRankBlock(d.backtest_rank)+
     '<section>'+
       '<div class="sec-head"><h2>① 趨勢效率主表</h2><span class="tag">Top '+d.topn+' · 依 Score 排序</span>'+
         '<span class="hint">會動(效率/單向)＋振幅(ADR)＋有量($Vol)＋誰大(Score) 一張表</span></div>'+
@@ -836,6 +867,15 @@ function renderStock(d){
       newsBlock(d.news);
 
   $("#backBtn").onclick = ()=> switchView(VIEW==="macro"?"macro":"trend");
+  // 均線交叉訊號展開/收合
+  const sigBtn=document.getElementById("sigToggle");
+  if(sigBtn) sigBtn.onclick=()=>{
+    const hid=document.getElementById("sigHidden");
+    const open=sigBtn.dataset.open==="1";
+    if(hid) hid.style.display = open?"none":"table-row-group";
+    sigBtn.dataset.open = open?"0":"1";
+    sigBtn.innerHTML = open ? ('顯示其餘 '+hid.children.length+' 個 ▼') : '收合 ▲';
+  };
   drawChart(d);
 }
 
@@ -875,13 +915,21 @@ function signalsBlock(signals,sn,ln){
   const lastTxt = last.type==="golden"
     ? '<span class="pos">最近：'+esc(last.t)+' 黃金交叉(短上穿長，偏多)</span>'
     : '<span class="neg">最近：'+esc(last.t)+' 死亡交叉(短下穿長，偏空)</span>';
-  const rows=list.map(s=>'<tr><td class="sym" style="cursor:default">'+esc(s.t)+'</td>'+
+  const rowHtml=s=>'<tr><td class="sym" style="cursor:default">'+esc(s.t)+'</td>'+
     '<td>'+(s.type==="golden"?'<span class="badge in">🟢 黃金交叉</span>':'<span class="badge add" style="background:#fdeaed;color:var(--red)">🔴 死亡交叉</span>')+'</td>'+
-    '<td class="dim">'+(s.price!=null?fmtNum(s.price,2):"–")+'</td></tr>').join("");
-  return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+' · 近5年</span>'+
-      '<span class="hint">短均線上穿長=金叉、下穿=死叉</span></div>'+
+    '<td class="dim">'+(s.price!=null?fmtNum(s.price,2):"–")+'</td></tr>';
+  const head='<thead><tr><th style="text-align:left">日期</th><th style="text-align:left">訊號</th><th>當時收盤</th></tr></thead>';
+  const shown=list.slice(0,10).map(rowHtml).join("");
+  const hidden=list.slice(10).map(rowHtml).join("");
+  const moreBtn = list.length>10
+    ? '<button class="btn" id="sigToggle" style="margin-top:10px" data-open="0">顯示其餘 '+(list.length-10)+' 個 ▼</button>'
+    : '';
+  return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+' · 近5年 · 共'+list.length+'個</span>'+
+      '<span class="hint">短均線上穿長=金叉、下穿=死叉(預設顯最近10個)</span></div>'+
     '<div class="legend" style="margin-top:0;margin-bottom:8px;border:none">'+lastTxt+'</div>'+
-    '<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">日期</th><th style="text-align:left">訊號</th><th>當時收盤</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="tbl-wrap"><table>'+head+'<tbody>'+shown+'</tbody>'+
+      '<tbody id="sigHidden" style="display:none">'+hidden+'</tbody></table></div>'+
+    moreBtn+
     '<div class="legend">⚠️ MA'+sn+' 較短、訊號頻繁(易有雜訊/假交叉)，<b>僅供參考，非買賣建議</b>，務必配合趨勢與量能。短均線數字越小越敏感。</div></section>';
 }
 

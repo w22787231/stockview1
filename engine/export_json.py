@@ -13,10 +13,84 @@ import sys, os, io, json, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import warnings
+warnings.filterwarnings("ignore")
 import adr_screen as eng  # 同資料夾的引擎
+import yfinance as yf
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 POOLS = ["tw150", "ndx100", "sp500", "sp400", "sp600"]
+MA_SHORT, MA_LONG = 5, 50
+
+
+def _golden_backtest_20(closes):
+    """對單檔收盤序列做 MA5×MA50 金叉、持有20日回測。回傳統計 dict 或 None。
+    口徑：金叉隔日收盤進場(避免未來函數)、20日後收盤出場。"""
+    n = len(closes)
+    if n < MA_LONG + 25:
+        return None
+
+    def ma(i, w):
+        if i + 1 < w:
+            return None
+        return sum(closes[i + 1 - w:i + 1]) / w
+
+    golden = []
+    for i in range(1, n):
+        ps, pl, cs, cl = ma(i-1, MA_SHORT), ma(i-1, MA_LONG), ma(i, MA_SHORT), ma(i, MA_LONG)
+        if None in (ps, pl, cs, cl):
+            continue
+        if (ps - pl) <= 0 and (cs - cl) > 0:
+            golden.append(i)
+    rets = []
+    for gi in golden:
+        e, x = gi + 1, gi + 1 + 20
+        if x >= n or closes[e] in (0, None):
+            continue
+        rets.append((closes[x] / closes[e] - 1.0) * 100.0)
+    if len(rets) < 3:   # 樣本太少不納入排行
+        return None
+    rs = sorted(rets)
+    wins = sum(1 for r in rets if r > 0)
+    return {"n": len(rets),
+            "win_rate": round(wins/len(rets)*100, 0),
+            "avg": round(sum(rets)/len(rets), 1),
+            "median": round(rs[len(rs)//2], 1),
+            "best": round(max(rets), 1),
+            "worst": round(min(rets), 1)}
+
+
+def build_backtest_rankings(main_rows):
+    """對主表股抓5年收盤、跑20日金叉回測，回勝率前10 + 中位前10。"""
+    syms = [r["sym"] for r in main_rows]
+    if not syms:
+        return {}
+    name = {r["sym"]: _name(r["sym"]) for r in main_rows}
+    try:
+        df = yf.download(syms, period="5y", interval="1d",
+                         group_by="ticker", progress=False, auto_adjust=False)
+    except Exception:
+        return {}
+    stats = []
+    for s in syms:
+        try:
+            if getattr(df.columns, "nlevels", 1) > 1 and s in df.columns.get_level_values(0):
+                sub = df[s].dropna()
+            else:
+                sub = df.dropna()
+            closes = list(sub["Close"])
+            bt = _golden_backtest_20(closes)
+            if bt:
+                bt["sym"] = s
+                bt["name"] = name.get(s)
+                stats.append(bt)
+        except Exception:
+            continue
+    if not stats:
+        return {}
+    by_win = sorted(stats, key=lambda x: (x["win_rate"], x["median"]), reverse=True)[:10]
+    by_med = sorted(stats, key=lambda x: (x["median"], x["win_rate"]), reverse=True)[:10]
+    return {"n_tested": len(stats), "by_win_rate": by_win, "by_median": by_med}
 
 
 def _round(x, n=4):
@@ -226,6 +300,7 @@ def run_pool(pool, topn):
         "source": "yfinance (daily)",
         "main": main,
         "highlights": build_highlights(rows, main_rows, topn),
+        "backtest_rank": build_backtest_rankings(main_rows),
         "cross_filter": build_cross_filter(rows, main_rows, topn),
         "volume_surge": build_volume_surge(rows, topn),
         "rankings": build_rankings(rows, topn),

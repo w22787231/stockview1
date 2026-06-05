@@ -674,6 +674,10 @@ function renderMacro(d){
         '<span class="hint">收益率/VIX 顯示水準 + 與昨日差(bps／點)</span></div>'+
       '<div class="idx-grid">'+(d.indices||[]).map(idxCard).join("")+'</div>'+
     '</section>'+
+    '<section id="sentSec"><div class="sec-head"><h2>情緒指標</h2><span class="tag">波動 / 廣度 / 貪婪恐懼</span>'+
+      '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
+      '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
+    '</section>'+
     '<section>'+
       '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
         '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
@@ -685,7 +689,74 @@ function renderMacro(d){
         '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
+  loadSentiment();
   loadThemes();
+}
+
+function sentCard(r){
+  const diff = r.diff!=null ? r.diff : r.diff_pct;
+  const isPx = r.unit==="px";
+  const up = diff>0;
+  // VIX/VXN/SKEW(指數類)上升=恐慌(紅)；HYG(價)上升=偏多(綠)
+  const c = diff==null?"dim":(!isPx ? (up?"neg":"pos") : (up?"pos":"neg"));
+  const sign = diff>0?"+":"";
+  const diffTxt = (diff!=null?sign+diff:"–")+(isPx?"%":" 點");
+  return '<div class="idx-card">'+
+    '<div class="ic-label">'+esc(r.label)+'</div><div class="ic-note">'+esc(r.note||"")+'</div>'+
+    '<div class="ic-val">'+(r.level!=null?Number(r.level).toFixed(2):"–")+'</div>'+
+    '<div class="ic-chg '+c+'">'+diffTxt+'</div>'+
+    '<div class="ic-sub">'+esc(r.read||"")+'</div></div>';
+}
+
+function fngCard(fg){
+  if(!fg) return '';
+  const s=fg.score, prev=fg.prev;
+  const col = s>=75?"#16a34a":(s>=55?"#5cb85c":(s>=45?"#9aa6b6":(s>=25?"#e8923a":"#e11d48")));
+  const zh = s>=75?"極度貪婪":(s>=55?"貪婪":(s>=45?"中性":(s>=25?"恐懼":"極度恐懼")));
+  const dd = (prev!=null)?(s-prev):null;
+  return '<div class="idx-card" style="border-color:'+col+'66">'+
+    '<div class="ic-label">😱 Fear &amp; Greed</div><div class="ic-note">CNN 市場貪婪/恐懼指數 (0–100)</div>'+
+    '<div class="ic-val" style="color:'+col+'">'+(s!=null?s.toFixed(0):"–")+'</div>'+
+    '<div class="ic-chg" style="color:'+col+'">'+zh+(dd!=null?' ('+(dd>0?"+":"")+dd.toFixed(0)+')':'')+'</div>'+
+    '<div class="ic-sub">&lt;25 極度恐懼(可能超賣) · &gt;75 極度貪婪(可能過熱)</div></div>';
+}
+
+function breadthBox(b){
+  if(!b) return '';
+  const bar=(p)=>'<span style="display:inline-block;height:7px;width:'+Math.round(p*0.9)+'px;background:'+(p>=50?"var(--green)":"var(--red)")+';border-radius:2px;opacity:.55;vertical-align:middle;margin-left:6px"></span>';
+  const row=(lbl,today,prev)=>{
+    const dd=(today-prev);
+    return '<tr><td class="sym" style="cursor:default">'+lbl+'</td>'+
+      '<td class="'+(today>=50?"pos":"neg")+'" style="font-weight:700">'+today+'%'+bar(today)+'</td>'+
+      '<td class="dim">'+prev+'%</td>'+
+      '<td class="'+(dd>0?"pos":(dd<0?"neg":"dim"))+'">'+(dd>0?"+":"")+dd.toFixed(1)+'%</td></tr>';
+  };
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">市場廣度 · '+esc(b.pool)+'（'+b.n+'檔）站上均線家數%</div>'+
+    '<table><thead><tr><th style="text-align:left">指標</th><th style="text-align:left">今日</th><th style="text-align:left">昨日</th><th style="text-align:left">變化</th></tr></thead><tbody>'+
+      row("站上 20MA", b.above20_pct, b.above20_prev)+
+      row("站上 50MA", b.above50_pct, b.above50_prev)+
+    '</tbody></table>'+
+    '<div class="ex">廣度＝多少%的股站上均線。<b>&gt;50% 偏多頭、&lt;50% 偏空頭</b>；今日比昨日上升＝市場轉強(資金擴散)。比看指數更能反映「個股普遍強不強」。</div></div>';
+}
+
+function renderSentiment(d){
+  const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
+  $("#sentBox").innerHTML =
+    '<div class="idx-grid">'+cards+'</div>'+
+    breadthBox(d.breadth)+
+    '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
+    (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
+}
+
+async function loadSentiment(){
+  try{
+    const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    renderSentiment(await res.json());
+  }catch(e){
+    const el=$("#sentBox"); if(el) el.innerHTML='<div class="legend">⚠️ 情緒指標資料尚未產生。請在 GitHub Actions 跑一次 export。</div>';
+  }
 }
 
 function retCell(v){

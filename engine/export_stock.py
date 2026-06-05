@@ -18,8 +18,10 @@ import adr_screen as eng
 OUT_DIR = os.path.join(HERE, "..", "data", "stock")
 
 # 雲端(GitHub Actions)上 yfinance 的 .info 常被 Yahoo 擋 → 重試 + 判斷是否真有料。
-INFO_RETRIES = 3
-INFO_SLEEP = 1.2  # 秒；每檔之間/重試之間稍歇，降低被限流機率
+# 可用環境變數覆寫(全池 1700 檔時建議調低，避免 sleep 累積過久):
+#   STOCK_INFO_RETRIES, STOCK_INFO_SLEEP
+INFO_RETRIES = int(os.environ.get("STOCK_INFO_RETRIES", "3"))
+INFO_SLEEP = float(os.environ.get("STOCK_INFO_SLEEP", "1.2"))  # 秒；重試間稍歇，降低被限流機率
 
 
 def fetch_info(tk):

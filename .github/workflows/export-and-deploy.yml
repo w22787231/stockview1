@@ -34,7 +34,7 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,20 +75,24 @@ jobs:
           python export_themes.py
 
       - name: Export per-stock detail (top names per pool)
-        # 各池主表 Top 150 + 台股主題成分股(約 700 檔，每天 ~30 分)。
-        # 要改涵蓋量改下面數字；要全池改成 --from-pool <pool>(不加數字)。
+        # 全 5 池(不加數字=全池) + 台股主題成分股，約 1700 檔。
+        # 耗時長(估 80-120 分)、後段易被 Yahoo 限流(基本面/新聞可能缺，仍有K線+三表)。
+        # continue-on-error + || true：單池失敗不中斷部署。
         continue-on-error: true
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
+          # 全池量大：降低重試與間隔，避免 sleep 累積。抓不到基本面者前端自動只顯K線+三表。
+          STOCK_INFO_RETRIES: "2"
+          STOCK_INFO_SLEEP: "0.5"
         run: |
           cd engine
-          python export_stock.py --from-themes        || true
-          python export_stock.py --from-pool tw150  150 || true
-          python export_stock.py --from-pool ndx100 150 || true
-          python export_stock.py --from-pool sp500  150 || true
-          python export_stock.py --from-pool sp400  150 || true
-          python export_stock.py --from-pool sp600  150 || true
+          python export_stock.py --from-themes    || true
+          python export_stock.py --from-pool tw150  || true
+          python export_stock.py --from-pool ndx100 || true
+          python export_stock.py --from-pool sp500  || true
+          python export_stock.py --from-pool sp400  || true
+          python export_stock.py --from-pool sp600  || true
 
       - name: Stage web output
         run: |

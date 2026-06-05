@@ -34,7 +34,7 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,19 +75,20 @@ jobs:
           python export_themes.py
 
       - name: Export per-stock detail (top names per pool)
-        # 全 5 池 + 台股主題成分股。檔多耗時長，故 continue-on-error 避免單池失敗中斷部署。
+        # 各池主表 Top 150 + 台股主題成分股(約 700 檔，每天 ~30 分)。
+        # 要改涵蓋量改下面數字；要全池改成 --from-pool <pool>(不加數字)。
         continue-on-error: true
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
         run: |
           cd engine
-          python export_stock.py --from-themes || true
-          python export_stock.py --from-pool tw150  || true
-          python export_stock.py --from-pool ndx100 || true
-          python export_stock.py --from-pool sp500  || true
-          python export_stock.py --from-pool sp400  || true
-          python export_stock.py --from-pool sp600  || true
+          python export_stock.py --from-themes        || true
+          python export_stock.py --from-pool tw150  150 || true
+          python export_stock.py --from-pool ndx100 150 || true
+          python export_stock.py --from-pool sp500  150 || true
+          python export_stock.py --from-pool sp400  150 || true
+          python export_stock.py --from-pool sp600  150 || true
 
       - name: Stage web output
         run: |

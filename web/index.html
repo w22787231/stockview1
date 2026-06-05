@@ -343,6 +343,23 @@ function crossSortVal(r){
   const recency = r.cross_days!=null ? (200 - Math.min(r.cross_days,200)) : 0;
   return base + recency;
 }
+// 交叉訊號排序：天數小→前、cross_days==null 墊底、同天數 score 大→前。
+// 與後端 _cross_sort_key 同口徑，前端即使吃到未排序資料也穩定。
+function sortCrossRows(rows){
+  return (rows||[]).slice().sort((a,b)=>{
+    const da = a.cross_days==null ? Infinity : a.cross_days;
+    const db = b.cross_days==null ? Infinity : b.cross_days;
+    if(da!==db) return da-db;
+    return (b.score||0)-(a.score||0);
+  });
+}
+// 從 cross_signals 取「近 fresh_days 天剛觸發」：合併 golden+death、排除無天數、依天數排序。
+function freshCrosses(cs){
+  if(!cs) return [];
+  const fd = cs.fresh_days!=null ? cs.fresh_days : 3;
+  const all = (cs.golden||[]).concat(cs.death||[]);
+  return sortCrossRows(all.filter(r=>r.cross_days!=null && r.cross_days<=fd));
+}
 const esc = s => (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 
 function symCell(sym,name){

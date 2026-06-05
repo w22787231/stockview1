@@ -813,7 +813,7 @@ function renderStock(d){
     metricsBlock+
     (function(){
       const sn=(d.ma&&d.ma.short_n)||5, ln=(d.ma&&d.ma.long_n)||50;
-      return '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA'+sn+'/MA'+ln+' · 均線交叉 · 近1年</span></div>'+
+      return '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA'+sn+'/MA'+ln+' · 均線交叉 · 近5年(可縮放)</span></div>'+
       '<div id="chart"></div>'+
       '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#f59e0b"></span>MA'+sn+'(短)</span>'+
       '<span class="lg"><span class="sw" style="background:#2563eb"></span>MA'+ln+'(長)</span>'+
@@ -866,7 +866,7 @@ function backtestBlock(bt){
 function signalsBlock(signals,sn,ln){
   if(!signals||!signals.length)
     return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+'</span></div>'+
-      '<div class="legend">近1年內無 MA'+sn+'/MA'+ln+' 交叉訊號。</div></section>';
+      '<div class="legend">近5年內無 MA'+sn+'/MA'+ln+' 交叉訊號。</div></section>';
   // 由新到舊
   const list=signals.slice().sort((a,b)=>a.t<b.t?1:-1);
   const last=list[0];
@@ -876,7 +876,7 @@ function signalsBlock(signals,sn,ln){
   const rows=list.map(s=>'<tr><td class="sym" style="cursor:default">'+esc(s.t)+'</td>'+
     '<td>'+(s.type==="golden"?'<span class="badge in">🟢 黃金交叉</span>':'<span class="badge add" style="background:#fdeaed;color:var(--red)">🔴 死亡交叉</span>')+'</td>'+
     '<td class="dim">'+(s.price!=null?fmtNum(s.price,2):"–")+'</td></tr>').join("");
-  return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+' · 近1年</span>'+
+  return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+' · 近5年</span>'+
       '<span class="hint">短均線上穿長=金叉、下穿=死叉</span></div>'+
     '<div class="legend" style="margin-top:0;margin-bottom:8px;border:none">'+lastTxt+'</div>'+
     '<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">日期</th><th style="text-align:left">訊號</th><th>當時收盤</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
@@ -958,7 +958,7 @@ function drawChart(d){
     yAxis:{scale:true,position:"right",axisLine:{show:false},
       axisLabel:{color:"#9aa6b6",fontSize:10},
       splitLine:{lineStyle:{color:"#eef1f6"}}},
-    dataZoom:[{type:"inside",start:55,end:100},{type:"slider",height:16,bottom:18,
+    dataZoom:[{type:"inside",start:80,end:100},{type:"slider",height:16,bottom:18,
       borderColor:"#e3e8f0",fillerColor:"rgba(37,99,235,.08)",
       handleStyle:{color:"#2563eb"},textStyle:{color:"#9aa6b6",fontSize:9}}],
     series:[

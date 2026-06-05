@@ -186,14 +186,22 @@ def backtest_golden(tk, years=5, horizons=(5, 10, 20)):
             results[str(hz)] = None
             continue
         rets_sorted = sorted(rets)
-        wins = sum(1 for r in rets if r > 0)
+        wins = [r for r in rets if r > 0]
+        losses = [r for r in rets if r < 0]
+        avg_win = (sum(wins) / len(wins)) if wins else None
+        avg_loss = (sum(losses) / len(losses)) if losses else None   # 負值
+        # 賺賠比 = 平均賺 / |平均賠|；無虧損(全賺)時設 None(無從比)
+        pl_ratio = (avg_win / abs(avg_loss)) if (avg_win is not None and avg_loss) else None
         results[str(hz)] = {
             "n": len(rets),
-            "win_rate": _safe(wins / len(rets) * 100.0),
+            "win_rate": _safe(len(wins) / len(rets) * 100.0),
             "avg": _safe(sum(rets) / len(rets)),
             "median": _safe(rets_sorted[len(rets_sorted) // 2]),
             "best": _safe(max(rets)),
             "worst": _safe(min(rets)),
+            "avg_win": _safe(avg_win),
+            "avg_loss": _safe(avg_loss),
+            "pl_ratio": _safe(pl_ratio),
         }
     total_signals = len(golden_idx)
     return {"signal": f"MA{MA_SHORT}金叉", "years": years,

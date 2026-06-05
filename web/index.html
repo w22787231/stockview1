@@ -538,13 +538,15 @@ function surgeGuide(){
 }
 
 function btRankTable(rows,kind){
-  const head=["#","代號/名稱","勝率","平均","中位","最佳","最差","樣本"];
+  const head=["#","代號/名稱","勝率","中位","賺賠比","最佳","最差","樣本"];
+  const plFmt=v=>v==null?"–":Number(v).toFixed(2);
+  const plCls=v=>v==null?"dim":(v>=1?"pos":"neg");
   const body=rows.map((r,i)=>'<tr>'+
     '<td>'+(i+1)+'</td>'+
     '<td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(r.sym)+(r.name?'<span class="nm">'+esc(r.name)+'</span>':'')+'</td>'+
     '<td class="'+(r.win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+r.win_rate.toFixed(0)+'%</td>'+
-    '<td class="'+cls(r.avg)+'">'+sgn(r.avg,1)+'%</td>'+
     '<td class="'+cls(r.median)+'" style="font-weight:700">'+sgn(r.median,1)+'%</td>'+
+    '<td class="'+plCls(r.pl_ratio)+'" style="font-weight:700">'+plFmt(r.pl_ratio)+'</td>'+
     '<td class="pos">'+sgn(r.best,1)+'%</td>'+
     '<td class="neg">'+sgn(r.worst,1)+'%</td>'+
     '<td class="dim">'+r.n+'</td></tr>').join("");
@@ -882,14 +884,19 @@ function renderStock(d){
 function backtestBlock(bt){
   if(!bt || !bt.horizons) return '';
   const small = bt.total_signals < 30;   // 樣本不足警示門檻
+  const plFmt=v=>v==null?"–":Number(v).toFixed(2);
+  const plCls=v=>v==null?"dim":(v>=1?"pos":"neg");
   const rows=["5","10","20"].map(hz=>{
     const r=bt.horizons[hz];
-    if(!r) return '<tr><td class="sym" style="cursor:default">'+hz+'日</td><td colspan="6" class="dim">樣本不足</td></tr>';
+    if(!r) return '<tr><td class="sym" style="cursor:default">'+hz+'日</td><td colspan="8" class="dim">樣本不足</td></tr>';
     return '<tr><td class="sym" style="cursor:default">'+hz+'日後</td>'+
       '<td class="dim">'+r.n+'</td>'+
       '<td class="'+(r.win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+r.win_rate.toFixed(0)+'%</td>'+
       '<td class="'+cls(r.avg)+'">'+sgn(r.avg,1)+'%</td>'+
       '<td class="'+cls(r.median)+'">'+sgn(r.median,1)+'%</td>'+
+      '<td class="pos">'+(r.avg_win!=null?sgn(r.avg_win,1)+'%':"–")+'</td>'+
+      '<td class="neg">'+(r.avg_loss!=null?sgn(r.avg_loss,1)+'%':"–")+'</td>'+
+      '<td class="'+plCls(r.pl_ratio)+'" style="font-weight:700">'+plFmt(r.pl_ratio)+'</td>'+
       '<td class="pos">'+sgn(r.best,1)+'%</td>'+
       '<td class="neg">'+sgn(r.worst,1)+'%</td></tr>';
   }).join("");
@@ -900,9 +907,9 @@ function backtestBlock(bt){
       '進場口徑為金叉隔日收盤(避免未來函數)。'+(small?'<b>本檔樣本僅 '+bt.total_signals+' 個，統計上偏少，參考價值有限。</b>':'樣本 '+bt.total_signals+' 個。')+
     '</div>'+
     '<div class="tbl-wrap"><table><thead><tr>'+
-      '<th style="text-align:left">持有期</th><th>樣本</th><th>勝率</th><th>平均報酬</th><th>中位報酬</th><th>最佳</th><th>最差</th>'+
+      '<th style="text-align:left">持有期</th><th>樣本</th><th>勝率</th><th>平均報酬</th><th>中位報酬</th><th>平均賺</th><th>平均賠</th><th>賺賠比</th><th>最佳</th><th>最差</th>'+
       '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="legend">勝率＝該持有期正報酬的訊號占比。<b>看「最差」欄</b>了解最大單次虧損——勝率高不代表不會大賠。樣本<30 視為不足。</div></section>';
+    '<div class="legend">勝率＝正報酬訊號占比。<b>賺賠比＝平均賺 ÷ |平均賠|</b>(最接近風報比)：>1 表示賺的幅度大於賠的，越大越好。<b>看「最差」欄</b>了解最大單次虧損。樣本<30 視為不足。</div></section>';
 }
 
 function signalsBlock(signals,sn,ln){

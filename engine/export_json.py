@@ -51,13 +51,20 @@ def _golden_backtest_20(closes):
     if len(rets) < 3:   # 樣本太少不納入排行
         return None
     rs = sorted(rets)
-    wins = sum(1 for r in rets if r > 0)
+    wins = [r for r in rets if r > 0]
+    losses = [r for r in rets if r < 0]
+    avg_win = (sum(wins)/len(wins)) if wins else None
+    avg_loss = (sum(losses)/len(losses)) if losses else None
+    pl_ratio = (avg_win/abs(avg_loss)) if (avg_win is not None and avg_loss) else None
     return {"n": len(rets),
-            "win_rate": round(wins/len(rets)*100, 0),
+            "win_rate": round(len(wins)/len(rets)*100, 0),
             "avg": round(sum(rets)/len(rets), 1),
             "median": round(rs[len(rs)//2], 1),
             "best": round(max(rets), 1),
-            "worst": round(min(rets), 1)}
+            "worst": round(min(rets), 1),
+            "avg_win": round(avg_win, 1) if avg_win is not None else None,
+            "avg_loss": round(avg_loss, 1) if avg_loss is not None else None,
+            "pl_ratio": round(pl_ratio, 2) if pl_ratio is not None else None}
 
 
 def build_backtest_rankings(main_rows):

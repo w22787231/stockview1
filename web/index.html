@@ -200,7 +200,23 @@
   .backbtn{font-size:13px;color:var(--blue);cursor:pointer;display:inline-flex;align-items:center;gap:5px;
     margin-bottom:10px;font-weight:600}
   .backbtn:hover{text-decoration:underline}
-  .fin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .fin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .events-box{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid var(--line);
+    border-radius:11px;padding:12px 16px;background:var(--panel);box-shadow:var(--shadow)}
+  .events-box .ev-date{font-size:13px;color:var(--ink2)}
+  .events-box .ev-link{font-size:12.5px;color:var(--blue);text-decoration:none;border:1px solid var(--line);
+    padding:5px 12px;border-radius:8px;background:var(--panel2);font-weight:600}
+  .events-box .ev-link:hover{border-color:var(--blue);background:#eef4ff}
+  .news-list{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:11px;
+    overflow:hidden;background:var(--panel);box-shadow:var(--shadow)}
+  .nw-item{padding:11px 15px;border-bottom:1px solid var(--line);transition:.1s}
+  .nw-item:last-child{border-bottom:none}
+  .nw-item:hover{background:var(--panel2)}
+  .nw-title{font-size:13.5px;line-height:1.4;margin-bottom:3px}
+  .nw-title a{color:var(--ink);text-decoration:none}
+  .nw-title a:hover{color:var(--blue);text-decoration:underline}
+  .nw-meta{font-size:11px;color:var(--ink3);display:flex;gap:10px;align-items:center}
+  .nw-meta .nw-pub{font-weight:600;color:var(--ink2)}
 
   /* 台股主題 */
   .tg-group{margin-bottom:16px}
@@ -717,11 +733,28 @@ function pct(n){ return n==null?"–":(n*100).toFixed(1)+"%"; }
 
 function metricCard(k,v){ return '<div class="mc"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div></div>'; }
 
+// 財務項目英文→中文
+const STMT_LABEL={
+  "Total Revenue":"營收","Gross Profit":"毛利","Operating Income":"營業利益",
+  "Net Income":"淨利","Diluted EPS":"稀釋EPS","Total Assets":"總資產",
+  "Total Liabilities Net Minority Interest":"總負債","Stockholders Equity":"股東權益",
+  "Cash And Cash Equivalents":"現金","Total Debt":"總負債(含息)",
+  "Operating Cash Flow":"營業現金流","Investing Cash Flow":"投資現金流",
+  "Financing Cash Flow":"籌資現金流","Free Cash Flow":"自由現金流"
+};
 function stmtTable(title,st){
-  if(!st) return '<div class="diff card"><h3>'+esc(title)+'</h3><div class="desc">（無資料）</div></div>';
-  const head='<th style="text-align:left">'+esc(title)+'</th>'+st.periods.map(p=>'<th>'+esc(p)+'</th>').join("");
-  const body=st.rows.map(r=>'<tr><td class="sym">'+esc(r.label)+'</td>'+
-    r.vals.map(v=>'<td class="'+(v!=null&&v<0?"neg":"dim")+'">'+bigNum(v)+'</td>').join("")+'</tr>').join("");
+  if(!st) return '<div class="tbl-wrap" style="padding:14px"><b>'+esc(title)+'</b><div class="legend" style="border:none;margin-top:6px">（季報資料雲端暫時抓不到）</div></div>';
+  const head='<th style="text-align:left">'+esc(title)+'</th>'+
+    st.periods.map((p,i)=>'<th>'+esc(p)+(i===0?' <span style="color:var(--ink3)">(最新)</span>':'')+'</th>').join("")+
+    '<th>YoY</th>';
+  const body=st.rows.map(r=>{
+    const lbl=STMT_LABEL[r.label]||r.label;
+    const yoyc=r.yoy==null?"dim":(r.yoy>0?"pos":(r.yoy<0?"neg":"dim"));
+    const yoy=r.yoy==null?"–":sgn(r.yoy,1)+"%";
+    return '<tr><td class="sym" style="cursor:default">'+esc(lbl)+'</td>'+
+      r.vals.map(v=>'<td class="'+(v!=null&&v<0?"neg":"dim")+'">'+bigNum(v)+'</td>').join("")+
+      '<td class="'+yoyc+'" style="font-weight:700">'+yoy+'</td></tr>';
+  }).join("");
   return '<div class="tbl-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
@@ -773,10 +806,35 @@ function renderStock(d){
         stmtTable("資產負債表", d.statements&&d.statements.balance)+
         stmtTable("現金流量表", d.statements&&d.statements.cashflow)+
       '</div>'+
-      '<div class="legend">數字為各期值(T兆/B十億/M百萬)，紅字為負。來源 yfinance，年報為主。</div></section>';
+      '<div class="legend">季報，最近 5 季。<b>YoY</b>＝最新季與去年同季比(看成長動能)。數字 T兆/B十億/M百萬，紅字為負。</div></section>'+
+      eventsBlock(d.events)+
+      newsBlock(d.news);
 
   $("#backBtn").onclick = ()=> switchView(VIEW==="macro"?"macro":"trend");
   drawChart(d);
+}
+
+function eventsBlock(ev){
+  if(!ev) return '';
+  const links=(ev.links||[]).map(l=>'<a class="ev-link" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+' ↗</a>').join("");
+  const ern = ev.next_earnings ? '<span class="ev-date">下次財報日：<b>'+esc(ev.next_earnings)+'</b></span>' : '';
+  if(!ern && !links) return '';
+  return '<section><div class="sec-head"><h2>法說 / 財報資料</h2><span class="tag">日期 + 官方連結</span></div>'+
+    '<div class="events-box">'+ern+links+'</div>'+
+    '<div class="legend">點連結到官方/Yahoo 看法說會逐字稿與簡報原文(本站不做 AI 解讀，提供來源讓你自行查閱)。</div></section>';
+}
+
+function newsBlock(news){
+  if(!news || !news.length) return '<section><div class="sec-head"><h2>最近新聞</h2></div><div class="legend">（暫無新聞，或雲端抓取失敗）</div></section>';
+  const items=news.map(n=>{
+    const t = n.time ? fmtTime(n.time) : "";
+    const pub = n.publisher ? '<span class="nw-pub">'+esc(n.publisher)+'</span>' : "";
+    const title = n.link ? '<a href="'+esc(n.link)+'" target="_blank" rel="noopener">'+esc(n.title)+'</a>' : esc(n.title);
+    return '<div class="nw-item"><div class="nw-title">'+title+'</div><div class="nw-meta">'+pub+(t?'<span class="nw-time">'+esc(t)+'</span>':'')+'</div></div>';
+  }).join("");
+  return '<section><div class="sec-head"><h2>最近新聞</h2><span class="tag">最多 10 篇</span></div>'+
+    '<div class="news-list">'+items+'</div>'+
+    '<div class="legend">來源 yfinance 聚合，點標題開原文。新聞時效性高，以更新時間為準。</div></section>';
 }
 
 function drawChart(d){

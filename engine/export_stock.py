@@ -169,26 +169,105 @@ def fundamentals(info):
 
 
 def statements(tk):
-    """財務三表(最近最多 4 期)。"""
+    """財務三表(季報，最近 5 季)+ 各項最新季的 YoY(與去年同季比)。"""
     def grab(df, rows_keep):
         if df is None or getattr(df, "empty", True):
             return None
-        cols = [c.strftime("%Y-%m") if hasattr(c, "strftime") else str(c) for c in df.columns][:4]
+        # 季報欄位通常已由新到舊排序。取最近 5 季顯示；YoY 需與 +4 季前(去年同季)比。
+        all_cols = list(df.columns)
+        show = all_cols[:5]
+        cols = [c.strftime("%Y-%m") if hasattr(c, "strftime") else str(c) for c in show]
         out = {"periods": cols, "rows": []}
         for label in rows_keep:
-            if label in df.index:
-                vals = [_safe(v) for v in list(df.loc[label])[:4]]
-                out["rows"].append({"label": label, "vals": vals})
+            if label not in df.index:
+                continue
+            series = list(df.loc[label])
+            vals = [_safe(v) for v in series[:5]]
+            # YoY：最新季(index 0) vs 去年同季(index 4)
+            yoy = None
+            if len(series) >= 5:
+                cur, prev = _safe(series[0]), _safe(series[4])
+                if cur is not None and prev not in (None, 0):
+                    yoy = (cur / prev - 1.0) * 100.0
+            out["rows"].append({"label": label, "vals": vals, "yoy": _safe(yoy)})
         return out if out["rows"] else None
 
-    inc = grab(getattr(tk, "financials", None),
+    inc = grab(getattr(tk, "quarterly_financials", None),
                ["Total Revenue", "Gross Profit", "Operating Income", "Net Income", "Diluted EPS"])
-    bal = grab(getattr(tk, "balance_sheet", None),
+    bal = grab(getattr(tk, "quarterly_balance_sheet", None),
                ["Total Assets", "Total Liabilities Net Minority Interest", "Stockholders Equity",
                 "Cash And Cash Equivalents", "Total Debt"])
-    cf = grab(getattr(tk, "cashflow", None),
+    cf = grab(getattr(tk, "quarterly_cashflow", None),
               ["Operating Cash Flow", "Investing Cash Flow", "Financing Cash Flow", "Free Cash Flow"])
-    return {"income": inc, "balance": bal, "cashflow": cf}
+    return {"income": inc, "balance": bal, "cashflow": cf, "period_type": "quarterly"}
+
+
+def get_news(tk, limit=10):
+    """最近新聞：標題/出版商/時間/連結。yfinance .news 結構在不同版本略異，盡量容錯。"""
+    try:
+        raw = tk.news or []
+    except Exception:
+        return []
+    out = []
+    for item in raw[:limit * 2]:
+        # 新版 yfinance 把內容包在 item['content']；舊版直接平鋪。
+        c = item.get("content", item) if isinstance(item, dict) else {}
+        title = c.get("title") or item.get("title")
+        if not title:
+            continue
+        # 連結
+        link = None
+        cu = c.get("canonicalUrl") or c.get("clickThroughUrl")
+        if isinstance(cu, dict):
+            link = cu.get("url")
+        link = link or item.get("link")
+        # 出版商
+        prov = c.get("provider")
+        publisher = (prov.get("displayName") if isinstance(prov, dict) else None) or item.get("publisher")
+        # 時間
+        pub = c.get("pubDate") or c.get("displayTime")
+        if not pub and item.get("providerPublishTime"):
+            try:
+                pub = datetime.datetime.fromtimestamp(
+                    item["providerPublishTime"], datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            except Exception:
+                pub = None
+        out.append({"title": title, "publisher": publisher, "time": pub, "link": link})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def get_events(tk, info):
+    """法說/財報相關日期 + 官方連結(讓使用者自行查看，不做 AI 解讀)。"""
+    ev = {}
+    # 下次/最近財報日
+    try:
+        cal = tk.calendar
+        if isinstance(cal, dict):
+            ed = cal.get("Earnings Date")
+            if isinstance(ed, list) and ed:
+                ev["next_earnings"] = str(ed[0])
+            elif ed:
+                ev["next_earnings"] = str(ed)
+    except Exception:
+        pass
+    if not ev.get("next_earnings") and info.get("earningsTimestamp"):
+        try:
+            ev["next_earnings"] = datetime.datetime.fromtimestamp(
+                info["earningsTimestamp"], datetime.timezone.utc).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    # 官方連結(投資人關係/官網)
+    site = info.get("website")
+    ev["links"] = []
+    if site:
+        ev["links"].append({"label": "公司官網", "url": site})
+    sym_u = info.get("symbol") or ""
+    # Yahoo Finance 該股的法說/財報頁(逐字稿、簡報常在此彙整)
+    if sym_u:
+        ev["links"].append({"label": "Yahoo 財報/法說", "url": f"https://finance.yahoo.com/quote/{sym_u}/press-releases"})
+    return ev
 
 
 def export_one(sym):
@@ -199,6 +278,8 @@ def export_one(sym):
     info, info_ok = fetch_info(tk)
     metrics, notes, overall = fundamentals(info)
     stmts = statements(tk)
+    news = get_news(tk, 10)
+    events = get_events(tk, info if isinstance(info, dict) else {})
     # has_fundamentals：前端據此決定要不要顯示指標卡/評語(避免一堆空「–」)
     has_fund = info_ok and metrics.get("mktcap") is not None
     nm = eng._TW_NAMES.get(sym.upper())
@@ -209,11 +290,12 @@ def export_one(sym):
         "has_fundamentals": bool(has_fund),
         "metrics": metrics, "notes": notes, "overall": overall,
         "candles": cdl, "ma": mas, "statements": stmts,
+        "news": news, "events": events,
     }
     os.makedirs(OUT_DIR, exist_ok=True)
     with io.open(os.path.join(OUT_DIR, _fname(sym)), "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
-    return True, f"{len(cdl)} bars, {'基本面✓' if has_fund else '基本面✗'}, {len(notes)} notes"
+    return True, f"{len(cdl)} bars, {'基本面✓' if has_fund else '基本面✗'}, {len(news)} news"
 
 
 def resolve_targets(args):

@@ -237,7 +237,7 @@
   .theme-card.open .theme-members{display:block}
   @media(max-width:680px){.theme-row .tr-desc{display:none}.theme-row .tr-name{min-width:90px}}
 </style>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -906,35 +906,80 @@ function newsBlock(news){
     '<div class="legend">來源 yfinance 聚合，點標題開原文。新聞時效性高，以更新時間為準。</div></section>';
 }
 
+let _chartObj=null;
 function drawChart(d){
   const el=document.getElementById("chart");
-  if(!el || !window.LightweightCharts){ if(el) el.innerHTML='<div class="loading-screen">圖表庫載入失敗</div>'; return; }
-  const chart=LightweightCharts.createChart(el,{
-    layout:{background:{color:"#ffffff"},textColor:"#5a6678"},
-    grid:{vertLines:{color:"#eef1f6"},horzLines:{color:"#eef1f6"}},
-    rightPriceScale:{borderColor:"#e3e8f0"}, timeScale:{borderColor:"#e3e8f0"},
-    crosshair:{mode:0}, height:360,
-  });
-  const cs=chart.addCandlestickSeries({upColor:"#16a34a",downColor:"#e11d48",
-    borderUpColor:"#16a34a",borderDownColor:"#e11d48",wickUpColor:"#16a34a",wickDownColor:"#e11d48"});
-  cs.setData(d.candles.filter(c=>c.o!=null).map(c=>({time:c.t,open:c.o,high:c.h,low:c.l,close:c.c})));
-  // 兼容新(ma_short/ma_long)與舊(ma20/ma60)欄位
+  if(!el || !window.echarts){ if(el) el.innerHTML='<div class="loading-screen">圖表庫載入失敗</div>'; return; }
+  if(_chartObj){ try{_chartObj.dispose();}catch(e){} }
+  const chart=echarts.init(el,null,{renderer:"canvas"});
+  _chartObj=chart;
+
+  const cdl=d.candles.filter(c=>c.o!=null);
+  const dates=cdl.map(c=>c.t);
+  // K棒資料 ECharts 格式：[open, close, low, high]
+  const kdata=cdl.map(c=>[c.o,c.c,c.l,c.h]);
+
+  // 均線對齊到日期軸(用 map 補 null)
   const ma=d.ma||{};
   const shortArr=ma.ma_short||ma.ma20||[], longArr=ma.ma_long||ma.ma60||[];
-  const maS=chart.addLineSeries({color:"#f59e0b",lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
-  maS.setData(shortArr.filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
-  const maL=chart.addLineSeries({color:"#2563eb",lineWidth:2,priceLineVisible:false,lastValueVisible:false});
-  maL.setData(longArr.filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
-  // 均線交叉標記：金叉(綠↑Buy) / 死叉(紅↓Sell)
-  const sigs=(d.signals||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
-  if(sigs.length){
-    cs.setMarkers(sigs.map(s=> s.type==="golden"
-      ? {time:s.t,position:"belowBar",color:"#16a34a",shape:"arrowUp",text:"金叉"}
-      : {time:s.t,position:"aboveBar",color:"#e11d48",shape:"arrowDown",text:"死叉"}));
-  }
-  chart.timeScale().fitContent();
-  const ro=()=>chart.applyOptions({width:el.clientWidth});
-  ro(); window.addEventListener("resize",ro);
+  const sn=ma.short_n||5, ln=ma.long_n||50;
+  const sMap={}, lMap={};
+  shortArr.forEach(p=>{if(p.v!=null)sMap[p.t]=p.v;});
+  longArr.forEach(p=>{if(p.v!=null)lMap[p.t]=p.v;});
+  const sLine=dates.map(t=>sMap[t]!=null?+sMap[t].toFixed(2):null);
+  const lLine=dates.map(t=>lMap[t]!=null?+lMap[t].toFixed(2):null);
+
+  // 灰色填色帶：底=兩線較低者(透明)，上疊=兩線差(灰)。用 stack 達成 TradingView 的銀色帶。
+  const bandLow=dates.map((t,i)=>(sLine[i]!=null&&lLine[i]!=null)?Math.min(sLine[i],lLine[i]):null);
+  const bandGap=dates.map((t,i)=>(sLine[i]!=null&&lLine[i]!=null)?+Math.abs(sLine[i]-lLine[i]).toFixed(2):null);
+
+  // 金叉/死叉標記點(標在當天 K 棒)
+  const markPts=(d.signals||[]).map(s=>{
+    const golden=s.type==="golden";
+    return {name:golden?"金叉":"死叉", coord:[s.t, s.price],
+      value:golden?"金叉":"死叉",
+      symbol: golden?"triangle":"pin", symbolSize: golden?14:16,
+      symbolRotate: golden?0:180,
+      itemStyle:{color: golden?"#16a34a":"#e11d48"},
+      label:{show:true,position:golden?"bottom":"top",fontSize:10,
+        color:golden?"#16a34a":"#e11d48",formatter:golden?"金叉":"死叉"}};
+  });
+
+  chart.setOption({
+    animation:false,
+    grid:{left:8,right:56,top:14,bottom:48,containLabel:true},
+    tooltip:{trigger:"axis",axisPointer:{type:"cross"},
+      backgroundColor:"#fff",borderColor:"#e3e8f0",textStyle:{color:"#1a2433",fontSize:11}},
+    legend:{data:["K線","MA"+sn,"MA"+ln],top:0,right:8,itemWidth:14,itemHeight:8,
+      textStyle:{fontSize:11,color:"#5a6678"}},
+    xAxis:{type:"category",data:dates,boundaryGap:true,
+      axisLine:{lineStyle:{color:"#e3e8f0"}},axisLabel:{color:"#9aa6b6",fontSize:10,
+        formatter:v=>v.slice(5)}, splitLine:{show:false}},
+    yAxis:{scale:true,position:"right",axisLine:{show:false},
+      axisLabel:{color:"#9aa6b6",fontSize:10},
+      splitLine:{lineStyle:{color:"#eef1f6"}}},
+    dataZoom:[{type:"inside",start:55,end:100},{type:"slider",height:16,bottom:18,
+      borderColor:"#e3e8f0",fillerColor:"rgba(37,99,235,.08)",
+      handleStyle:{color:"#2563eb"},textStyle:{color:"#9aa6b6",fontSize:9}}],
+    series:[
+      // 填色帶(銀灰)：先放透明底，再疊灰色差值
+      {name:"band-low",type:"line",data:bandLow,stack:"band",lineStyle:{opacity:0},
+        areaStyle:{opacity:0},symbol:"none",silent:true,z:1,tooltip:{show:false},legendHoverLink:false},
+      {name:"band",type:"line",data:bandGap,stack:"band",lineStyle:{opacity:0},
+        areaStyle:{color:"rgba(148,163,184,.28)"},symbol:"none",silent:true,z:1,tooltip:{show:false},legendHoverLink:false},
+      // K線
+      {name:"K線",type:"candlestick",data:kdata,z:3,
+        itemStyle:{color:"#16a34a",color0:"#e11d48",borderColor:"#16a34a",borderColor0:"#e11d48"},
+        markPoint:{data:markPts,silent:true}},
+      // 雙均線
+      {name:"MA"+sn,type:"line",data:sLine,smooth:true,symbol:"none",z:4,
+        lineStyle:{color:"#f59e0b",width:1.6},connectNulls:true},
+      {name:"MA"+ln,type:"line",data:lLine,smooth:true,symbol:"none",z:4,
+        lineStyle:{color:"#2563eb",width:2},connectNulls:true},
+    ],
+  });
+  const ro=()=>chart.resize();
+  window.addEventListener("resize",ro);
 }
 
 async function openStock(sym){

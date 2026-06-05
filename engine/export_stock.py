@@ -259,6 +259,10 @@ def fundamentals(info):
         "fcf": fcf, "div_yield": _safe(g("dividendYield")),
         "high52": _safe(g("fiftyTwoWeekHigh")), "low52": _safe(g("fiftyTwoWeekLow")),
         "ma50": _safe(g("fiftyDayAverage")), "ma200": _safe(g("twoHundredDayAverage")),
+        # 持股結構(籌碼)：機構/內部人持股比例 + 機構家數
+        "inst_pct": _safe(g("heldPercentInstitutions")),
+        "insider_pct": _safe(g("heldPercentInsiders")),
+        "inst_count": _safe(g("institutionsCount")) if g("institutionsCount") else None,
     }
     notes = []
 
@@ -438,6 +442,15 @@ def export_one(sym):
     # has_fundamentals：前端據此決定要不要顯示指標卡/評語(避免一堆空「–」)
     has_fund = info_ok and metrics.get("mktcap") is not None
     nm = eng._TW_NAMES.get(sym.upper())
+    # 台股：附神秘金字塔大戶籌碼連結(該站資料 Cloudflare+JS 無法直抓，只連結)
+    chip_links = []
+    su = sym.upper()
+    if su.endswith((".TW", ".TWO")):
+        code = su.split(".")[0]
+        chip_links.append({"label": "大戶籌碼(神秘金字塔)",
+                           "url": f"https://norway.twsthr.info/StockHolders.aspx?stock={code}"})
+        chip_links.append({"label": "籌碼K線(玩股網)",
+                           "url": f"https://www.wantgoo.com/stock/{code}/major-investors/main-trend"})
     payload = {
         "sym": sym.upper(), "name_zh": nm,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -446,6 +459,7 @@ def export_one(sym):
         "metrics": metrics, "notes": notes, "overall": overall,
         "candles": cdl, "ma": mas, "signals": signals, "backtest": backtest,
         "statements": stmts, "news": news, "events": events,
+        "chip_links": chip_links,
     }
     os.makedirs(OUT_DIR, exist_ok=True)
     with io.open(os.path.join(OUT_DIR, _fname(sym)), "w", encoding="utf-8") as f:

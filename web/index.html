@@ -991,6 +991,7 @@ function renderStock(d){
         stmtTable("現金流量表", d.statements&&d.statements.cashflow)+
       '</div>'+
       '<div class="legend">季報，最近 5 季。<b>YoY</b>＝最新季與去年同季比(看成長動能)。數字 T兆/B十億/M百萬，紅字為負。</div></section>'+
+      chipBlock(d.metrics, d.chip_links)+
       eventsBlock(d.events)+
       newsBlock(d.news);
 
@@ -1070,6 +1071,34 @@ function signalsBlock(signals,sn,ln){
       '<tbody id="sigHidden" style="display:none">'+hidden+'</tbody></table></div>'+
     moreBtn+
     '<div class="legend">⚠️ MA'+sn+' 較短、訊號頻繁(易有雜訊/假交叉)，<b>僅供參考，非買賣建議</b>，務必配合趨勢與量能。短均線數字越小越敏感。</div></section>';
+}
+
+function chipBlock(m, chipLinks){
+  m = m||{};
+  const inst=m.inst_pct, insider=m.insider_pct;
+  const hasData = inst!=null || insider!=null;
+  const links = chipLinks||[];
+  if(!hasData && !links.length) return '';
+  let cards='';
+  if(hasData){
+    const card=(k,v,note)=>'<div class="mc"><div class="k">'+esc(k)+'</div><div class="v">'+
+      (v!=null?(v*100).toFixed(1)+'%':"–")+'</div>'+(note?'<div style="font-size:9.5px;color:var(--ink3);margin-top:2px">'+esc(note)+'</div>':'')+'</div>';
+    cards='<div class="stk-metrics">'+
+      card("機構持股", inst, "法人/基金持有")+
+      card("內部人持股", insider, "公司內部人")+
+      (m.float_shares!=null?card("流通股", null):"")+
+    '</div>';
+  }
+  const linkBtns = links.length
+    ? '<div class="events-box" style="margin-top:'+(hasData?"10px":"0")+'">'+
+        '<span class="ev-date">台股大戶/主力籌碼(本站無法直抓，連結外部查詢)：</span>'+
+        links.map(l=>'<a class="ev-link" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+' ↗</a>').join("")+
+      '</div>' : '';
+  return '<section><div class="sec-head"><h2>籌碼 / 持股結構</h2><span class="tag">機構·內部人持股</span>'+
+      (links.length?'<span class="hint">台股大戶分級點外部連結</span>':'')+'</div>'+
+    cards+linkBtns+
+    '<div class="legend">機構持股高＝法人認同(但也較易受法人調節影響)；內部人持股高＝管理層利益綁定。'+
+    (links.length?'台股「大戶持股分級(400張以上%)」資料在神秘金字塔/玩股網，因 Cloudflare+動態渲染本站無法直接抓取，提供連結。':'美股無台股式大戶分級，以機構/內部人%替代。')+'</div></section>';
 }
 
 function eventsBlock(ev){

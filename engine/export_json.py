@@ -91,7 +91,7 @@ def _golden_backtest_swing(closes):
 
 
 def build_backtest_rankings(main_rows):
-    """對主表股抓5年收盤、跑 MA10×MA50 金叉進死叉出的完整波段回測，回勝率前10 + 中位前10。"""
+    """對主表股抓5年收盤、跑 MA10×MA50 金叉進死叉出的完整波段回測，回勝率前10 + 中位前10 + 平均前10。"""
     syms = [r["sym"] for r in main_rows]
     if not syms:
         return {}
@@ -118,9 +118,11 @@ def build_backtest_rankings(main_rows):
             continue
     if not stats:
         return {}
-    by_win = sorted(stats, key=lambda x: (x["win_rate"], x["median"]), reverse=True)[:10]
+    by_win = sorted(stats, key=lambda x: (x["win_rate"], x["avg"]), reverse=True)[:10]
     by_med = sorted(stats, key=lambda x: (x["median"], x["win_rate"]), reverse=True)[:10]
-    return {"n_tested": len(stats), "by_win_rate": by_win, "by_median": by_med}
+    by_avg = sorted(stats, key=lambda x: (x["avg"], x["win_rate"]), reverse=True)[:10]
+    return {"n_tested": len(stats), "by_win_rate": by_win,
+            "by_median": by_med, "by_avg": by_avg}
 
 
 def _round(x, n=4):
@@ -322,10 +324,41 @@ def _cross_sort_key(r):
     return (days, -(r.get("score") or 0.0))
 
 
-def build_cross_signals(rows):
+def _annotate_fresh_backtest(fresh_rows, downloader=None):
+    """對「剛觸發」的少數股票抓5年收盤、跑金叉完整波段回測，
+    把 bt_win_rate / bt_avg / bt_n(金叉勝率/平均報酬/樣本數)併回各列(in place)。
+    範圍只含 fresh_rows(通常幾~幾十檔)，不拖慢全池。downloader 供測試注入。"""
+    syms = [r["sym"] for r in fresh_rows]
+    if not syms:
+        return
+    dl = downloader or (lambda ss: yf.download(
+        ss, period="5y", interval="1d", group_by="ticker",
+        progress=False, auto_adjust=False))
+    try:
+        df = dl(syms)
+    except Exception:
+        return
+    for r in fresh_rows:
+        s = r["sym"]
+        try:
+            if getattr(df.columns, "nlevels", 1) > 1 and s in df.columns.get_level_values(0):
+                sub = df[s].dropna()
+            else:
+                sub = df.dropna()
+            bt = _golden_backtest_swing(list(sub["Close"]))
+            if bt:
+                r["bt_win_rate"] = bt["win_rate"]
+                r["bt_avg"] = bt["avg"]
+                r["bt_n"] = bt["n"]
+        except Exception:
+            continue
+
+
+def build_cross_signals(rows, downloader=None):
     """全池 MA10×MA50 交叉清單。把 compute_trend 的全池 rows 依交叉狀態分組。
     golden/death 各自依「越新觸發越前、同天數 Score 大→前」排序；
-    cross_state 非 golden/death(資料不足)者略過。「剛觸發」由前端依 fresh_days 篩。"""
+    cross_state 非 golden/death(資料不足)者略過。「剛觸發」由前端依 fresh_days 篩。
+    「剛觸發」那幾檔(cross_days<=fresh_days)額外跑5年金叉回測，標 bt_win_rate/bt_avg/bt_n。"""
     def pack(r):
         return {"sym": r["sym"], "name": _name(r["sym"]),
                 "cross_state": r.get("cross_state"),
@@ -344,6 +377,9 @@ def build_cross_signals(rows):
             death.append(pack(r))
     golden.sort(key=_cross_sort_key)
     death.sort(key=_cross_sort_key)
+    fresh = [r for r in (golden + death)
+             if r["cross_days"] is not None and r["cross_days"] <= FRESH_CROSS_DAYS]
+    _annotate_fresh_backtest(fresh, downloader=downloader)
     return {"fresh_days": FRESH_CROSS_DAYS,
             "golden": golden, "death": death,
             "n_golden": len(golden), "n_death": len(death)}

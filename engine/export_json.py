@@ -312,6 +312,43 @@ def build_cross_filter(rows, main_rows, topn):
     return out
 
 
+FRESH_CROSS_DAYS = 3  # 「剛觸發」窗口：cross_days <= 此值視為近期新交叉
+
+
+def _cross_sort_key(r):
+    """排序鍵：cross_days 小→前(None 墊底)、同天數 score 大→前。"""
+    d = r.get("cross_days")
+    days = d if d is not None else float("inf")
+    return (days, -(r.get("score") or 0.0))
+
+
+def build_cross_signals(rows):
+    """全池 MA10×MA50 交叉清單。把 compute_trend 的全池 rows 依交叉狀態分組。
+    golden/death 各自依「越新觸發越前、同天數 Score 大→前」排序；
+    cross_state 非 golden/death(資料不足)者略過。「剛觸發」由前端依 fresh_days 篩。"""
+    def pack(r):
+        return {"sym": r["sym"], "name": _name(r["sym"]),
+                "cross_state": r.get("cross_state"),
+                "cross_days": r.get("cross_days"),
+                "sc5": _round(r.get("sc5"), 0), "r5": _round(r.get("r5"), 1),
+                "score": _round(r.get("score"), 0),
+                "e5": _round(r.get("e5"), 2), "e20": _round(r.get("e20"), 2),
+                "a20": _round(r.get("a20"), 1), "cur": r.get("cur")}
+
+    golden, death = [], []
+    for r in rows:
+        st = r.get("cross_state")
+        if st == "golden":
+            golden.append(pack(r))
+        elif st == "death":
+            death.append(pack(r))
+    golden.sort(key=_cross_sort_key)
+    death.sort(key=_cross_sort_key)
+    return {"fresh_days": FRESH_CROSS_DAYS,
+            "golden": golden, "death": death,
+            "n_golden": len(golden), "n_death": len(death)}
+
+
 def run_pool(pool, topn):
     symbols = eng.load_pool(pool)
     if symbols is None:

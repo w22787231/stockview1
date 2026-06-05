@@ -531,7 +531,7 @@ function renderCross(d){
   const freshDeath = fresh.length - freshGold;
 
   const freshBlock = fresh.length
-    ? crossSignalTable("t-cross-fresh", sortCrossRows(fresh), "")
+    ? crossSignalTable("t-cross-fresh", fresh, "近 "+fd+" 日無新交叉觸發。")
     : '<div class="note">近 '+fd+' 日無新交叉觸發。</div>';
 
   $("#content").innerHTML =

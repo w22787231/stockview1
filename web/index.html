@@ -1076,7 +1076,7 @@ function renderStock(d){
       eventsBlock(d.events)+
       newsBlock(d.news);
 
-  $("#backBtn").onclick = ()=> switchView(VIEW==="macro"?"macro":"trend");
+  $("#backBtn").onclick = ()=> switchView(VIEW==="cross"?"cross":(VIEW==="macro"?"macro":"trend"));
   // 均線交叉訊號展開/收合
   const sigBtn=document.getElementById("sigToggle");
   if(sigBtn) sigBtn.onclick=()=>{

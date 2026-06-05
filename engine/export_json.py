@@ -24,7 +24,7 @@ MA_SHORT, MA_LONG = 10, 50
 
 
 def _golden_backtest_swing(closes):
-    """MA5×MA50 金叉進、死叉出的完整波段回測。回傳統計 dict 或 None。
+    """MA10×MA50 金叉進、死叉出的完整波段回測(同個股口徑)。回傳統計 dict 或 None。
     口徑：金叉隔日進場、下次死叉隔日出場(避免未來函數)；未平倉那筆另記。"""
     n = len(closes)
     if n < MA_LONG + 25:
@@ -91,7 +91,7 @@ def _golden_backtest_swing(closes):
 
 
 def build_backtest_rankings(main_rows):
-    """對主表股抓5年收盤、跑20日金叉回測，回勝率前10 + 中位前10。"""
+    """對主表股抓5年收盤、跑 MA10×MA50 金叉進死叉出的完整波段回測，回勝率前10 + 中位前10。"""
     syms = [r["sym"] for r in main_rows]
     if not syms:
         return {}

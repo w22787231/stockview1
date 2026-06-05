@@ -556,34 +556,37 @@ function surgeGuide(){
 }
 
 function btRankTable(rows,kind){
-  const head=["#","代號/名稱","勝率","中位","賺賠比","最佳","最差","樣本"];
+  // 與個股「完整波段」同欄位：筆數/勝率/平均/中位/平均賺/平均賠/賺賠比/最佳/最差/平均抱
+  const head=["#","代號/名稱","筆數","勝率","平均","中位","平均賺","平均賠","賺賠比","最佳","最差","平均抱"];
   const plFmt=v=>v==null?"–":Number(v).toFixed(2);
   const plCls=v=>v==null?"dim":(v>=1?"pos":"neg");
   const body=rows.map((r,i)=>'<tr>'+
     '<td>'+(i+1)+'</td>'+
     '<td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(r.sym)+(r.name?'<span class="nm">'+esc(r.name)+'</span>':'')+'</td>'+
+    '<td class="dim">'+r.n+'</td>'+
     '<td class="'+(r.win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+r.win_rate.toFixed(0)+'%</td>'+
+    '<td class="'+cls(r.avg)+'">'+sgn(r.avg,1)+'%</td>'+
     '<td class="'+cls(r.median)+'" style="font-weight:700">'+sgn(r.median,1)+'%</td>'+
+    '<td class="pos">'+(r.avg_win!=null?sgn(r.avg_win,1)+'%':"–")+'</td>'+
+    '<td class="neg">'+(r.avg_loss!=null?sgn(r.avg_loss,1)+'%':"–")+'</td>'+
     '<td class="'+plCls(r.pl_ratio)+'" style="font-weight:700">'+plFmt(r.pl_ratio)+'</td>'+
     '<td class="pos">'+sgn(r.best,1)+'%</td>'+
     '<td class="neg">'+sgn(r.worst,1)+'%</td>'+
-    '<td class="dim">'+r.n+'</td></tr>').join("");
+    '<td class="dim">'+(r.avg_hold!=null?Number(r.avg_hold).toFixed(0)+'天':"–")+'</td></tr>').join("");
   return '<div class="tbl-wrap"><table><thead><tr>'+head.map((h,i)=>'<th'+(i===1?' style="text-align:left"':'')+'>'+h+'</th>').join("")+'</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
 function backtestRankBlock(br){
   if(!br || !br.by_win_rate || !br.by_win_rate.length) return '';
   return '<section>'+
-    '<div class="sec-head"><h2>金叉回測排行</h2><span class="tag">MA5金叉 · 持有20日 · 近5年</span>'+
-      '<span class="hint">僅本池主表股('+(br.n_tested||0)+'檔)，過去歷史統計</span></div>'+
+    '<div class="sec-head"><h2>金叉回測排行</h2><span class="tag">MA10×MA50 金叉進死叉出 · 近5年</span>'+
+      '<span class="hint">僅本池主表股('+(br.n_tested||0)+'檔)，金叉進場、死叉出場的完整波段</span></div>'+
     '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 10px">'+
-      '⚠️ <b>歷史統計，非未來保證、非買賣建議。</b>進場口徑為金叉隔日收盤(避免未來函數)，未含手續費。樣本<10 者參考價值有限，務必看「最差」欄。'+
+      '⚠️ <b>歷史統計，非未來保證、非買賣建議。</b>口徑：金叉隔日收盤進場、下次死叉隔日收盤出場(完整波段，避免未來函數)；未含手續費。樣本<10 者參考價值有限，務必看「最差」欄。'+
     '</div>'+
-    '<div class="fin-grid">'+
-      '<div><div class="tg-gname">🏆 20日勝率 前10</div>'+btRankTable(br.by_win_rate,"win")+'</div>'+
-      '<div><div class="tg-gname">📊 20日中位報酬 前10</div>'+btRankTable(br.by_median,"med")+'</div>'+
-    '</div>'+
-    '<div class="legend">勝率＝20日後正報酬占比；<b>中位報酬</b>＝排序正中間那次(比平均更代表常態，不被極端值拉歪)。代號可點進個股看完整回測。</div>'+
+    '<div class="tg-gname">🏆 勝率 前10</div>'+btRankTable(br.by_win_rate,"win")+
+    '<div class="tg-gname" style="margin-top:14px">📊 中位報酬 前10</div>'+btRankTable(br.by_median,"med")+
+    '<div class="legend"><b>完整波段</b>＝抱到死叉才出場(不是固定持有N天)，能反映「順勢抱一波」的真實報酬。勝率＝正報酬波段占比；<b>中位</b>＝排序正中間那波(比平均更代表常態，不被極端值拉歪)。<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>平均抱</b>＝每波平均持有天數。代號可點進個股看完整回測。</div>'+
   '</section>';
 }
 

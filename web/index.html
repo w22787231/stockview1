@@ -497,6 +497,66 @@ function crossTable(rows){
   return buildTable("t-cross", rows, cols, {empty:"（全池無 5日評分≥80 者）"});
 }
 
+// 交叉訊號表格：代號/名稱・狀態・幾天前・5日漲%・5日評分・Score。沿用 buildTable。
+function crossSignalTable(tableId, rows, emptyMsg){
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"狀態", key:"cross", sortVal:crossSortVal,
+      cell:r=>r.cross_state==="golden"?'<td><span class="pos">▲金叉</span></td>'
+                                     :'<td><span class="neg">▼死叉</span></td>'},
+    {h:"幾天前", key:"days",
+      sortVal:r=>r.cross_days==null?9e9:r.cross_days,
+      cell:r=>r.cross_days==null?'<td class="dim">—</td>'
+             :r.cross_days===0?'<td><b>今日 <span style="color:var(--amber)">★</span></b></td>'
+             :'<td class="dim">'+r.cross_days+' 天前</td>'},
+    {h:"5日漲%", key:"r5", cell:r=>'<td class="'+cls(r.r5)+'">'+sgn(r.r5,1)+'%</td>'},
+    {h:"5日評分", key:"sc5", cell:r=>'<td>'+fmtNum(r.sc5)+'</td>'},
+    {h:"Score", key:"score", cell:r=>'<td>'+fmtNum(r.score)+'</td>'},
+  ];
+  return buildTable(tableId, rows, cols, {empty:emptyMsg});
+}
+
+// 交叉訊號分頁：🔥近 N 日剛觸發(展開) + 全部金叉(收起) + 全部死叉(收起)。
+function renderCross(d){
+  const cs = d.cross_signals;
+  if(!cs){
+    $("#content").innerHTML='<section><div class="sec-head"><h2>交叉訊號</h2></div>'+
+      '<div class="note">此池資料尚未含交叉訊號（部署版本較舊）。請按右上「🔄 更新資料」重新產生。</div></section>';
+    return;
+  }
+  const fresh = freshCrosses(cs);
+  const fd = cs.fresh_days!=null?cs.fresh_days:3;
+  const freshGold = fresh.filter(r=>r.cross_state==="golden").length;
+  const freshDeath = fresh.length - freshGold;
+
+  const freshBlock = fresh.length
+    ? crossSignalTable("t-cross-fresh", sortCrossRows(fresh), "")
+    : '<div class="note">近 '+fd+' 日無新交叉觸發。</div>';
+
+  $("#content").innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>交叉訊號</h2><span class="tag">MA10×MA50 · 本池 '+esc(d.pool_label)+'</span>'+
+        '<span class="hint">本池 '+d.n_ok+' 檔，每日快照</span></div>'+
+      '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
+        '⚠️ <b>歷史/快照統計，非未來保證、非買賣建議。</b>金叉＝短均線(MA10)上穿長均線(MA50)、死叉＝下穿；「幾天前」＝距最近一次交叉的交易日數，0＝今日觸發。'+
+      '</div>'+
+
+      '<div class="tg-gname">🔥 最近剛觸發（≤'+fd+' 天）　<span class="dim" style="font-weight:400">金叉 '+freshGold+' ・ 死叉 '+freshDeath+'</span></div>'+
+      freshBlock+
+
+      '<details style="margin-top:14px"><summary class="tg-gname" style="cursor:pointer">▼ 全部金叉（'+cs.n_golden+' 檔）</summary>'+
+        '<div style="margin-top:8px">'+crossSignalTable("t-cross-gold", sortCrossRows(cs.golden), "（本池目前無金叉）")+'</div>'+
+      '</details>'+
+
+      '<details style="margin-top:10px"><summary class="tg-gname" style="cursor:pointer">▼ 全部死叉（'+cs.n_death+' 檔）</summary>'+
+        '<div style="margin-top:8px">'+crossSignalTable("t-cross-death", sortCrossRows(cs.death), "（本池目前無死叉）")+'</div>'+
+      '</details>'+
+
+      '<div class="legend">金叉＝MA10 上穿 MA50（偏多）、死叉＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序，點欄頭可改排序。代號可點進個股看完整波段回測。</div>'+
+    '</section>';
+}
+
 function abTable(rows,kind){
   let cols;
   if(kind==="A"){

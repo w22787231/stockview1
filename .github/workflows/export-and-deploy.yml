@@ -87,6 +87,7 @@ jobs:
           STOCK_INFO_SLEEP: "0.5"
         run: |
           cd engine
+          python export_stock.py --from-watchlist || true
           python export_stock.py --from-themes    || true
           python export_stock.py --from-pool tw150  || true
           python export_stock.py --from-pool ndx100 || true

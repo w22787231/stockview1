@@ -322,6 +322,16 @@ def resolve_targets(args):
                     if m.get("sym"):
                         out.append(m["sym"].upper())
         return sorted(set(out))
+    if args and args[0] == "--from-watchlist":
+        fp = os.path.join(HERE, "universe", "watchlist.txt")
+        if not os.path.exists(fp):
+            return []
+        out = []
+        for ln in io.open(fp, encoding="utf-8"):
+            ln = ln.strip()
+            if ln and not ln.startswith("#"):
+                out.append(ln.upper())
+        return out
     return [a.upper() for a in args]
 
 

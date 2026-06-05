@@ -20,7 +20,7 @@ import yfinance as yf
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 POOLS = ["tw150", "ndx100", "sp500", "sp400", "sp600"]
-MA_SHORT, MA_LONG = 5, 50
+MA_SHORT, MA_LONG = 10, 50
 
 
 def _golden_backtest_swing(closes):

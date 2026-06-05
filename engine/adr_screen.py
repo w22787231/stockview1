@@ -222,7 +222,7 @@ def _score5(r5, e5, e5_minus_e20):
     s_acc = clamp((e5_minus_e20 + 0.1) / 0.4)  # 加速: -0.1~+0.3 映到 0~1
     return (0.40 * s_ret + 0.35 * s_eff + 0.25 * s_acc) * 100.0
 
-def _ma_cross_status(sub, short_n=5, long_n=50, lookback=120):
+def _ma_cross_status(sub, short_n=10, long_n=50, lookback=120):
     """回傳 (state, days_since)。state: 'golden'(短>長,多頭) / 'death'(短<長,空頭)。
     days_since: 最近一次交叉是幾天前(None=回看範圍內無交叉)。資料不足回 (None,None)。"""
     closes = list(sub["Close"])

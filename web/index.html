@@ -847,7 +847,7 @@ function renderStock(d){
       (chg!=null?' <span style="font-size:16px">'+sgn(chg,2)+'%</span>':'')+'</div>'+
     metricsBlock+
     (function(){
-      const sn=(d.ma&&d.ma.short_n)||5, ln=(d.ma&&d.ma.long_n)||50;
+      const sn=(d.ma&&d.ma.short_n)||10, ln=(d.ma&&d.ma.long_n)||50;
       return '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA'+sn+'/MA'+ln+' · 均線交叉 · 近5年(可縮放)</span></div>'+
       '<div id="chart"></div>'+
       '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#f59e0b"></span>MA'+sn+'(短)</span>'+
@@ -855,7 +855,7 @@ function renderStock(d){
       '<span class="lg"><span class="pos">▲金叉</span></span><span class="lg"><span class="neg">▼死叉</span></span>'+
       '<span class="lg">綠漲紅跌</span></div></section>';
     })()+
-    signalsBlock(d.signals,(d.ma&&d.ma.short_n)||5,(d.ma&&d.ma.long_n)||50)+
+    signalsBlock(d.signals,(d.ma&&d.ma.short_n)||10,(d.ma&&d.ma.long_n)||50)+
     backtestBlock(d.backtest)+
     notesBlock+
     '<section><div class="sec-head"><h2>財務三表</h2><span class="tag">最近數期</span></div>'+
@@ -989,7 +989,7 @@ function drawChart(d){
   // 均線對齊到日期軸(用 map 補 null)
   const ma=d.ma||{};
   const shortArr=ma.ma_short||ma.ma20||[], longArr=ma.ma_long||ma.ma60||[];
-  const sn=ma.short_n||5, ln=ma.long_n||50;
+  const sn=ma.short_n||10, ln=ma.long_n||50;
   const sMap={}, lMap={};
   shortArr.forEach(p=>{if(p.v!=null)sMap[p.t]=p.v;});
   longArr.forEach(p=>{if(p.v!=null)lMap[p.t]=p.v;});

@@ -88,7 +88,7 @@ def _fname(sym):
     return sym.replace(".", "_").upper() + ".json"
 
 
-MA_SHORT = 5
+MA_SHORT = 10
 MA_LONG = 50
 
 

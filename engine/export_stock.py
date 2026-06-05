@@ -11,11 +11,41 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import warnings
 import time
+import json as _json
+import urllib.parse
+import urllib.request
 warnings.filterwarnings("ignore")
 import yfinance as yf
 import adr_screen as eng
 
 OUT_DIR = os.path.join(HERE, "..", "data", "stock")
+
+# 翻譯開關：預設開；設環境變數 STOCK_TRANSLATE=0 可關(全池量大時想省時可關)。
+TRANSLATE_ON = os.environ.get("STOCK_TRANSLATE", "1") not in ("0", "false", "False")
+
+
+def _has_cjk(s):
+    return any("一" <= ch <= "鿿" for ch in (s or ""))
+
+
+def translate_zh(text):
+    """用免費 Google 翻譯端點把文字翻成繁中。已是中文/失敗則回 None。
+    免金鑰、容錯：被擋或逾時就回 None(前端只顯原文)。"""
+    if not TRANSLATE_ON or not text or _has_cjk(text):
+        return None
+    try:
+        q = urllib.parse.quote(text[:500])
+        url = ("https://translate.googleapis.com/translate_a/single"
+               "?client=gtx&sl=auto&tl=zh-TW&dt=t&q=" + q)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            data = _json.loads(r.read().decode("utf-8", "ignore"))
+        # 回傳結構: [[[譯文, 原文, ...], ...], ...]
+        parts = [seg[0] for seg in data[0] if seg and seg[0]]
+        out = "".join(parts).strip()
+        return out or None
+    except Exception:
+        return None
 
 # 雲端(GitHub Actions)上 yfinance 的 .info 常被 Yahoo 擋 → 重試 + 判斷是否真有料。
 # 可用環境變數覆寫(全池 1700 檔時建議調低，避免 sleep 累積過久):
@@ -319,7 +349,8 @@ def get_news(tk, limit=10):
                     item["providerPublishTime"], datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             except Exception:
                 pub = None
-        out.append({"title": title, "publisher": publisher, "time": pub, "link": link})
+        out.append({"title": title, "title_zh": translate_zh(title),
+                    "publisher": publisher, "time": pub, "link": link})
         if len(out) >= limit:
             break
     return out

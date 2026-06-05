@@ -215,6 +215,8 @@
   .nw-title{font-size:13.5px;line-height:1.4;margin-bottom:3px}
   .nw-title a{color:var(--ink);text-decoration:none}
   .nw-title a:hover{color:var(--blue);text-decoration:underline}
+  .nw-zh{font-size:12.5px;color:var(--ink2);line-height:1.4;margin-bottom:4px;
+    padding-left:9px;border-left:2px solid var(--line)}
   .nw-meta{font-size:11px;color:var(--ink3);display:flex;gap:10px;align-items:center}
   .nw-meta .nw-pub{font-weight:600;color:var(--ink2)}
 
@@ -899,7 +901,8 @@ function newsBlock(news){
     const t = n.time ? fmtTime(n.time) : "";
     const pub = n.publisher ? '<span class="nw-pub">'+esc(n.publisher)+'</span>' : "";
     const title = n.link ? '<a href="'+esc(n.link)+'" target="_blank" rel="noopener">'+esc(n.title)+'</a>' : esc(n.title);
-    return '<div class="nw-item"><div class="nw-title">'+title+'</div><div class="nw-meta">'+pub+(t?'<span class="nw-time">'+esc(t)+'</span>':'')+'</div></div>';
+    const zh = (n.title_zh && n.title_zh!==n.title) ? '<div class="nw-zh">'+esc(n.title_zh)+'</div>' : "";
+    return '<div class="nw-item"><div class="nw-title">'+title+'</div>'+zh+'<div class="nw-meta">'+pub+(t?'<span class="nw-time">'+esc(t)+'</span>':'')+'</div></div>';
   }).join("");
   return '<section><div class="sec-head"><h2>最近新聞</h2><span class="tag">最多 10 篇</span></div>'+
     '<div class="news-list">'+items+'</div>'+

@@ -882,34 +882,40 @@ function renderStock(d){
 }
 
 function backtestBlock(bt){
-  if(!bt || !bt.horizons) return '';
-  const small = bt.total_signals < 30;   // 樣本不足警示門檻
+  const st = bt && bt.stat;
+  if(!st) return '';
+  const small = st.n < 10;
   const plFmt=v=>v==null?"–":Number(v).toFixed(2);
   const plCls=v=>v==null?"dim":(v>=1?"pos":"neg");
-  const rows=["5","10","20"].map(hz=>{
-    const r=bt.horizons[hz];
-    if(!r) return '<tr><td class="sym" style="cursor:default">'+hz+'日</td><td colspan="8" class="dim">樣本不足</td></tr>';
-    return '<tr><td class="sym" style="cursor:default">'+hz+'日後</td>'+
-      '<td class="dim">'+r.n+'</td>'+
-      '<td class="'+(r.win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+r.win_rate.toFixed(0)+'%</td>'+
-      '<td class="'+cls(r.avg)+'">'+sgn(r.avg,1)+'%</td>'+
-      '<td class="'+cls(r.median)+'">'+sgn(r.median,1)+'%</td>'+
-      '<td class="pos">'+(r.avg_win!=null?sgn(r.avg_win,1)+'%':"–")+'</td>'+
-      '<td class="neg">'+(r.avg_loss!=null?sgn(r.avg_loss,1)+'%':"–")+'</td>'+
-      '<td class="'+plCls(r.pl_ratio)+'" style="font-weight:700">'+plFmt(r.pl_ratio)+'</td>'+
-      '<td class="pos">'+sgn(r.best,1)+'%</td>'+
-      '<td class="neg">'+sgn(r.worst,1)+'%</td></tr>';
-  }).join("");
-  return '<section><div class="sec-head"><h2>金叉歷史回測</h2><span class="tag">'+esc(bt.signal)+' · 近'+bt.years+'年</span>'+
-      '<span class="hint">過去金叉後持有 N 日的歷史統計</span></div>'+
-    '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 10px">'+
-      '⚠️ <b>這是歷史統計，不是未來保證、更非買賣建議。</b>過去表現無法預測未來；未含手續費/滑價；'+
-      '進場口徑為金叉隔日收盤(避免未來函數)。'+(small?'<b>本檔樣本僅 '+bt.total_signals+' 個，統計上偏少，參考價值有限。</b>':'樣本 '+bt.total_signals+' 個。')+
-    '</div>'+
+  // 進行中(未平倉)那筆
+  const ot = bt.open_trade;
+  const otHtml = ot ? '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 10px">'+
+    '📍 <b>目前持倉中(未平倉)</b>：最近一次金叉後尚未死叉，進場至今 '+
+    '<b class="'+(ot.entry_ret>0?"pos":"neg")+'">'+sgn(ot.entry_ret,1)+'%</b>，已抱 '+ot.days+' 天。（此筆未計入下方已平倉統計）</div>' : '';
+  const stat=
     '<div class="tbl-wrap"><table><thead><tr>'+
-      '<th style="text-align:left">持有期</th><th>樣本</th><th>勝率</th><th>平均報酬</th><th>中位報酬</th><th>平均賺</th><th>平均賠</th><th>賺賠比</th><th>最佳</th><th>最差</th>'+
-      '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="legend">勝率＝正報酬訊號占比。<b>賺賠比＝平均賺 ÷ |平均賠|</b>(最接近風報比)：>1 表示賺的幅度大於賠的，越大越好。<b>看「最差」欄</b>了解最大單次虧損。樣本<30 視為不足。</div></section>';
+      '<th style="text-align:left">已平倉波段</th><th>筆數</th><th>勝率</th><th>平均</th><th>中位</th><th>平均賺</th><th>平均賠</th><th>賺賠比</th><th>最佳</th><th>最差</th><th>平均抱</th>'+
+    '</tr></thead><tbody><tr>'+
+      '<td class="sym" style="cursor:default">完整波段</td>'+
+      '<td class="dim">'+st.n+'</td>'+
+      '<td class="'+(st.win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+st.win_rate.toFixed(0)+'%</td>'+
+      '<td class="'+cls(st.avg)+'">'+sgn(st.avg,1)+'%</td>'+
+      '<td class="'+cls(st.median)+'">'+sgn(st.median,1)+'%</td>'+
+      '<td class="pos">'+(st.avg_win!=null?sgn(st.avg_win,1)+'%':"–")+'</td>'+
+      '<td class="neg">'+(st.avg_loss!=null?sgn(st.avg_loss,1)+'%':"–")+'</td>'+
+      '<td class="'+plCls(st.pl_ratio)+'" style="font-weight:700">'+plFmt(st.pl_ratio)+'</td>'+
+      '<td class="pos">'+sgn(st.best,1)+'%</td>'+
+      '<td class="neg">'+sgn(st.worst,1)+'%</td>'+
+      '<td class="dim">'+(st.avg_hold!=null?st.avg_hold.toFixed(0)+'天':"–")+'</td>'+
+    '</tr></tbody></table></div>';
+  return '<section><div class="sec-head"><h2>金叉歷史回測</h2><span class="tag">'+esc(bt.signal)+' · 近'+bt.years+'年</span>'+
+      '<span class="hint">金叉進場、死叉出場的完整波段</span></div>'+
+    '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 10px">'+
+      '⚠️ <b>歷史統計，非未來保證、非買賣建議。</b>口徑：金叉隔日收盤進場、下次死叉隔日收盤出場(完整波段，避免未來函數)；未含手續費。'+
+      (small?'<b>已平倉僅 '+st.n+' 筆，樣本偏少，參考有限。</b>':'已平倉 '+st.n+' 筆。')+
+    '</div>'+
+    otHtml+stat+
+    '<div class="legend"><b>完整波段</b>＝抱到死叉才出場(不是固定持有N天)，能反映「順勢抱一波」的真實報酬。<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>平均抱</b>＝每波平均持有天數。MA5死叉快，平均抱通常不長。</div></section>';
 }
 
 function signalsBlock(signals,sn,ln){

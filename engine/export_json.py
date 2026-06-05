@@ -23,9 +23,9 @@ POOLS = ["tw150", "ndx100", "sp500", "sp400", "sp600"]
 MA_SHORT, MA_LONG = 5, 50
 
 
-def _golden_backtest_20(closes):
-    """對單檔收盤序列做 MA5×MA50 金叉、持有20日回測。回傳統計 dict 或 None。
-    口徑：金叉隔日收盤進場(避免未來函數)、20日後收盤出場。"""
+def _golden_backtest_swing(closes):
+    """MA5×MA50 金叉進、死叉出的完整波段回測。回傳統計 dict 或 None。
+    口徑：金叉隔日進場、下次死叉隔日出場(避免未來函數)；未平倉那筆另記。"""
     n = len(closes)
     if n < MA_LONG + 25:
         return None
@@ -35,20 +35,41 @@ def _golden_backtest_20(closes):
             return None
         return sum(closes[i + 1 - w:i + 1]) / w
 
-    golden = []
+    crosses = []
     for i in range(1, n):
         ps, pl, cs, cl = ma(i-1, MA_SHORT), ma(i-1, MA_LONG), ma(i, MA_SHORT), ma(i, MA_LONG)
         if None in (ps, pl, cs, cl):
             continue
         if (ps - pl) <= 0 and (cs - cl) > 0:
-            golden.append(i)
-    rets = []
-    for gi in golden:
-        e, x = gi + 1, gi + 1 + 20
-        if x >= n or closes[e] in (0, None):
-            continue
-        rets.append((closes[x] / closes[e] - 1.0) * 100.0)
-    if len(rets) < 3:   # 樣本太少不納入排行
+            crosses.append((i, "g"))
+        elif (ps - pl) >= 0 and (cs - cl) < 0:
+            crosses.append((i, "d"))
+
+    rets, hold = [], []
+    in_pos, entry_i, open_ret = False, None, None
+    for (idx, typ) in crosses:
+        if typ == "g" and not in_pos:
+            entry_i = idx + 1
+            if entry_i < n:
+                in_pos = True
+        elif typ == "d" and in_pos:
+            x = idx + 1
+            if x < n:
+                e, xc = closes[entry_i], closes[x]
+                if e and xc and e == e and xc == xc:
+                    rets.append((xc / e - 1.0) * 100.0)
+                    hold.append(x - entry_i)
+            in_pos, entry_i = False, None
+    if in_pos and entry_i is not None and entry_i < n:
+        e = closes[entry_i]
+        last = None
+        for j in range(n-1, entry_i-1, -1):
+            if closes[j] and closes[j] == closes[j]:
+                last = closes[j]; break
+        if e and e == e and last:
+            open_ret = (last / e - 1.0) * 100.0
+
+    if len(rets) < 3:
         return None
     rs = sorted(rets)
     wins = [r for r in rets if r > 0]
@@ -64,7 +85,9 @@ def _golden_backtest_20(closes):
             "worst": round(min(rets), 1),
             "avg_win": round(avg_win, 1) if avg_win is not None else None,
             "avg_loss": round(avg_loss, 1) if avg_loss is not None else None,
-            "pl_ratio": round(pl_ratio, 2) if pl_ratio is not None else None}
+            "pl_ratio": round(pl_ratio, 2) if pl_ratio is not None else None,
+            "avg_hold": round(sum(hold)/len(hold), 0) if hold else None,
+            "open_ret": round(open_ret, 1) if open_ret is not None else None}
 
 
 def build_backtest_rankings(main_rows):
@@ -86,7 +109,7 @@ def build_backtest_rankings(main_rows):
             else:
                 sub = df.dropna()
             closes = list(sub["Close"])
-            bt = _golden_backtest_20(closes)
+            bt = _golden_backtest_swing(closes)
             if bt:
                 bt["sym"] = s
                 bt["name"] = name.get(s)

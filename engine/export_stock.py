@@ -141,18 +141,10 @@ def candles(tk):
     return out, mas, signals
 
 
-def backtest_golden(tk, years=5, horizons=(5, 10, 20)):
-    """金叉訊號歷史回測(誠實版)。
-    口徑：金叉當天收盤後才知訊號 → 用「隔一天收盤」當進場基準(避免未來函數)；
-          後 N 日報酬 = N日後收盤 / 進場收盤 - 1。回傳各 horizon 的勝率/平均/中位/樣本數。
-    """
-    try:
-        h = tk.history(period=f"{years}y", interval="1d", auto_adjust=False)
-    except Exception:
-        return None
-    if h is None or h.empty or len(h) < MA_LONG + max(horizons) + 5:
-        return None
-    closes = list(h["Close"])
+def _swing_trades(closes):
+    """金叉進、死叉出的完整波段。回傳 (closed_rets, hold_days, open_trade)。
+    口徑：金叉隔日收盤進場 → 下次死叉隔日收盤出場(避免未來函數)。
+    最後一筆若仍在金叉中(無死叉)= 未平倉，用最新收盤算未實現報酬另回傳。"""
     n = len(closes)
 
     def ma_at(i, w):
@@ -160,52 +152,88 @@ def backtest_golden(tk, years=5, horizons=(5, 10, 20)):
             return None
         return sum(closes[i + 1 - w:i + 1]) / w
 
-    # 找金叉日 index
-    golden_idx = []
+    # 標出每天的金叉/死叉
+    crosses = []  # (idx, 'golden'|'death')
     for i in range(1, n):
-        ps, pl = ma_at(i - 1, MA_SHORT), ma_at(i - 1, MA_LONG)
-        cs, cl = ma_at(i, MA_SHORT), ma_at(i, MA_LONG)
+        ps, pl, cs, cl = ma_at(i-1, MA_SHORT), ma_at(i-1, MA_LONG), ma_at(i, MA_SHORT), ma_at(i, MA_LONG)
         if None in (ps, pl, cs, cl):
             continue
         if (ps - pl) <= 0 and (cs - cl) > 0:
-            golden_idx.append(i)
+            crosses.append((i, "golden"))
+        elif (ps - pl) >= 0 and (cs - cl) < 0:
+            crosses.append((i, "death"))
 
-    results = {}
-    for hz in horizons:
-        rets = []
-        for gi in golden_idx:
-            entry_i = gi + 1           # 隔天進場(避免未來函數)
-            exit_i = entry_i + hz
-            if exit_i >= n:
-                continue
-            entry, exit_ = closes[entry_i], closes[exit_i]
-            if entry in (0, None):
-                continue
-            rets.append((exit_ / entry - 1.0) * 100.0)
-        if not rets:
-            results[str(hz)] = None
-            continue
-        rets_sorted = sorted(rets)
-        wins = [r for r in rets if r > 0]
-        losses = [r for r in rets if r < 0]
-        avg_win = (sum(wins) / len(wins)) if wins else None
-        avg_loss = (sum(losses) / len(losses)) if losses else None   # 負值
-        # 賺賠比 = 平均賺 / |平均賠|；無虧損(全賺)時設 None(無從比)
-        pl_ratio = (avg_win / abs(avg_loss)) if (avg_win is not None and avg_loss) else None
-        results[str(hz)] = {
-            "n": len(rets),
-            "win_rate": _safe(len(wins) / len(rets) * 100.0),
-            "avg": _safe(sum(rets) / len(rets)),
-            "median": _safe(rets_sorted[len(rets_sorted) // 2]),
-            "best": _safe(max(rets)),
-            "worst": _safe(min(rets)),
-            "avg_win": _safe(avg_win),
-            "avg_loss": _safe(avg_loss),
-            "pl_ratio": _safe(pl_ratio),
-        }
-    total_signals = len(golden_idx)
-    return {"signal": f"MA{MA_SHORT}金叉", "years": years,
-            "total_signals": total_signals, "horizons": results}
+    closed_rets, hold_days = [], []
+    open_trade = None
+    in_pos = False
+    entry_i = None
+    for (idx, typ) in crosses:
+        if typ == "golden" and not in_pos:
+            entry_i = idx + 1  # 隔日進場
+            if entry_i < n:
+                in_pos = True
+        elif typ == "death" and in_pos:
+            exit_i = idx + 1   # 隔日出場
+            if exit_i < n:
+                e, x = closes[entry_i], closes[exit_i]
+                if e and x and e == e and x == x:  # 排除 None/0/NaN
+                    closed_rets.append((x / e - 1.0) * 100.0)
+                    hold_days.append(exit_i - entry_i)
+            in_pos = False
+            entry_i = None
+    # 收尾：仍在持倉=未平倉。用「最後一個有效收盤」算未實現報酬(避開 NaN/停牌)。
+    if in_pos and entry_i is not None and entry_i < n and closes[entry_i] not in (0, None):
+        last_px, last_i = None, None
+        for j in range(n - 1, entry_i - 1, -1):
+            v = closes[j]
+            if v is not None and v == v and v != 0:  # v==v 排除 NaN
+                last_px, last_i = v, j
+                break
+        if last_px is not None and closes[entry_i] == closes[entry_i]:
+            open_trade = {
+                "entry_ret": (last_px / closes[entry_i] - 1.0) * 100.0,
+                "days": last_i - entry_i,
+            }
+    return closed_rets, hold_days, open_trade
+
+
+def backtest_golden(tk, years=5):
+    """金叉進、死叉出的完整波段回測(誠實版)。
+    每筆=金叉隔日進場、下次死叉隔日出場。未平倉那筆另標 open_trade。"""
+    try:
+        h = tk.history(period=f"{years}y", interval="1d", auto_adjust=False)
+    except Exception:
+        return None
+    if h is None or h.empty or len(h) < MA_LONG + 25:
+        return None
+    closes = list(h["Close"])
+    rets, hold, open_trade = _swing_trades(closes)
+    stat = _swing_stats(rets, hold)
+    return {"signal": f"MA{MA_SHORT}×MA{MA_LONG} 金叉進死叉出", "years": years,
+            "stat": stat, "open_trade": open_trade}
+
+
+def _swing_stats(rets, hold):
+    if not rets:
+        return None
+    rs = sorted(rets)
+    wins = [r for r in rets if r > 0]
+    losses = [r for r in rets if r < 0]
+    avg_win = (sum(wins)/len(wins)) if wins else None
+    avg_loss = (sum(losses)/len(losses)) if losses else None
+    pl_ratio = (avg_win/abs(avg_loss)) if (avg_win is not None and avg_loss) else None
+    return {
+        "n": len(rets),
+        "win_rate": _safe(len(wins)/len(rets)*100.0),
+        "avg": _safe(sum(rets)/len(rets)),
+        "median": _safe(rs[len(rs)//2]),
+        "best": _safe(max(rets)),
+        "worst": _safe(min(rets)),
+        "avg_win": _safe(avg_win),
+        "avg_loss": _safe(avg_loss),
+        "pl_ratio": _safe(pl_ratio),
+        "avg_hold": _safe(sum(hold)/len(hold)) if hold else None,
+    }
 
 
 def fundamentals(info):

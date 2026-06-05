@@ -59,6 +59,13 @@ def test_empty_rows():
     assert cs["golden"] == [] and cs["death"] == []
 
 
+def test_payload_contains_cross_signals():
+    """驗證 run_pool payload 組裝把 cross_signals 帶進去(原始碼層級，免連網)。"""
+    src = open("export_json.py", encoding="utf-8").read()
+    assert '"cross_signals": build_cross_signals(rows)' in src, \
+        "run_pool payload 尚未加入 cross_signals"
+
+
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

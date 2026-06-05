@@ -369,6 +369,7 @@ def run_pool(pool, topn):
         "highlights": build_highlights(rows, main_rows, topn),
         "backtest_rank": build_backtest_rankings(main_rows),
         "cross_filter": build_cross_filter(rows, main_rows, topn),
+        "cross_signals": build_cross_signals(rows),
         "volume_surge": build_volume_surge(rows, topn),
         "rankings": build_rankings(rows, topn),
         "failed": [{"sym": s, "why": why} for s, why in failed],

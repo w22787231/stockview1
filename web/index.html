@@ -499,7 +499,8 @@ function crossTable(rows){
 }
 
 // 交叉訊號表格：代號/名稱・狀態・幾天前・5日漲%・5日評分・Score。沿用 buildTable。
-function crossSignalTable(tableId, rows, emptyMsg){
+// withBacktest=true 時(僅🔥剛觸發表)再加 金叉勝率/平均報酬/樣本(5年金叉完整波段回測)。
+function crossSignalTable(tableId, rows, emptyMsg, withBacktest){
   const cols=[
     {h:"#", key:null, rownum:true},
     {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
@@ -515,6 +516,20 @@ function crossSignalTable(tableId, rows, emptyMsg){
     {h:"5日評分", key:"sc5", cell:r=>'<td>'+fmtNum(r.sc5)+'</td>'},
     {h:"Score", key:"score", cell:r=>'<td>'+fmtNum(r.score)+'</td>'},
   ];
+  if(withBacktest){
+    cols.push(
+      {h:"金叉勝率", key:"bt_win_rate",
+        sortVal:r=>r.bt_win_rate==null?-1:r.bt_win_rate,
+        cell:r=>r.bt_win_rate==null?'<td class="dim">–</td>'
+               :'<td class="'+(r.bt_win_rate>=50?"pos":"neg")+'" style="font-weight:700">'+r.bt_win_rate.toFixed(0)+'%</td>'},
+      {h:"平均報酬", key:"bt_avg",
+        sortVal:r=>r.bt_avg==null?-1e9:r.bt_avg,
+        cell:r=>r.bt_avg==null?'<td class="dim">–</td>':'<td class="'+cls(r.bt_avg)+'">'+sgn(r.bt_avg,1)+'%</td>'},
+      {h:"樣本", key:"bt_n",
+        sortVal:r=>r.bt_n==null?-1:r.bt_n,
+        cell:r=>r.bt_n==null?'<td class="dim">–</td>':'<td class="dim">'+r.bt_n+'</td>'}
+    );
+  }
   return buildTable(tableId, rows, cols, {empty:emptyMsg});
 }
 
@@ -532,7 +547,7 @@ function renderCross(d){
   const freshDeath = fresh.length - freshGold;
 
   const freshBlock = fresh.length
-    ? crossSignalTable("t-cross-fresh", fresh, "近 "+fd+" 日無新交叉觸發。")
+    ? crossSignalTable("t-cross-fresh", fresh, "近 "+fd+" 日無新交叉觸發。", true)
     : '<div class="note">近 '+fd+' 日無新交叉觸發。</div>';
 
   $("#content").innerHTML =
@@ -554,7 +569,7 @@ function renderCross(d){
         '<div style="margin-top:8px">'+crossSignalTable("t-cross-death", sortCrossRows(cs.death), "（本池目前無死叉）")+'</div>'+
       '</details>'+
 
-      '<div class="legend">金叉＝MA10 上穿 MA50（偏多）、死叉＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序，點欄頭可改排序。代號可點進個股看完整波段回測。</div>'+
+      '<div class="legend">金叉＝MA10 上穿 MA50（偏多）、死叉＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序，點欄頭可改排序。<b>🔥剛觸發</b>那幾檔附該股近5年金叉完整波段回測：<b>金叉勝率</b>＝歷史金叉後抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均報酬、<b>樣本</b>＝幾次金叉(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
     '</section>';
 }
 
@@ -663,8 +678,8 @@ function backtestRankBlock(br){
       '⚠️ <b>歷史統計，非未來保證、非買賣建議。</b>口徑：金叉隔日收盤進場、下次死叉隔日收盤出場(完整波段，避免未來函數)；未含手續費。樣本<10 者參考價值有限，務必看「最差」欄。'+
     '</div>'+
     '<div class="tg-gname">🏆 勝率 前10</div>'+btRankTable(br.by_win_rate,"win")+
-    '<div class="tg-gname" style="margin-top:14px">📊 中位報酬 前10</div>'+btRankTable(br.by_median,"med")+
-    '<div class="legend"><b>完整波段</b>＝抱到死叉才出場(不是固定持有N天)，能反映「順勢抱一波」的真實報酬。勝率＝正報酬波段占比；<b>中位</b>＝排序正中間那波(比平均更代表常態，不被極端值拉歪)。<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>平均抱</b>＝每波平均持有天數。代號可點進個股看完整回測。</div>'+
+    '<div class="tg-gname" style="margin-top:14px">📊 平均報酬 前10</div>'+btRankTable(br.by_avg||br.by_median,"avg")+
+    '<div class="legend"><b>完整波段</b>＝抱到死叉才出場(不是固定持有N天)，能反映「順勢抱一波」的真實報酬。勝率＝正報酬波段占比；<b>平均</b>＝每波報酬的算術平均(會被極端大賺/大賠影響)。<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>平均抱</b>＝每波平均持有天數。代號可點進個股看完整回測。</div>'+
   '</section>';
 }
 

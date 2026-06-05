@@ -22,8 +22,9 @@ let CAPTURED = {};
 function buildTable(id, rows, cols, opts){
   CAPTURED[id] = rows.length;
   if(opts && opts.empty && !rows.length) return '<div class="note">'+opts.empty+'</div>';
+  const head = cols.map(c=>'<th>'+c.h+'</th>').join('');
   const body = rows.map(r=>cols.map(c=>c.rownum?'<td>#</td>':c.cell(r)).join('')).join('');
-  return '<table id="'+id+'">'+body+'</table>';
+  return '<table id="'+id+'"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
 }
 function symCell(sym,name){ return '<td class="sym clickable" data-stk="'+sym+'">'+sym+(name?'<span class="nm">'+name+'</span>':'')+'</td>'; }
 function crossSortVal(r){ return r.cross_state==='golden'?1:0; }
@@ -83,5 +84,24 @@ assert(empt.includes("（本池目前無金叉）"), "缺金叉空訊息");
 assert(empt.includes("（本池目前無死叉）"), "缺死叉空訊息");
 assert(empt.includes("近 3 日無新交叉觸發"), "缺剛觸發空訊息");
 console.log("empty pool OK");
+
+// 4) 剛觸發股帶回測欄位：fresh 表須出現 金叉勝率/平均報酬/樣本 表頭 + 數值；
+//    全部金叉/死叉表不應有這些表頭(只有 fresh 表 withBacktest=true)。
+const freshRow = {sym:"ZZZ", name:null, cross_state:"golden", cross_days:1,
+                  sc5:80, r5:5.0, score:1000, bt_win_rate:67, bt_avg:12.3, bt_n:9};
+const oldRow  = {sym:"YYY", name:null, cross_state:"golden", cross_days:40,
+                 sc5:50, r5:1.0, score:500};
+mod.renderCross({pool_label:"T", n_ok:2,
+  cross_signals:{fresh_days:3, golden:[freshRow, oldRow], death:[], n_golden:2, n_death:0}});
+const bt = mod.getContent();
+assert(bt.includes("金叉勝率"), "fresh 表缺 金叉勝率 表頭");
+assert(bt.includes("平均報酬"), "fresh 表缺 平均報酬 表頭");
+assert(bt.includes(">樣本<"), "fresh 表缺 樣本 表頭");
+assert(bt.includes("67%"), "缺 bt_win_rate 值");      // 67 -> "67%"
+assert(bt.includes("+12.3%"), "缺 bt_avg 值");        // sgn(12.3,1)
+// 全部金叉表(withBacktest 預設 false)不該有回測表頭：取 t-cross-gold 那段檢查
+const goldSeg = bt.slice(bt.indexOf('id="t-cross-gold"'), bt.indexOf('</table>', bt.indexOf('id="t-cross-gold"')));
+assert(!goldSeg.includes("金叉勝率"), "全部金叉表不應帶回測欄");
+console.log("fresh backtest columns OK");
 
 console.log("\nheadless renderCross tests passed");

@@ -222,12 +222,43 @@ def _score5(r5, e5, e5_minus_e20):
     s_acc = clamp((e5_minus_e20 + 0.1) / 0.4)  # 加速: -0.1~+0.3 映到 0~1
     return (0.40 * s_ret + 0.35 * s_eff + 0.25 * s_acc) * 100.0
 
+def _ma_cross_status(sub, short_n=5, long_n=50, lookback=120):
+    """回傳 (state, days_since)。state: 'golden'(短>長,多頭) / 'death'(短<長,空頭)。
+    days_since: 最近一次交叉是幾天前(None=回看範圍內無交叉)。資料不足回 (None,None)。"""
+    closes = list(sub["Close"])
+    if len(closes) < long_n + 2:
+        return None, None
+    def ma(i, w):
+        if i + 1 < w:
+            return None
+        return sum(closes[i + 1 - w:i + 1]) / w
+    n = len(closes)
+    s_last, l_last = ma(n - 1, short_n), ma(n - 1, long_n)
+    if s_last is None or l_last is None:
+        return None, None
+    state = "golden" if s_last >= l_last else "death"
+    # 往回找最近一次交叉
+    days_since = None
+    start = max(long_n, n - lookback)
+    for i in range(n - 1, start, -1):
+        ps, pl = ma(i - 1, short_n), ma(i - 1, long_n)
+        cs, cl = ma(i, short_n), ma(i, long_n)
+        if None in (ps, pl, cs, cl):
+            break
+        crossed = ((ps - pl) <= 0 and (cs - cl) > 0) or ((ps - pl) >= 0 and (cs - cl) < 0)
+        if crossed:
+            days_since = (n - 1) - i
+            break
+    return state, days_since
+
+
 def compute_trend(symbols):
     """趨勢效率 = N日漲幅/(ADRN%xN)，看單向性。依 eff20 由高到低排。"""
     rows, failed = [], []
     if not symbols:
         return rows, failed
-    df = _download(symbols, period="3mo")
+    # 6mo：MA50 交叉狀態需要較長歷史(3mo 不夠 50 日均線穩定)。
+    df = _download(symbols, period="6mo")
     for sym in symbols:
         try:
             sub = _sub(df, symbols, sym)
@@ -246,10 +277,12 @@ def compute_trend(symbols):
             # 不受單日跳空汙染(量不因跳空失真，反而爆量+跳空正是進場訊號)。
             dv1 = float(last20["Close"].iloc[-1] * last20["Volume"].iloc[-1])
             volr = (dv1 / dv) if dv > 0 else 0.0
+            cross_state, cross_days = _ma_cross_status(sub)
             rows.append({"sym": sym, "e3": e3, "e5": e5, "e10": e10, "e20": e20,
                          "d520": e5 - e20, "r20": r20, "r5": r5, "sc5": sc5,
                          "a5": a5, "a10": a10, "a20": a20, "ad520": a5 - a20,
                          "dv": dv, "dv1": dv1, "volr": volr, "score": score,
+                         "cross_state": cross_state, "cross_days": cross_days,
                          "cur": "TWD" if is_tw(sym) else "USD"})
         except Exception as e:
             failed.append((sym, repr(e)[:40]))

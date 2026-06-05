@@ -307,6 +307,22 @@ const dvfmt = n => n==null?"–":"$"+fmtNum(n/1e6,0)+"M";
 const volrFmt = n => n==null?"–":Number(n).toFixed(2)+"×";
 // 量比上色：≥2 強放量(綠)、≥1.5 放量(綠淡)、<0.7 縮量(紅)、其餘中性。
 const volrCls = n => n==null?"dim":(n>=1.5?"pos":(n<0.7?"neg":"dim"));
+// 金叉狀態欄：golden=綠↑、death=紅↓；附「N天前」剛交叉者標★(越近越值得注意)
+function crossCell(r){
+  const st=r.cross_state, dd=r.cross_days;
+  if(st==null) return '<td class="dim">–</td>';
+  const fresh = (dd!=null && dd<=10) ? ' <span style="color:var(--amber)">★</span>' : '';
+  const days = (dd!=null) ? '<span style="color:var(--ink3);font-size:10px"> '+dd+'天</span>' : '';
+  if(st==="golden") return '<td><span class="pos">▲金叉</span>'+days+fresh+'</td>';
+  return '<td><span class="neg">▼死叉</span>'+days+fresh+'</td>';
+}
+// 排序權重：金叉>死叉；同狀態下「剛交叉(天數小)」排前面
+function crossSortVal(r){
+  if(r.cross_state==null) return -9999;
+  const base = r.cross_state==="golden" ? 1000 : 0;
+  const recency = r.cross_days!=null ? (200 - Math.min(r.cross_days,200)) : 0;
+  return base + recency;
+}
 const esc = s => (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 
 function symCell(sym,name){
@@ -421,6 +437,7 @@ function mainTable(rows){
     {h:"avg$Vol", key:"dv", cell:r=>'<td class="dim">'+dvfmt(r.dv)+'</td>'},
     {h:"量比", key:"volr", cell:r=>'<td class="'+volrCls(r.volr)+'">'+volrFmt(r.volr)+'</td>'},
     {h:"Score", key:"score", cell:r=>'<td>'+fmtNum(r.score)+'</td>'},
+    {h:"金叉", key:"cross", sortVal:crossSortVal, cell:r=>crossCell(r)},
     {h:"單向性", key:null, cell:r=>'<td style="text-align:left" class="dim">'+esc(r.trend)+'</td>'},
   ];
   return buildTable("t-main", rows, cols);

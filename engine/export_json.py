@@ -88,6 +88,7 @@ def build_main(rows, topn):
             "a20": _round(r["a20"], 1), "ad520": _round(r["ad520"], 1),
             "dv": _round(r["dv"], 0), "volr": _round(r.get("volr"), 2),
             "score": _round(r["score"], 0),
+            "cross_state": r.get("cross_state"), "cross_days": r.get("cross_days"),
             "trend": eng._eff_trend(r["e5"], r["e10"], r["e20"]),
             "cur": r["cur"],
         })

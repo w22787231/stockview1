@@ -794,11 +794,16 @@ function renderStock(d){
     '<div class="stk-price '+chgc+'">'+(m.price!=null?fmtNum(m.price,2):fmtNum(d.candles[d.candles.length-1].c,2))+
       (chg!=null?' <span style="font-size:16px">'+sgn(chg,2)+'%</span>':'')+'</div>'+
     metricsBlock+
-    '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA20/MA60 · 近1年</span></div>'+
+    (function(){
+      const sn=(d.ma&&d.ma.short_n)||5, ln=(d.ma&&d.ma.long_n)||50;
+      return '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA'+sn+'/MA'+ln+' · 均線交叉 · 近1年</span></div>'+
       '<div id="chart"></div>'+
-      '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#16a34a"></span>MA20</span>'+
-      '<span class="lg"><span class="sw" style="background:#2563eb"></span>MA60</span>'+
-      '<span class="lg">綠漲紅跌</span></div></section>'+
+      '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#f59e0b"></span>MA'+sn+'(短)</span>'+
+      '<span class="lg"><span class="sw" style="background:#2563eb"></span>MA'+ln+'(長)</span>'+
+      '<span class="lg"><span class="pos">▲金叉</span></span><span class="lg"><span class="neg">▼死叉</span></span>'+
+      '<span class="lg">綠漲紅跌</span></div></section>';
+    })()+
+    signalsBlock(d.signals,(d.ma&&d.ma.short_n)||5,(d.ma&&d.ma.long_n)||50)+
     notesBlock+
     '<section><div class="sec-head"><h2>財務三表</h2><span class="tag">最近數期</span></div>'+
       '<div class="fin-grid">'+
@@ -812,6 +817,26 @@ function renderStock(d){
 
   $("#backBtn").onclick = ()=> switchView(VIEW==="macro"?"macro":"trend");
   drawChart(d);
+}
+
+function signalsBlock(signals,sn,ln){
+  if(!signals||!signals.length)
+    return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+'</span></div>'+
+      '<div class="legend">近1年內無 MA'+sn+'/MA'+ln+' 交叉訊號。</div></section>';
+  // 由新到舊
+  const list=signals.slice().sort((a,b)=>a.t<b.t?1:-1);
+  const last=list[0];
+  const lastTxt = last.type==="golden"
+    ? '<span class="pos">最近：'+esc(last.t)+' 黃金交叉(短上穿長，偏多)</span>'
+    : '<span class="neg">最近：'+esc(last.t)+' 死亡交叉(短下穿長，偏空)</span>';
+  const rows=list.map(s=>'<tr><td class="sym" style="cursor:default">'+esc(s.t)+'</td>'+
+    '<td>'+(s.type==="golden"?'<span class="badge in">🟢 黃金交叉</span>':'<span class="badge add" style="background:#fdeaed;color:var(--red)">🔴 死亡交叉</span>')+'</td>'+
+    '<td class="dim">'+(s.price!=null?fmtNum(s.price,2):"–")+'</td></tr>').join("");
+  return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+' · 近1年</span>'+
+      '<span class="hint">短均線上穿長=金叉、下穿=死叉</span></div>'+
+    '<div class="legend" style="margin-top:0;margin-bottom:8px;border:none">'+lastTxt+'</div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">日期</th><th style="text-align:left">訊號</th><th>當時收盤</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="legend">⚠️ MA'+sn+' 較短、訊號頻繁(易有雜訊/假交叉)，<b>僅供參考，非買賣建議</b>，務必配合趨勢與量能。短均線數字越小越敏感。</div></section>';
 }
 
 function eventsBlock(ev){
@@ -849,12 +874,21 @@ function drawChart(d){
   const cs=chart.addCandlestickSeries({upColor:"#16a34a",downColor:"#e11d48",
     borderUpColor:"#16a34a",borderDownColor:"#e11d48",wickUpColor:"#16a34a",wickDownColor:"#e11d48"});
   cs.setData(d.candles.filter(c=>c.o!=null).map(c=>({time:c.t,open:c.o,high:c.h,low:c.l,close:c.c})));
-  const ma20=chart.addLineSeries({color:"#16a34a",lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
-  ma20.setData((d.ma.ma20||[]).filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
-  const ma60=chart.addLineSeries({color:"#2563eb",lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
-  ma60.setData((d.ma.ma60||[]).filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
+  // 兼容新(ma_short/ma_long)與舊(ma20/ma60)欄位
+  const ma=d.ma||{};
+  const shortArr=ma.ma_short||ma.ma20||[], longArr=ma.ma_long||ma.ma60||[];
+  const maS=chart.addLineSeries({color:"#f59e0b",lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
+  maS.setData(shortArr.filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
+  const maL=chart.addLineSeries({color:"#2563eb",lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+  maL.setData(longArr.filter(p=>p.v!=null).map(p=>({time:p.t,value:p.v})));
+  // 均線交叉標記：金叉(綠↑Buy) / 死叉(紅↓Sell)
+  const sigs=(d.signals||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
+  if(sigs.length){
+    cs.setMarkers(sigs.map(s=> s.type==="golden"
+      ? {time:s.t,position:"belowBar",color:"#16a34a",shape:"arrowUp",text:"金叉"}
+      : {time:s.t,position:"aboveBar",color:"#e11d48",shape:"arrowDown",text:"死叉"}));
+  }
   chart.timeScale().fitContent();
-  // 視窗縮放
   const ro=()=>chart.applyOptions({width:el.clientWidth});
   ro(); window.addEventListener("resize",ro);
 }

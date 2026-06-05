@@ -58,11 +58,16 @@ def _fname(sym):
     return sym.replace(".", "_").upper() + ".json"
 
 
+MA_SHORT = 5
+MA_LONG = 50
+
+
 def candles(tk):
-    """1年日K → list of {t,o,h,l,c,v} + MA20/MA60。"""
+    """1年日K → list of {t,o,h,l,c,v} + MA短/MA長 + 均線交叉訊號。
+    交叉訊號(複刻 ChartArt MA Cross):短上穿長=黃金交叉(golden)、短下穿長=死亡交叉(death)。"""
     h = tk.history(period="1y", interval="1d", auto_adjust=False)
     if h is None or h.empty:
-        return [], {}
+        return [], {}, []
     closes = list(h["Close"])
     out = []
     for idx, row in h.iterrows():
@@ -73,16 +78,37 @@ def candles(tk):
             "v": _safe(row["Volume"]),
         })
 
-    def ma(n):
+    def ma_series(n):
+        """回傳與 closes 等長的 MA 陣列(前 n-1 個為 None)。"""
         res = []
         for i in range(len(closes)):
             if i + 1 < n:
-                continue
-            window = closes[i + 1 - n:i + 1]
-            res.append({"t": out[i]["t"], "v": _safe(sum(window) / n)})
+                res.append(None)
+            else:
+                res.append(sum(closes[i + 1 - n:i + 1]) / n)
         return res
 
-    return out, {"ma20": ma(20), "ma60": ma(60)}
+    s = ma_series(MA_SHORT)
+    l = ma_series(MA_LONG)
+
+    def ma_points(arr):
+        return [{"t": out[i]["t"], "v": _safe(arr[i])} for i in range(len(arr)) if arr[i] is not None]
+
+    # 偵測交叉：前一根 短<長、這根 短>=長 = 黃金交叉(反之死亡交叉)
+    signals = []
+    for i in range(1, len(closes)):
+        if s[i] is None or l[i] is None or s[i - 1] is None or l[i - 1] is None:
+            continue
+        prev_diff = s[i - 1] - l[i - 1]
+        cur_diff = s[i] - l[i]
+        if prev_diff <= 0 and cur_diff > 0:
+            signals.append({"t": out[i]["t"], "type": "golden", "price": _safe(closes[i])})
+        elif prev_diff >= 0 and cur_diff < 0:
+            signals.append({"t": out[i]["t"], "type": "death", "price": _safe(closes[i])})
+
+    mas = {"ma_short": ma_points(s), "ma_long": ma_points(l),
+           "short_n": MA_SHORT, "long_n": MA_LONG}
+    return out, mas, signals
 
 
 def fundamentals(info):
@@ -274,7 +300,7 @@ def get_events(tk, info):
 
 def export_one(sym):
     tk = yf.Ticker(sym)
-    cdl, mas = candles(tk)
+    cdl, mas, signals = candles(tk)
     if not cdl:
         return False, "no price"
     info, info_ok = fetch_info(tk)
@@ -291,7 +317,7 @@ def export_one(sym):
         "source": "yfinance",
         "has_fundamentals": bool(has_fund),
         "metrics": metrics, "notes": notes, "overall": overall,
-        "candles": cdl, "ma": mas, "statements": stmts,
+        "candles": cdl, "ma": mas, "signals": signals, "statements": stmts,
         "news": news, "events": events,
     }
     os.makedirs(OUT_DIR, exist_ok=True)

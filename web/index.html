@@ -730,13 +730,9 @@ function renderStock(d){
   const chg = (m.price!=null&&d.candles.length>1) ? (m.price/d.candles[d.candles.length-2].c-1)*100 : null;
   const chgc = chg==null?"dim":(chg>0?"pos":(chg<0?"neg":"dim"));
   const nm = d.name_zh ? d.name_zh : (m.name||"");
-  $("#content").innerHTML =
-    '<div class="backbtn" id="backBtn">← 返回</div>'+
-    '<div class="stk-head"><span class="ssym">'+esc(d.sym)+'</span>'+
-      (nm?'<span class="snm">'+esc(nm)+'</span>':'')+
-      (m.sector?'<span class="ssec">'+esc(m.sector)+(m.industry?' · '+esc(m.industry):'')+'</span>':'')+'</div>'+
-    '<div class="stk-price '+chgc+'">'+(m.price!=null?fmtNum(m.price,2):"–")+
-      (chg!=null?' <span style="font-size:16px">'+sgn(chg,2)+'%</span>':'')+'</div>'+
+  // 基本面有抓到才顯示指標卡 + 評語(雲端常抓不到 .info；抓不到就不擺一堆空「–」)
+  const hasFund = (d.has_fundamentals!==false) && (m.mktcap!=null || m.pe!=null);
+  const metricsBlock = hasFund ?
     '<div class="stk-metrics">'+
       metricCard("市值", bigNum(m.mktcap))+
       metricCard("PE", m.pe!=null?m.pe.toFixed(1):"–")+
@@ -748,17 +744,29 @@ function renderStock(d){
       metricCard("營收成長", pct(m.rev_growth))+
       metricCard("52週高", m.high52!=null?fmtNum(m.high52,2):"–")+
       metricCard("52週低", m.low52!=null?fmtNum(m.low52,2):"–")+
-    '</div>'+
+    '</div>' : '';
+  const notesBlock = (hasFund && (d.notes||[]).length) ?
+    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+
+      '<div class="rating r'+esc(d.overall)+'">整體評等 '+esc(d.overall)+' — '+
+        (d.overall==="強"?"基本面強健":(d.overall==="中"?"基本面中性，需配合題材或技術面":"基本面偏弱，留意"))+'</div>'+
+      '<div class="notes-list">'+(d.notes||[]).map(n=>'<div class="note-row '+esc(n.level)+'">'+
+        '<span class="ntag">'+esc(n.tag)+'</span><span>'+esc(n.text)+'</span></div>').join("")+'</div></section>' :
+    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+
+      '<div class="legend">⚠️ 此檔基本面指標(PE/ROE/財報)雲端暫時抓不到，僅顯示技術線圖與財務三表。下次更新可能補上。</div></section>';
+  $("#content").innerHTML =
+    '<div class="backbtn" id="backBtn">← 返回</div>'+
+    '<div class="stk-head"><span class="ssym">'+esc(d.sym)+'</span>'+
+      (nm?'<span class="snm">'+esc(nm)+'</span>':'')+
+      (m.sector?'<span class="ssec">'+esc(m.sector)+(m.industry?' · '+esc(m.industry):'')+'</span>':'')+'</div>'+
+    '<div class="stk-price '+chgc+'">'+(m.price!=null?fmtNum(m.price,2):fmtNum(d.candles[d.candles.length-1].c,2))+
+      (chg!=null?' <span style="font-size:16px">'+sgn(chg,2)+'%</span>':'')+'</div>'+
+    metricsBlock+
     '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA20/MA60 · 近1年</span></div>'+
       '<div id="chart"></div>'+
       '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#16a34a"></span>MA20</span>'+
       '<span class="lg"><span class="sw" style="background:#2563eb"></span>MA60</span>'+
       '<span class="lg">綠漲紅跌</span></div></section>'+
-    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+
-      '<div class="rating r'+esc(d.overall)+'">整體評等 '+esc(d.overall)+' — '+
-        (d.overall==="強"?"基本面強健":(d.overall==="中"?"基本面中性，需配合題材或技術面":"基本面偏弱，留意"))+'</div>'+
-      '<div class="notes-list">'+(d.notes||[]).map(n=>'<div class="note-row '+esc(n.level)+'">'+
-        '<span class="ntag">'+esc(n.tag)+'</span><span>'+esc(n.text)+'</span></div>').join("")+'</div></section>'+
+    notesBlock+
     '<section><div class="sec-head"><h2>財務三表</h2><span class="tag">最近數期</span></div>'+
       '<div class="fin-grid">'+
         stmtTable("損益表", d.statements&&d.statements.income)+

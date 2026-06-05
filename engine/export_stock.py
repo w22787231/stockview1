@@ -10,11 +10,34 @@ import sys, os, io, json, math, datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import warnings
+import time
 warnings.filterwarnings("ignore")
 import yfinance as yf
 import adr_screen as eng
 
 OUT_DIR = os.path.join(HERE, "..", "data", "stock")
+
+# 雲端(GitHub Actions)上 yfinance 的 .info 常被 Yahoo 擋 → 重試 + 判斷是否真有料。
+INFO_RETRIES = 3
+INFO_SLEEP = 1.2  # 秒；每檔之間/重試之間稍歇，降低被限流機率
+
+
+def fetch_info(tk):
+    """重試取 .info；回傳 (info, ok)。ok=有抓到實質基本面欄位。"""
+    last = {}
+    for attempt in range(INFO_RETRIES):
+        try:
+            info = tk.info or {}
+        except Exception:
+            info = {}
+        # 判斷是否真有料：市值或 PE 或營收成長任一存在即視為成功
+        if any(info.get(k) not in (None, "") for k in
+               ("marketCap", "trailingPE", "forwardPE", "priceToSalesTrailing12Months", "revenueGrowth")):
+            return info, True
+        last = info
+        if attempt < INFO_RETRIES - 1:
+            time.sleep(INFO_SLEEP)
+    return last, False
 
 
 def _safe(x):
@@ -170,37 +193,51 @@ def statements(tk):
 
 def export_one(sym):
     tk = yf.Ticker(sym)
-    try:
-        info = tk.info or {}
-    except Exception:
-        info = {}
     cdl, mas = candles(tk)
     if not cdl:
         return False, "no price"
+    info, info_ok = fetch_info(tk)
     metrics, notes, overall = fundamentals(info)
     stmts = statements(tk)
+    # has_fundamentals：前端據此決定要不要顯示指標卡/評語(避免一堆空「–」)
+    has_fund = info_ok and metrics.get("mktcap") is not None
     nm = eng._TW_NAMES.get(sym.upper())
     payload = {
         "sym": sym.upper(), "name_zh": nm,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": "yfinance",
+        "has_fundamentals": bool(has_fund),
         "metrics": metrics, "notes": notes, "overall": overall,
         "candles": cdl, "ma": mas, "statements": stmts,
     }
     os.makedirs(OUT_DIR, exist_ok=True)
     with io.open(os.path.join(OUT_DIR, _fname(sym)), "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
-    return True, f"{len(cdl)} bars, {len(notes)} notes"
+    return True, f"{len(cdl)} bars, {'基本面✓' if has_fund else '基本面✗'}, {len(notes)} notes"
 
 
 def resolve_targets(args):
     if args and args[0] == "--from-pool":
         pool = args[1]
-        topn = int(args[2]) if len(args) > 2 and args[2].isdigit() else 30
+        # 無 N 或 N=all → 全池；否則主表 Top N
+        topn = None
+        if len(args) > 2 and args[2].isdigit():
+            topn = int(args[2])
         syms = eng.load_pool(pool) or []
+        if topn is None:
+            return [s.upper() for s in syms]   # 全池(不必先算 trend)
         rows, _ = eng.compute_trend(syms)
         rows = sorted(rows, key=lambda r: r["score"], reverse=True)[:topn]
         return [r["sym"] for r in rows]
+    if args and args[0] == "--from-themes":
+        spec = json.load(io.open(os.path.join(HERE, "universe", "tw_themes.json"), encoding="utf-8"))
+        out = []
+        for grp in spec["groups"]:
+            for th in grp["themes"]:
+                for m in th["members"]:
+                    if m.get("sym"):
+                        out.append(m["sym"].upper())
+        return sorted(set(out))
     return [a.upper() for a in args]
 
 

@@ -60,6 +60,18 @@
   .idx-card .ic-val{font-family:var(--mono);font-size:21px;font-weight:740;letter-spacing:-.3px;line-height:1.1}
   .idx-card .ic-chg{font-family:var(--mono);font-size:13px;font-weight:700;margin-top:3px}
   .idx-card .ic-sub{font-size:10.5px;color:var(--ink3);margin-top:2px}
+  /* 情緒極端值警示：紅(危險/過熱)、綠(超賣機會) 明顯閃爍 */
+  .idx-card.alert-red{border-color:var(--red);background:#fff5f6;animation:pulseRed 1.1s ease-in-out infinite}
+  .idx-card.alert-green{border-color:var(--green);background:#f2fbf5;animation:pulseGreen 1.1s ease-in-out infinite}
+  .idx-card.alert-red .ic-val{color:var(--red)} .idx-card.alert-green .ic-val{color:var(--green)}
+  .idx-card .alert-tag{display:inline-block;font-size:10px;font-weight:800;padding:1px 7px;border-radius:5px;margin-top:5px}
+  .idx-card.alert-red .alert-tag{background:var(--red);color:#fff}
+  .idx-card.alert-green .alert-tag{background:var(--green);color:#fff}
+  @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(225,29,72,.0)}50%{box-shadow:0 0 0 4px rgba(225,29,72,.28),0 0 14px rgba(225,29,72,.4)}}
+  @keyframes pulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.0)}50%{box-shadow:0 0 0 4px rgba(22,163,74,.28),0 0 14px rgba(22,163,74,.4)}}
+  .breadth-alert-green{animation:pulseGreen 1.1s ease-in-out infinite;border-radius:6px}
+  .breadth-alert-red{animation:pulseRed 1.1s ease-in-out infinite;border-radius:6px}
+  @media (prefers-reduced-motion: reduce){.idx-card.alert-red,.idx-card.alert-green,.breadth-alert-green,.breadth-alert-red{animation:none}}
 
   .toolbar{display:flex;align-items:center;justify-content:space-between;
     gap:12px;flex-wrap:wrap;margin:16px 0 14px}
@@ -693,18 +705,42 @@ function renderMacro(d){
   loadThemes();
 }
 
+// 各情緒指標的極端值警示閾值。回傳 {cls, tag} 或 null。
+function sentAlert(sym, level, diffPct){
+  if(level==null) return null;
+  switch(sym){
+    case "^VIX":  // >28 恐慌(紅閃)、<13 過度自滿(綠=可能買點)
+      if(level>=28) return {cls:"alert-red", tag:"🔴 恐慌"};
+      if(level<13)  return {cls:"alert-green", tag:"🟢 過度自滿"};
+      return null;
+    case "^VXN":  // 那指版門檻略高
+      if(level>=32) return {cls:"alert-red", tag:"🔴 恐慌"};
+      if(level<18)  return {cls:"alert-green", tag:"🟢 過度自滿"};
+      return null;
+    case "^SKEW": // >150 尾部風險高(紅閃)
+      if(level>=150) return {cls:"alert-red", tag:"🔴 尾部風險高"};
+      return null;
+    case "HYG":   // 單日跌 >1% = 信用惡化(紅閃)
+      if(diffPct!=null && diffPct<=-1) return {cls:"alert-red", tag:"🔴 信用轉弱"};
+      return null;
+    default: return null;
+  }
+}
+
 function sentCard(r){
   const diff = r.diff!=null ? r.diff : r.diff_pct;
   const isPx = r.unit==="px";
   const up = diff>0;
-  // VIX/VXN/SKEW(指數類)上升=恐慌(紅)；HYG(價)上升=偏多(綠)
   const c = diff==null?"dim":(!isPx ? (up?"neg":"pos") : (up?"pos":"neg"));
   const sign = diff>0?"+":"";
   const diffTxt = (diff!=null?sign+diff:"–")+(isPx?"%":" 點");
-  return '<div class="idx-card">'+
+  const al = sentAlert(r.sym, r.level, isPx?diff:null);
+  const cls = al?(" "+al.cls):"";
+  const tag = al?('<div><span class="alert-tag">'+al.tag+'</span></div>'):"";
+  return '<div class="idx-card'+cls+'">'+
     '<div class="ic-label">'+esc(r.label)+'</div><div class="ic-note">'+esc(r.note||"")+'</div>'+
     '<div class="ic-val">'+(r.level!=null?Number(r.level).toFixed(2):"–")+'</div>'+
-    '<div class="ic-chg '+c+'">'+diffTxt+'</div>'+
+    '<div class="ic-chg '+c+'">'+diffTxt+'</div>'+tag+
     '<div class="ic-sub">'+esc(r.read||"")+'</div></div>';
 }
 
@@ -714,20 +750,33 @@ function fngCard(fg){
   const col = s>=75?"#16a34a":(s>=55?"#5cb85c":(s>=45?"#9aa6b6":(s>=25?"#e8923a":"#e11d48")));
   const zh = s>=75?"極度貪婪":(s>=55?"貪婪":(s>=45?"中性":(s>=25?"恐懼":"極度恐懼")));
   const dd = (prev!=null)?(s-prev):null;
-  return '<div class="idx-card" style="border-color:'+col+'66">'+
+  // 極端值閃爍：<25 極度恐懼(綠=可能超賣買點)、>80 極度貪婪(紅=過熱)
+  let cls="", tag="";
+  if(s!=null){
+    if(s<25){ cls=" alert-green"; tag='<div><span class="alert-tag">🟢 極度恐懼·可能超賣</span></div>'; }
+    else if(s>80){ cls=" alert-red"; tag='<div><span class="alert-tag">🔴 極度貪婪·過熱</span></div>'; }
+  }
+  return '<div class="idx-card'+cls+'" style="border-color:'+col+'66">'+
     '<div class="ic-label">😱 Fear &amp; Greed</div><div class="ic-note">CNN 市場貪婪/恐懼指數 (0–100)</div>'+
     '<div class="ic-val" style="color:'+col+'">'+(s!=null?s.toFixed(0):"–")+'</div>'+
-    '<div class="ic-chg" style="color:'+col+'">'+zh+(dd!=null?' ('+(dd>0?"+":"")+dd.toFixed(0)+')':'')+'</div>'+
+    '<div class="ic-chg" style="color:'+col+'">'+zh+(dd!=null?' ('+(dd>0?"+":"")+dd.toFixed(0)+')':'')+'</div>'+tag+
     '<div class="ic-sub">&lt;25 極度恐懼(可能超賣) · &gt;75 極度貪婪(可能過熱)</div></div>';
 }
 
 function breadthBox(b){
   if(!b) return '';
   const bar=(p)=>'<span style="display:inline-block;height:7px;width:'+Math.round(p*0.9)+'px;background:'+(p>=50?"var(--green)":"var(--red)")+';border-radius:2px;opacity:.55;vertical-align:middle;margin-left:6px"></span>';
+  // 廣度極端：<8 極度超賣(綠閃)、<30 超賣(綠標)、>85 過熱(紅閃)
+  function alertWrap(p, txt){
+    if(p<8)  return '<span class="breadth-alert-green" style="padding:2px 8px;color:var(--green);font-weight:800">'+txt+' 🟢極超賣</span>';
+    if(p>85) return '<span class="breadth-alert-red" style="padding:2px 8px;color:var(--red);font-weight:800">'+txt+' 🔴過熱</span>';
+    if(p<30) return '<span style="color:var(--green);font-weight:700">'+txt+' 🟢超賣</span>';
+    return '<span class="'+(p>=50?"pos":"neg")+'" style="font-weight:700">'+txt+'</span>';
+  }
   const row=(lbl,today,prev)=>{
     const dd=(today-prev);
     return '<tr><td class="sym" style="cursor:default">'+lbl+'</td>'+
-      '<td class="'+(today>=50?"pos":"neg")+'" style="font-weight:700">'+today+'%'+bar(today)+'</td>'+
+      '<td>'+alertWrap(today, today+'%')+bar(today)+'</td>'+
       '<td class="dim">'+prev+'%</td>'+
       '<td class="'+(dd>0?"pos":(dd<0?"neg":"dim"))+'">'+(dd>0?"+":"")+dd.toFixed(1)+'%</td></tr>';
   };
@@ -737,7 +786,7 @@ function breadthBox(b){
       row("站上 20MA", b.above20_pct, b.above20_prev)+
       row("站上 50MA", b.above50_pct, b.above50_prev)+
     '</tbody></table>'+
-    '<div class="ex">廣度＝多少%的股站上均線。<b>&gt;50% 偏多頭、&lt;50% 偏空頭</b>；今日比昨日上升＝市場轉強(資金擴散)。比看指數更能反映「個股普遍強不強」。</div></div>';
+    '<div class="ex">廣度＝多少%的股站上均線。<b>&gt;50% 偏多頭、&lt;50% 偏空頭</b>。<b class="pos">&lt;30% 超賣</b>(可能反彈買點)、<b class="pos">&lt;8% 極度超賣🟢</b>(歷史底部訊號)、<b class="neg">&gt;85% 過熱🔴</b>(漲多回檔風險)。今日比昨日上升＝資金擴散。</div></div>';
 }
 
 function renderSentiment(d){

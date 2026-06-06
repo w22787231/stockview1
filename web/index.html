@@ -292,6 +292,11 @@
   .mstock-name{font-size:12.5px;font-weight:700;color:var(--ink)}
   .mstock-mkt{font-family:var(--mono);font-size:9.5px;color:var(--ink3);border:1px solid var(--line);
     border-radius:5px;padding:0 5px}
+  .mstock-mkt.us{color:var(--blue);border-color:#cfe0fb;background:#eef4ff}
+  .mstock-mkt.eu{color:#c2630a;border-color:#f0d0a8;background:#fff4e6}
+  .mstock-mkt.cn{color:var(--red);border-color:#f3c0c8;background:#fdeef0}
+  .mstock-mkt.hk{color:#0e8a8a;border-color:#a8e0e0;background:#e6f7f7}
+  .mstock-mkt.jp{color:#7c3aed;border-color:#d9c8f7;background:#f3eefe}
   .mstock-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px}
   .mstock-tag{font-size:10px;color:var(--ink2);background:var(--panel2);border-radius:5px;padding:1px 7px}
   .mstock-note{font-size:11.5px;color:var(--ink2);line-height:1.55}
@@ -1038,6 +1043,23 @@ const FLOW_LABEL = {inflow:"🟢 資金流入", outflow:"🔴 爆量出貨", qui
 function quoteCol(lbl,v){
   return '<span class="q"><span class="ql">'+lbl+'</span>'+
     '<span class="'+cls(v)+'">'+(v==null?"–":sgn(v,1)+"%")+'</span></span>';
+}
+// 依代號後綴判市場（吃完整 sym，後綴比對優先）。回傳 {mkt:標記字, cls:CSS類}。
+function marketOf(sym){
+  const MARKET_MAP = {
+    ".TW":["市","tw"], ".TWO":["櫃","tw"],
+    ".SS":["滬","cn"], ".SZ":["深","cn"],
+    ".HK":["港","hk"], ".T":["日","jp"], ".DE":["德","eu"],
+    ".ST":["瑞","eu"], ".MC":["西","eu"], ".PA":["法","eu"], ".AS":["荷","eu"], ".L":["英","eu"],
+  };
+  sym = sym||"";
+  const dot = sym.lastIndexOf(".");
+  if(dot>=0){
+    const suf = sym.slice(dot);
+    if(MARKET_MAP[suf]) return {mkt:MARKET_MAP[suf][0], cls:MARKET_MAP[suf][1]};
+    return {mkt:"", cls:""};
+  }
+  return {mkt:"美", cls:"us"};
 }
 function memberCard(m){
   const sym = m.sym||"";

@@ -117,6 +117,8 @@ jobs:
           cp -r web/* public/
           mkdir -p public/data
           cp data/*.json public/data/
+          # 台股代號→中文名對照（版控的靜態表，非每日 export 產生）→ 供前端中文名搜尋
+          cp engine/universe/tw_names.json public/data/tw_names.json
           # 個股詳情在 data/stock/ 子目錄，整包複製
           if [ -d data/stock ]; then mkdir -p public/data/stock && cp data/stock/*.json public/data/stock/; fi
           echo "Built files:"

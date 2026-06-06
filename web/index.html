@@ -1160,6 +1160,31 @@ async function loadStockIndex(){
   catch(e){ STOCK_IDX = {syms:[]}; }
   return STOCK_IDX;
 }
+
+// 台股代號→中文名對照（data/tw_names.json，全台股清單），支援用中文名搜尋。
+// NAME_IDX：{ names:[{sym,name}], byName:{name→sym} } 供精確/部分比對。
+let NAME_IDX = null;
+async function loadNames(){
+  if(NAME_IDX) return NAME_IDX;
+  let map = {};
+  try{ map = await (await fetch("data/tw_names.json?t="+Date.now(),{cache:"no-store"})).json(); }
+  catch(e){ map = {}; }
+  const names = Object.keys(map).map(sym=>({sym, name:String(map[sym]||"")}));
+  const byName = {};
+  names.forEach(x=>{ if(x.name) byName[x.name]=x.sym; });
+  NAME_IDX = {names, byName};
+  return NAME_IDX;
+}
+// 由中文名查代號。回傳 {exact:sym|null, matches:[{sym,name}]}。
+// exact＝完整名稱命中；matches＝名稱含查詢字串者（精確優先排前）。
+function lookupByName(ni, qRaw){
+  const q = (qRaw||"").trim();
+  if(!q || !ni) return {exact:null, matches:[]};
+  const exact = ni.byName[q] || null;
+  const matches = ni.names.filter(x=>x.name.includes(q));
+  matches.sort((a,b)=>(a.name===q?-1:0)-(b.name===q?-1:0) || a.name.length-b.name.length);
+  return {exact, matches};
+}
 function stkFile(sym){ return "data/stock/"+sym.replace(/\./g,"_").toUpperCase()+".json"; }
 function bigNum(n){
   if(n==null) return "–";
@@ -1577,33 +1602,85 @@ async function load(){
 }
 
 // ── 搜尋代號：高亮主表該檔並捲動過去 ──
-async function doSearch(){
-  const q = ($("#searchInput").value||"").trim().toUpperCase();
-  if(!q) return;
-  await loadStockIndex();
-  const syms = (STOCK_IDX&&STOCK_IDX.syms)||[];
-  // 解析：精確 > 加台股後綴 > 開頭符合
-  let target = null;
-  if(syms.includes(q)) target=q;
-  else if(syms.includes(q+".TW")) target=q+".TW";
-  else if(syms.includes(q+".TWO")) target=q+".TWO";
-  else { const p=syms.find(s=>s.startsWith(q)); if(p) target=p; }
-  if(target){ openStock(target); return; }
-  // 沒詳情 → 退而求其次：在當前榜單高亮該列
+// 把代號（去後綴）解析回完整 sym：精確 > 加台股後綴 > 開頭符合。找不到回 null。
+function resolveSymByCode(syms, code){
+  const q = (code||"").toUpperCase();
+  if(!q) return null;
+  if(syms.includes(q)) return q;
+  if(syms.includes(q+".TW")) return q+".TW";
+  if(syms.includes(q+".TWO")) return q+".TWO";
+  const p = syms.find(s=>s.startsWith(q));
+  return p || null;
+}
+// 在當前榜單高亮某 sym（去後綴比對）；回傳是否命中。
+function highlightInList(symOrCode){
   document.querySelectorAll("tr.hit").forEach(tr=>tr.classList.remove("hit"));
-  const rows=Array.from(document.querySelectorAll("tr[data-sym]"));
-  const hit=rows.find(tr=>{const s=tr.dataset.sym.toUpperCase();return s===q||s===q+".TW"||s===q+".TWO"||s.startsWith(q);});
+  const q = (symOrCode||"").toUpperCase();
+  const code = q.replace(/\.(TW|TWO)$/,"");
+  const rows = Array.from(document.querySelectorAll("tr[data-sym]"));
+  const hit = rows.find(tr=>{
+    const s = tr.dataset.sym.toUpperCase();
+    return s===q || s===code || s===code+".TW" || s===code+".TWO";
+  });
+  if(hit){ hit.classList.add("hit"); hit.scrollIntoView({behavior:"smooth",block:"center"}); }
+  return !!hit;
+}
+function banner(html){
   const b=$("#banner"); b.className="banner show";
   b.style.color="var(--ink2)"; b.style.borderColor="var(--line)"; b.style.background="var(--panel2)";
-  if(hit){ hit.classList.add("hit"); hit.scrollIntoView({behavior:"smooth",block:"center"});
-    b.innerHTML="🔍「"+esc(q)+"」尚無個股詳情，已在榜單中高亮。詳情僅涵蓋已產生的清單。"; }
-  else b.innerHTML="🔍 找不到「"+esc(q)+"」。個股詳情僅涵蓋已產生清單("+syms.length+"檔)；榜單搜尋請先切到對應池。";
+  b.innerHTML=html;
+}
+// 找到一檔（已知 sym）→ 有詳情就開、否則榜單高亮、再否則提示。
+function gotoSym(sym, syms){
+  if(syms.includes(sym)){ openStock(sym); return; }
+  if(highlightInList(sym)) banner("🔍「"+esc(sym)+"」尚無個股詳情，已在榜單中高亮。詳情僅涵蓋已產生的清單。");
+  else banner("🔍「"+esc(sym)+"」尚無個股詳情，且不在目前榜單池中（榜單搜尋請先切到對應池）。");
+}
+
+async function doSearch(){
+  const raw = ($("#searchInput").value||"").trim();
+  if(!raw) return;
+  await loadStockIndex();
+  const syms = (STOCK_IDX&&STOCK_IDX.syms)||[];
+
+  // 1) 代號（含數字、或已帶 .TW/.TWO）優先
+  if(/^[0-9]/.test(raw) || /\.(TW|TWO)$/i.test(raw)){
+    const target = resolveSymByCode(syms, raw);
+    if(target){ openStock(target); return; }
+    // 代號沒詳情 → 榜單高亮
+    if(highlightInList(raw)){ banner("🔍「"+esc(raw)+"」尚無個股詳情，已在榜單中高亮。"); return; }
+    banner("🔍 找不到「"+esc(raw)+"」。個股詳情僅涵蓋已產生清單("+syms.length+"檔)；榜單搜尋請先切到對應池。");
+    return;
+  }
+
+  // 2) 中文名：精確優先，部分比對多筆則列出讓使用者選
+  const ni = await loadNames();
+  const {exact, matches} = lookupByName(ni, raw);
+  if(exact){ gotoSym(exact, syms); return; }
+  if(matches.length===1){ gotoSym(matches[0].sym, syms); return; }
+  if(matches.length>1){
+    const top = matches.slice(0,12).map(x=>{
+      const code = x.sym.replace(/\.(TW|TWO)$/,"");
+      return '<a href="#" data-stk="'+esc(x.sym)+'" style="margin-right:12px;white-space:nowrap">'+
+        esc(x.name)+'（'+esc(code)+'）</a>';
+    }).join("");
+    banner("🔍「"+esc(raw)+"」符合 "+matches.length+" 檔，請點選："+top+(matches.length>12?" …":""));
+    return;
+  }
+  banner("🔍 找不到「"+esc(raw)+"」。可用「數字代號」(如 2317) 或「完整/部分公司中文名」(如 鴻海) 搜尋。");
 }
 const _si = $("#searchInput");
 if(_si){
   _si.addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
   _si.addEventListener("input", ()=>{ if(!_si.value.trim()) document.querySelectorAll("tr.hit").forEach(tr=>tr.classList.remove("hit")); });
 }
+// banner 內「多筆符合」的連結 → 開該股（沿用全域 .clickable[data-stk] 委派之外，這裡 a 標籤另接）
+document.addEventListener("click", function(e){
+  const a = e.target.closest && e.target.closest("#banner a[data-stk]");
+  if(!a) return;
+  e.preventDefault();
+  if(typeof openStock==="function") openStock(a.dataset.stk);
+});
 
 // ── 更新按鈕：觸發 GitHub Actions repository_dispatch ──
 $("#refreshBtn").onclick = async ()=>{

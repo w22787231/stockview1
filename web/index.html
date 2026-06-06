@@ -241,6 +241,12 @@
   .tg-group{margin-bottom:16px}
   .tg-group .tg-gname{font-size:13px;font-weight:720;color:var(--ink2);margin:14px 0 8px;
     padding-left:10px;border-left:3px solid var(--bluebar)}
+  .etf-filters{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .etf-fb{font-size:12.5px;padding:4px 10px;border:1px solid var(--line);border-radius:14px;
+    background:var(--panel2);color:var(--ink2);cursor:pointer}
+  .etf-fb:hover{border-color:var(--blue);color:var(--ink)}
+  .etf-fb.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  td.etf-new{color:#8a6400;background:#fff8e6;font-weight:700}
   .theme-card{border:1px solid var(--line);border-radius:11px;background:var(--panel);
     box-shadow:var(--shadow);margin-bottom:8px;overflow:hidden}
   .theme-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;transition:.1s}
@@ -1036,6 +1042,7 @@ async function loadThemes(){
 
 // ── 產業鏈頁（MoneyDJ 式上中下游分類 + 概念股標籤）──
 let CHAIN_DATA = null;   // 快取整份 tw_chain.json
+let ETF_DATA=null, ETF_FILTER={etf:"all", action:"all"};
 let CHAIN_CUR = 0;       // 目前選的鏈 index
 const POS_CLS = {"上游":"up","中游":"mid","下游":"down","周邊":"side"};
 
@@ -1158,6 +1165,91 @@ async function loadChain(){
   }catch(e){
     $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/tw_chain.json 失敗（'+esc(e.message)+'）。</div>';
   }
+}
+
+// ── ETF 持股異動分頁 ───────────────────────────────
+async function loadEtf(){
+  for(const k in SORT_STATE) delete SORT_STATE[k];
+  $("#meta").innerHTML='<div><b>ETF 持股異動</b> 5 檔主動式ETF</div><div>每日追蹤 · 來源各發行商官網</div>';
+  $("#poolNote").innerHTML="";
+  if(ETF_DATA){ renderEtf(); return; }
+  $("#content").innerHTML='<div class="loading-screen">載入 ETF 持股異動 …</div>';
+  try{
+    const res=await fetch("data/etf.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    ETF_DATA=await res.json();
+    renderEtf();
+  }catch(e){
+    $("#content").innerHTML='<div class="loading-screen">ETF 資料尚未產生（'+esc(e.message)+'），請待下次更新。</div>';
+  }
+}
+
+const ETF_ACTION_CLS={"新增":"etf-new","加碼":"pos","減碼":"neg","出清":"dim"};
+const ETF_ACTION_ICON={"新增":"🆕新增","加碼":"➕加碼","減碼":"➖減碼","出清":"❌出清"};
+
+function etfFilterBar(d){
+  const etfBtns=['<button class="etf-fb'+(ETF_FILTER.etf==="all"?" on":"")+'" data-etf="all">全部</button>']
+    .concat((d.order||[]).map(e=>'<button class="etf-fb'+(ETF_FILTER.etf===e?" on":"")+'" data-etf="'+e+'">'+e+' '+esc(d.etfs[e].name)+'</button>'));
+  const acts=["all","新增","加碼","減碼","出清"];
+  const actLabel={all:"全部動作","新增":"🆕新增","加碼":"➕加碼","減碼":"➖減碼","出清":"❌出清"};
+  const actBtns=acts.map(a=>'<button class="etf-fb'+(ETF_FILTER.action===a?" on":"")+'" data-act="'+a+'">'+actLabel[a]+'</button>');
+  return '<div class="etf-filters">'+etfBtns.join("")+'</div>'+
+         '<div class="etf-filters">'+actBtns.join("")+'</div>';
+}
+
+function etfChangeTable(rows){
+  const body=rows.map(r=>'<tr'+(r.code?' data-sym="'+esc(r.code)+'"':'')+'>'+
+    symCell(r.code,r.name)+
+    '<td class="'+(ETF_ACTION_CLS[r.action]||"dim")+'" style="font-weight:700">'+(ETF_ACTION_ICON[r.action]||esc(r.action))+'</td>'+
+    '<td class="'+cls(r.dqty)+'">'+sgn(r.dqty,0)+'</td>'+
+    '<td class="dim">'+fmtNum(r.qty)+'</td>'+
+    '<td class="'+cls(r.dweight)+'">'+sgn(r.dweight,2)+'</td>'+
+    '<td>'+fmtNum(r.weight,2)+'</td></tr>').join("");
+  return '<div class="tbl-wrap"><table><thead><tr>'+
+    '<th style="text-align:left">代碼/名稱</th><th>動作</th><th>張數變化</th><th>目前張數</th><th>權重變化</th><th>權重%</th>'+
+    '</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function renderEtf(){
+  const d=ETF_DATA;
+  if(!d || !d.history){ $("#content").innerHTML='<section><div class="sec-head"><h2>ETF 持股異動</h2></div><div class="note">ETF 資料尚未產生，請待下次更新。</div></section>'; return; }
+  const latest=d.history.length?d.history[0].date:"—";
+  const fE=ETF_FILTER.etf, fA=ETF_FILTER.action;
+  const days=d.history.map(day=>{
+    const cs=day.changes.filter(c=>(fE==="all"||c.etf===fE)&&(fA==="all"||c.action===fA));
+    return {date:day.date, changes:cs};
+  }).filter(day=>day.changes.length);
+
+  let html='<section>'+
+    '<div class="sec-head"><h2>ETF 持股異動</h2><span class="tag">5 檔主動式ETF · 每日追蹤</span>'+
+      '<span class="hint">資料日 '+esc(latest)+'</span></div>'+
+    '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
+      '⚠️ 資料來源各 ETF 發行商官網（統一/群益/元大）。週末/假日持股不變動屬正常，故當日不列。'+
+    '</div>'+ etfFilterBar(d);
+
+  if(!days.length){
+    html+='<div class="note">'+(d.history.length?'目前篩選條件下無變動紀錄。':'尚無變動紀錄（週末/假日或剛部署）。')+'</div>';
+  }else{
+    for(const day of days){
+      html+='<div class="tg-gname" style="margin-top:16px;font-size:14px">📅 '+esc(day.date)+(day===days[0]?'（最新）':'')+'</div>';
+      for(const etf of d.order){
+        const grp=day.changes.filter(c=>c.etf===etf);
+        if(!grp.length) continue;
+        const cnt=a=>grp.filter(c=>c.action===a).length;
+        const tags=["新增","加碼","減碼","出清"].filter(a=>cnt(a)).map(a=>ETF_ACTION_ICON[a].slice(2)+cnt(a)).join(" ");
+        html+='<div class="tg-gname" style="margin:10px 0 6px">▎'+esc(etf)+' '+esc(d.etfs[etf].name)+'　<span class="dim" style="font-weight:400">'+tags+'</span></div>'+
+              etfChangeTable(grp);
+      }
+    }
+  }
+  html+='<div class="legend">🆕新增＝昨無今有；➕加碼/➖減碼＝張數增/減；❌出清＝昨有今無。每日依 ETF 分組，組內按權重高→低。代碼可點進個股。</div></section>';
+  $("#content").innerHTML=html;
+
+  $("#content").querySelectorAll(".etf-fb").forEach(b=>b.onclick=()=>{
+    if(b.dataset.etf!=null) ETF_FILTER.etf=b.dataset.etf;
+    if(b.dataset.act!=null) ETF_FILTER.action=b.dataset.act;
+    renderEtf();
+  });
 }
 
 async function loadMacro(){

@@ -44,4 +44,28 @@ for (const [sym, mkt, cls] of cases) {
 const unknown = sandbox.marketOf("FOO.XYZ");
 assert.equal(unknown.mkt, "", "未知後綴 mkt 應為空");
 
+// memberCard 跨市場：抽 memberCard + 相依 helper
+const helpers = `
+const esc = s => (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const sgn = (n,d=2)=> n==null?"–":(n>=0?"+":"")+Number(n).toFixed(d);
+const cls = n => n==null?"dim":(n>0?"pos":(n<0?"neg":"dim"));
+const FLOW_LABEL = {inflow:"x",outflow:"x",quiet:"x",neutral:"x"};
+`;
+vm.runInContext(helpers + extract("quoteCol") + extract("memberCard") + "\nglobalThis.memberCard = memberCard;", sandbox);
+
+const hcn = sandbox.memberCard({sym:"688234.SS", name:"天岳先進", r1:1, r5:2, r20:3, flow:"inflow"});
+assert.ok(hcn.includes("mstock-mkt cn"), "滬股應有 cn class");
+assert.ok(hcn.includes(">滬<"), "應顯示 滬");
+assert.ok(hcn.includes(">688234<"), "code 應去 .SS 顯示 688234");
+assert.ok(hcn.includes('data-stk="688234.SS"'), "data-stk 應保留完整 sym");
+
+const hus = sandbox.memberCard({sym:"NVDA", name:"輝達", r1:1, r5:1, r20:1});
+assert.ok(hus.includes("mstock-mkt us") && hus.includes(">美<"), "美股應顯示 美/us");
+
+const heu = sandbox.memberCard({sym:"SIVE.ST", name:"Sivers"});
+assert.ok(heu.includes(">瑞<") && heu.includes(">SIVE<"), "SIVE.ST 應顯示 瑞 + code SIVE");
+
+const htw = sandbox.memberCard({sym:"3363.TWO", name:"上詮"});
+assert.ok(htw.includes(">櫃<") && htw.includes(">3363<"), "台股櫃仍正確");
+
 console.log("✅ marketOf 各市場後綴測試全過");

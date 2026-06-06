@@ -292,6 +292,7 @@
   .mstock-name{font-size:12.5px;font-weight:700;color:var(--ink)}
   .mstock-mkt{font-family:var(--mono);font-size:9.5px;color:var(--ink3);border:1px solid var(--line);
     border-radius:5px;padding:0 5px}
+  .mstock-mkt.tw{color:var(--ink2);border-color:var(--line);background:var(--panel2)}
   .mstock-mkt.us{color:var(--blue);border-color:#cfe0fb;background:#eef4ff}
   .mstock-mkt.eu{color:#c2630a;border-color:#f0d0a8;background:#fff4e6}
   .mstock-mkt.cn{color:var(--red);border-color:#f3c0c8;background:#fdeef0}
@@ -1046,6 +1047,7 @@ function quoteCol(lbl,v){
 }
 // 依代號後綴判市場（吃完整 sym，後綴比對優先）。回傳 {mkt:標記字, cls:CSS類}。
 function marketOf(sym){
+  // ⚠ 後綴清單須與 memberCard 去後綴 regex 同步。
   const MARKET_MAP = {
     ".TW":["市","tw"], ".TWO":["櫃","tw"],
     ".SS":["滬","cn"], ".SZ":["深","cn"],
@@ -1063,6 +1065,7 @@ function marketOf(sym){
 }
 function memberCard(m){
   const sym = m.sym||"";
+  // ⚠ 此後綴清單須與 marketOf 的 MARKET_MAP 同步（加新市場兩處都要改）。
   const code = sym.replace(/\.(TW|TWO|SS|SZ|HK|T|DE|ST|MC|PA|AS|L)$/,"");
   const mk = marketOf(sym);
   const tags = (m.tags||[]).map(t=>'<span class="mstock-tag">'+esc(t)+'</span>').join("");

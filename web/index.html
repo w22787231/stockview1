@@ -1064,13 +1064,7 @@ function marketOf(sym){
 function memberCard(m){
   const sym = m.sym||"";
   const code = sym.replace(/\.(TW|TWO|SS|SZ|HK|T|DE|ST|MC|PA|AS|L)$/,"");
-  const mk = (typeof marketOf==="function") ? marketOf(sym) : (function(){
-    const MM={".TW":["市","tw"],".TWO":["櫃","tw"],".SS":["滬","cn"],".SZ":["深","cn"],
-      ".HK":["港","hk"],".T":["日","jp"],".DE":["德","eu"],".ST":["瑞","eu"],".MC":["西","eu"],
-      ".PA":["法","eu"],".AS":["荷","eu"],".L":["英","eu"]};
-    const d=sym.lastIndexOf("."); if(d<0) return {mkt:"美",cls:"us"};
-    const s=sym.slice(d); return MM[s]?{mkt:MM[s][0],cls:MM[s][1]}:{mkt:"",cls:""};
-  })();
+  const mk = marketOf(sym);
   const tags = (m.tags||[]).map(t=>'<span class="mstock-tag">'+esc(t)+'</span>').join("");
   const quote = '<div class="mstock-quote">'+
     quoteCol("1日", m.r1)+

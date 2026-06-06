@@ -20,9 +20,12 @@
 
 ### 2.1 新腳本 `engine/export_chain.py`
 
-比照 `engine/export_themes.py` 的模式（讀清單定義 → 抓 yfinance → 算指標 → 寫回 JSON）。
+比照 `engine/export_themes.py` 的「定義檔與行情產出分離」模式（定義放 `engine/universe/`、產出放 repo 根 `data/`）。
 
-- **輸入**：`web/data/tw_chain.json`（人工維護的三鏈分類結構，已存在）。
+> 設計細化（取代「原地回填同一檔」）：分類定義移到 `engine/universe/tw_chain.json`（純結構，無行情），`export_chain.py` 讀它 → 抓行情 → 輸出 `data/tw_chain.json`（部署 workflow 既有的 `cp data/*.json public/data/` 會帶上），並同步一份到 `web/data/tw_chain.json` 供本機預覽。此法與既有架構一致，且避免讀寫同檔。
+
+- **輸入**：`engine/universe/tw_chain.json`（人工維護的三鏈分類結構，由現有 `web/data/tw_chain.json` 抽出）。
+- **輸出**：`data/tw_chain.json`（線上來源）+ `web/data/tw_chain.json`（本機預覽）。
 - **抓取**：收集所有 `chains[].stages[].members[].sym`，去重後一次 `yf.download(symbols, period="2mo", interval="1d", group_by="ticker", progress=False, auto_adjust=False)`。
 - **逐檔計算**（沿用既有公式）：
   - `r1 / r5 / r20`：`ret_n(closes, n)` = `(closes[-1] / closes[-1-n] - 1) * 100`，資料不足回 `null`。

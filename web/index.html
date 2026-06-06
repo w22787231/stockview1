@@ -1189,7 +1189,7 @@ const ETF_ACTION_ICON={"新增":"🆕新增","加碼":"➕加碼","減碼":"➖�
 
 function etfFilterBar(d){
   const etfBtns=['<button class="etf-fb'+(ETF_FILTER.etf==="all"?" on":"")+'" data-etf="all">全部</button>']
-    .concat((d.order||[]).map(e=>'<button class="etf-fb'+(ETF_FILTER.etf===e?" on":"")+'" data-etf="'+e+'">'+e+' '+esc(d.etfs[e].name)+'</button>'));
+    .concat((d.order||[]).map(e=>'<button class="etf-fb'+(ETF_FILTER.etf===e?" on":"")+'" data-etf="'+esc(e)+'">'+esc(e)+' '+esc((d.etfs[e]||{}).name||e)+'</button>'));
   const acts=["all","新增","加碼","減碼","出清"];
   const actLabel={all:"全部動作","新增":"🆕新增","加碼":"➕加碼","減碼":"➖減碼","出清":"❌出清"};
   const actBtns=acts.map(a=>'<button class="etf-fb'+(ETF_FILTER.action===a?" on":"")+'" data-act="'+a+'">'+actLabel[a]+'</button>');
@@ -1236,8 +1236,8 @@ function renderEtf(){
         const grp=day.changes.filter(c=>c.etf===etf);
         if(!grp.length) continue;
         const cnt=a=>grp.filter(c=>c.action===a).length;
-        const tags=["新增","加碼","減碼","出清"].filter(a=>cnt(a)).map(a=>ETF_ACTION_ICON[a].slice(2)+cnt(a)).join(" ");
-        html+='<div class="tg-gname" style="margin:10px 0 6px">▎'+esc(etf)+' '+esc(d.etfs[etf].name)+'　<span class="dim" style="font-weight:400">'+tags+'</span></div>'+
+        const tags=["新增","加碼","減碼","出清"].filter(a=>cnt(a)).map(a=>[...ETF_ACTION_ICON[a]].slice(1).join("")+cnt(a)).join(" ");
+        html+='<div class="tg-gname" style="margin:10px 0 6px">▎'+esc(etf)+' '+esc((d.etfs[etf]||{}).name||etf)+'　<span class="dim" style="font-weight:400">'+tags+'</span></div>'+
               etfChangeTable(grp);
       }
     }

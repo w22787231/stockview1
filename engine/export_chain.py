@@ -77,3 +77,98 @@ def merge_quotes(member, q):
     else:
         out["last"] = out["r1"] = out["r5"] = out["r20"] = out["volr"] = out["flow"] = None
     return out
+
+
+def fetch(symbols):
+    """一次抓多檔，回傳 {sym: {last,r1,r5,r20,volr} or None}。volr=今日$Vol/20日均$Vol。"""
+    import yfinance as yf
+    df = yf.download(symbols, period="2mo", interval="1d",
+                     group_by="ticker", progress=False, auto_adjust=False)
+    out = {}
+    for s in symbols:
+        try:
+            if getattr(df.columns, "nlevels", 1) > 1 and s in df.columns.get_level_values(0):
+                sub = df[s].dropna()
+            else:
+                sub = df.dropna()
+            closes = list(sub["Close"])
+            dollar = list(sub["Close"] * sub["Volume"])   # 每日成交金額
+            if len(closes) < 2:
+                out[s] = None
+                continue
+            last20 = dollar[-20:]
+            dv = (sum(last20) / len(last20)) if last20 else None     # 20日均成交金額
+            dv1 = dollar[-1] if dollar else None                     # 今日成交金額
+            volr = (dv1 / dv) if (dv and dv > 0 and dv1 is not None) else None
+            out[s] = {
+                "last": _safe(closes[-1]),
+                "r1": ret_n(closes, 1), "r5": ret_n(closes, 5), "r20": ret_n(closes, 20),
+                "volr": _safe(volr),
+            }
+        except Exception:
+            out[s] = None
+    return out
+
+
+def build():
+    spec = json.load(io.open(CHAIN_DEF, encoding="utf-8"))
+    # 收集所有 sym
+    all_syms = []
+    for c in spec["chains"]:
+        for st in c["stages"]:
+            for m in st.get("members", []):
+                if m.get("sym"):
+                    all_syms.append(m["sym"])
+    all_syms = sorted(set(all_syms))
+    if not all_syms:
+        print("[chain] 定義檔無任何 sym，中止。")
+        raise SystemExit(1)
+
+    px = fetch(all_syms)
+    if not any(px.values()):
+        print("[chain] yfinance 全數抓取失敗，保留舊檔不覆寫。")
+        raise SystemExit(1)
+
+    failed = []
+    chains_out = []
+    for c in spec["chains"]:
+        stages_out = []
+        for st in c["stages"]:
+            members_out = []
+            for m in st.get("members", []):
+                s = m.get("sym")
+                q = px.get(s) if s else None
+                if s and not q:
+                    failed.append(s)
+                members_out.append(merge_quotes(m, q))
+            stages_out.append({
+                "pos": st.get("pos", ""), "name": st.get("name", ""),
+                "desc": st.get("desc", ""), "concepts": st.get("concepts", []),
+                "members": members_out,
+            })
+        chains_out.append({
+            "id": c.get("id", ""), "name": c.get("name", ""),
+            "desc": c.get("desc", ""), "concepts": c.get("concepts", []),
+            "stages": stages_out,
+        })
+
+    payload = {
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "source": spec.get("source", "yfinance (daily)"),
+        "note": spec.get("note", ""),
+        "chains": chains_out,
+        "failed": sorted(set(failed)),
+    }
+    blob = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    for d in (DATA_DIR, WEB_DATA_DIR):
+        os.makedirs(d, exist_ok=True)
+        with io.open(os.path.join(d, "tw_chain.json"), "w", encoding="utf-8") as f:
+            f.write(blob)
+    nstage = sum(len(c["stages"]) for c in chains_out)
+    print(f"[chain] -> data/tw_chain.json + web/data/  ({len(chains_out)} 鏈, {nstage} 環節, {len(all_syms)} 檔, 失敗 {len(set(failed))})")
+    if failed:
+        print("[chain] 失敗:", ", ".join(sorted(set(failed))))
+
+
+if __name__ == "__main__":
+    build()

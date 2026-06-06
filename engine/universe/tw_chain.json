@@ -743,6 +743,437 @@
           ]
         }
       ]
+    },
+    {
+      "id": "ar-xr",
+      "name": "AR/XR 智慧眼鏡",
+      "desc": "消費級 AI/AR 眼鏡進入多巨頭出貨期（Meta 帶頭、Apple/Samsung/Google 跟進）。由終端逆向穿透至上游材料，找未被定價的瓶頸層。資料來源：Obsidian chokepoint-scan 拆鏈報告。",
+      "concepts": [
+        "AR眼鏡",
+        "XR",
+        "光波導",
+        "光學級SiC",
+        "microLED",
+        "Meta",
+        "Apple"
+      ],
+      "stages": [
+        {
+          "pos": "上游",
+          "name": "L1.0 石墨耗材 / 長晶熱場",
+          "desc": "長晶爐 2000°C+ 等靜壓石墨坩堝/熱場，SiC 長晶與磊晶必用耗材，已實證短缺。報告評為最未定價的『賣鏟子』層。",
+          "concepts": [
+            "等靜壓石墨",
+            "長晶耗材"
+          ],
+          "members": [
+            {
+              "sym": "5301.T",
+              "name": "東海碳素 Tokai Carbon",
+              "tags": [
+                "等靜壓石墨",
+                "SiC塗層"
+              ],
+              "note": "L1.0 石墨耗材 · CP4/4 · 🟢未定價。AI功率+AR光學雙需求，估值僅錨半導體耗材。"
+            },
+            {
+              "sym": "5310.T",
+              "name": "東洋炭素 Toyo Tanso",
+              "tags": [
+                "等靜壓石墨",
+                "熱場"
+              ],
+              "note": "L1.0 長晶/磊晶熱場耗材 · 🟢未定價。全球高階等靜壓石墨少數供應商。"
+            },
+            {
+              "sym": "SGL.DE",
+              "name": "SGL Carbon",
+              "tags": [
+                "等靜壓石墨",
+                "susceptor"
+              ],
+              "note": "L1.0 SIGRAFINE 等靜壓石墨、Si/SiC 磊晶 susceptor（德，去中化溢價）。"
+            },
+            {
+              "sym": "300316.SZ",
+              "name": "晶盛機電",
+              "tags": [
+                "長晶爐",
+                "設備"
+              ],
+              "note": "L1.5 PVT 長晶爐+加工設備（跨 L1/L3 層）。"
+            }
+          ]
+        },
+        {
+          "pos": "上游",
+          "name": "L2 光學級 SiC 基板",
+          "desc": "SiC 折射率 2.7、單層全彩、最薄最輕；良率<20%、單片損失 US$500，真實物理瓶頸。⚠報告修正：Lumus CES2026 玻璃波導突破 70°FoV，SiC『唯一路徑』溢價下修。",
+          "concepts": [
+            "光學級SiC",
+            "波導基板"
+          ],
+          "members": [
+            {
+              "sym": "688234.SS",
+              "name": "天岳先進(A) SICC",
+              "tags": [
+                "光學級SiC",
+                "SiC基板"
+              ],
+              "note": "L2 光學級 SiC · CP4/4 · 🟢尚未定價。全球 SiC 基板市占 16.7%；Meta Orion 已下單；中國標的有地緣折價。"
+            },
+            {
+              "sym": "2631.HK",
+              "name": "天岳先進(H) SICC",
+              "tags": [
+                "光學級SiC",
+                "SiC基板"
+              ],
+              "note": "L2 天岳先進港股（同公司 A+H）。"
+            },
+            {
+              "sym": "COHR",
+              "name": "Coherent",
+              "tags": [
+                "光學級SiC",
+                "光學材料"
+              ],
+              "note": "L2 SiC + 光學材料西方主力（原 II-VI），擴 300mm；享去中化溢價。"
+            },
+            {
+              "sym": "WOLF",
+              "name": "Wolfspeed",
+              "tags": [
+                "SiC",
+                "12吋"
+              ],
+              "note": "L2 SiC 基板，2026/1 首片 12 吋單晶。"
+            }
+          ]
+        },
+        {
+          "pos": "上游",
+          "name": "L3 製程 / 設備 (NIL/蝕刻)",
+          "desc": "奈米壓印 NIL（波導量產關鍵，EVG 私有近壟斷）、SiC 蝕刻。三條波導路線都需設備層，抗路線風險。",
+          "concepts": [
+            "NIL",
+            "蝕刻設備"
+          ],
+          "members": [
+            {
+              "sym": "AMAT",
+              "name": "Applied Materials",
+              "tags": [
+                "蝕刻設備",
+                "SiC製程"
+              ],
+              "note": "L3 SiC 蝕刻（XR1 70°製程）·全路線受惠但 AR 佔比被稀釋。（EVG 私有，NIL 近壟斷，無公開標的）"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "L4 微顯示 (LCoS/microLED/OLED)",
+          "desc": "Meta Ray-Ban Display 用 LCoS；microLED 為下一代（良率未過）；Apple/三星偏 micro-OLED（Sony 產能受限）。",
+          "concepts": [
+            "LCoS",
+            "microLED",
+            "microOLED"
+          ],
+          "members": [
+            {
+              "sym": "603501.SS",
+              "name": "韋爾股份/豪威 OmniVision",
+              "tags": [
+                "LCoS",
+                "微顯示"
+              ],
+              "note": "L4 LCoS 微顯示 · 🔴已定價。Meta Ray-Ban Display 採用；題材已炒過。"
+            },
+            {
+              "sym": "HIMX",
+              "name": "奇景光電 Himax",
+              "tags": [
+                "LCoS",
+                "WiseEye AI"
+              ],
+              "note": "L4 LCoS + WiseEye 超低功耗 AI 感測雙卡位 · 🟡定價中。等 2H26 量產驗證。"
+            },
+            {
+              "sym": "6758.T",
+              "name": "Sony 索尼",
+              "tags": [
+                "microOLED",
+                "CIS"
+              ],
+              "note": "L4 micro-OLED 全球龍頭，但產能<50萬台/年為死穴；Apple 被迫找替代。ADR=SONY。"
+            },
+            {
+              "sym": "000725.SZ",
+              "name": "京東方 BOE",
+              "tags": [
+                "microOLED",
+                "面板"
+              ],
+              "note": "L4 micro-OLED 替代供應，Apple 評估中。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "L4 高折射率玻璃 (繞射波導材料)",
+          "desc": "若 Apple/三星走繞射式(SRG)波導，材料瓶頸轉向高折射率玻璃。反射式+繞射式都吃，抗路線風險。",
+          "concepts": [
+            "高折玻璃",
+            "繞射波導"
+          ],
+          "members": [
+            {
+              "sym": "5201.T",
+              "name": "AGC 旭硝子",
+              "tags": [
+                "高折玻璃",
+                "波導晶圓"
+              ],
+              "note": "L4 高折射率玻璃晶圓，1.9 折射率量產 AR/MR 波導。"
+            },
+            {
+              "sym": "7741.T",
+              "name": "Hoya",
+              "tags": [
+                "高折玻璃",
+                "精密光學"
+              ],
+              "note": "L4 高均勻度高折玻璃、AR/MR 波導晶圓。"
+            },
+            {
+              "sym": "5218.T",
+              "name": "Ohara 小原",
+              "tags": [
+                "光學玻璃",
+                "鑭系"
+              ],
+              "note": "L4 含鑭系高折特殊配方光學玻璃。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "L5 光波導 / 微光學",
+          "desc": "真正稀缺層。Meta 用 Lumus 反射波導（私有），公開市場靠廣達(代工)+SCHOTT(私,高折玻璃)+台廠光學間接卡位。",
+          "concepts": [
+            "光波導",
+            "微光學",
+            "Lumus生態"
+          ],
+          "members": [
+            {
+              "sym": "2382.TW",
+              "name": "廣達 Quanta",
+              "tags": [
+                "波導代工",
+                "光學引擎"
+              ],
+              "note": "L5 Lumus 反射波導量產代工+已投專用產線 · CP4/4 · 🟡定價中。公開可買最直接卡位。"
+            },
+            {
+              "sym": "3406.TW",
+              "name": "玉晶光",
+              "tags": [
+                "微光學",
+                "波導"
+              ],
+              "note": "L5 微光學/波導卡位，Apple/Sony 鏡頭供應商。AR 營收佔比仍小（題材為主）。"
+            },
+            {
+              "sym": "3363.TWO",
+              "name": "上詮",
+              "tags": [
+                "光學卡位",
+                "CPO"
+              ],
+              "note": "L5 光學卡位（CPO/光通訊本業，AR 為延伸）。⚠上櫃。"
+            },
+            {
+              "sym": "3019.TW",
+              "name": "亞洲光學",
+              "tags": [
+                "AR光學",
+                "metalens"
+              ],
+              "note": "L5 AR/metalens 微光學。"
+            },
+            {
+              "sym": "6456.TW",
+              "name": "業成 GIS",
+              "tags": [
+                "microLED面板",
+                "AR"
+              ],
+              "note": "L5/L4 microLED AR 面板 2H26 量產。"
+            }
+          ]
+        },
+        {
+          "pos": "下游",
+          "name": "L6 系統組裝 / 聲學 / EMS",
+          "desc": "歌爾為 Meta 主力組裝廠，且真護城河在聲學（微喇叭/MEMS麥全球第一），市場低估為『組裝』。EMS 含立訊（簽 OpenAI 硬體）。",
+          "concepts": [
+            "組裝",
+            "聲學",
+            "EMS"
+          ],
+          "members": [
+            {
+              "sym": "002241.SZ",
+              "name": "歌爾股份 GoerTek",
+              "tags": [
+                "組裝",
+                "聲學龍頭"
+              ],
+              "note": "L6 Meta 主力組裝+聲學全球第一（微喇叭/MEMS麥）· 組裝🔴已定價但聲學護城河被低估。控股 OmniLight、收 Plessey。地緣標靶。"
+            },
+            {
+              "sym": "002475.SZ",
+              "name": "立訊精密 Luxshare",
+              "tags": [
+                "EMS",
+                "OpenAI"
+              ],
+              "note": "L6 EMS 整機代工，簽下 OpenAI 硬體代工（新終端錨點前置）。"
+            },
+            {
+              "sym": "2018.HK",
+              "name": "瑞聲科技 AAC",
+              "tags": [
+                "聲學",
+                "微喇叭"
+              ],
+              "note": "L6 聲學（微喇叭/MEMS麥），前五大。"
+            },
+            {
+              "sym": "KN",
+              "name": "Knowles",
+              "tags": [
+                "MEMS麥克風"
+              ],
+              "note": "L6 MEMS 麥克風 23% 市占（WLP 雙雄），享去中化溢價。"
+            },
+            {
+              "sym": "6794.T",
+              "name": "Foster Electric",
+              "tags": [
+                "微喇叭"
+              ],
+              "note": "L6 微喇叭前五大。"
+            },
+            {
+              "sym": "EL.PA",
+              "name": "EssilorLuxottica",
+              "tags": [
+                "品牌",
+                "鏡框"
+              ],
+              "note": "L6 Ray-Ban 品牌/鏡框，Meta 合作方。"
+            }
+          ]
+        },
+        {
+          "pos": "周邊",
+          "name": "相機 / 鏡頭 (CIS)",
+          "desc": "眼鏡攝影是 Ray-Ban Meta 銷量翻倍主因。CIS/鏡頭確定受惠但已被定價（成熟層，AR 為增量）。",
+          "concepts": [
+            "CIS",
+            "鏡頭"
+          ],
+          "members": [
+            {
+              "sym": "3008.TW",
+              "name": "大立光 Largan",
+              "tags": [
+                "鏡頭",
+                "CIS"
+              ],
+              "note": "周邊 鏡頭龍頭（iPhone 鏈，AR 增量）。"
+            },
+            {
+              "sym": "2382.HK",
+              "name": "舜宇光學 Sunny Optical",
+              "tags": [
+                "鏡頭",
+                "光學"
+              ],
+              "note": "周邊 鏡頭/光學。⚠港股 2382≠台股廣達 2382.TW。"
+            },
+            {
+              "sym": "ON",
+              "name": "onsemi",
+              "tags": [
+                "CIS",
+                "影像感測"
+              ],
+              "note": "周邊 CIS 影像感測。"
+            }
+          ]
+        },
+        {
+          "pos": "周邊",
+          "name": "被動元件 / 載板",
+          "desc": "AI 眼鏡是 MLCC 超微縮(008004級)與 SLP 載板的新增需求曲線。",
+          "concepts": [
+            "MLCC",
+            "載板"
+          ],
+          "members": [
+            {
+              "sym": "6981.T",
+              "name": "村田 Murata",
+              "tags": [
+                "超微型MLCC"
+              ],
+              "note": "周邊 超微型 MLCC 龍頭（0.25×0.125mm）。"
+            },
+            {
+              "sym": "6976.T",
+              "name": "太陽誘電 Taiyo Yuden",
+              "tags": [
+                "超微型MLCC"
+              ],
+              "note": "周邊 超微型 MLCC。"
+            },
+            {
+              "sym": "2327.TW",
+              "name": "國巨 Yageo",
+              "tags": [
+                "MLCC",
+                "被動元件"
+              ],
+              "note": "周邊 MLCC/被動元件。"
+            }
+          ]
+        },
+        {
+          "pos": "周邊",
+          "name": "主晶片 SoC",
+          "desc": "Qualcomm 近壟斷 Android XR + Meta 陣營，確定受惠但已定價、AR 佔比小（CP 高 alpha 低）。",
+          "concepts": [
+            "SoC",
+            "Snapdragon"
+          ],
+          "members": [
+            {
+              "sym": "QCOM",
+              "name": "Qualcomm",
+              "tags": [
+                "SoC",
+                "Snapdragon AR"
+              ],
+              "note": "周邊 SoC 主晶片近壟斷（Snapdragon AR1/AR1+）· 🔴已定價。"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

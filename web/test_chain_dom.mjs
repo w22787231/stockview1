@@ -31,7 +31,7 @@ const cls = n => n==null?"dim":(n>0?"pos":(n<0?"neg":"dim"));
 // FLOW_LABEL 與 quoteCol 是 memberCard 的相依，需一起載入
 const flS = appJs.indexOf("const FLOW_LABEL");
 const flowLabel = flS >= 0 ? appJs.slice(flS, appJs.indexOf("\n", flS)) : "";
-vm.runInContext(helpers + "\n" + flowLabel + "\n" + extract("quoteCol") + "\n" + extract("memberCard") + "\nglobalThis.memberCard = memberCard;", sandbox);
+vm.runInContext(helpers + "\n" + flowLabel + "\n" + extract("marketOf") + "\n" + extract("quoteCol") + "\n" + extract("memberCard") + "\nglobalThis.memberCard = memberCard;", sandbox);
 
 // 情境 1：完整行情 + inflow
 const h1 = sandbox.memberCard({sym:"3363.TWO", name:"上詮", tags:["FAU"], note:"夥伴",

@@ -347,6 +347,7 @@
     <button class="mtab active" data-view="trend">趨勢動能榜</button>
     <button class="mtab" data-view="cross">交叉訊號</button>
     <button class="mtab" data-view="chain">產業鏈</button>
+    <button class="mtab" data-view="etf">ETF持股異動</button>
     <button class="mtab" data-view="news">即時快訊</button>
   </nav>
 
@@ -1660,6 +1661,7 @@ function switchView(v){
   if(v==="macro") loadMacro();
   else if(v==="news") loadNewsFeed();
   else if(v==="chain") loadChain();
+  else if(v==="etf") loadEtf();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));

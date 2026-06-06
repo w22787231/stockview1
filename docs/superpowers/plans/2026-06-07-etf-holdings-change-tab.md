@@ -235,12 +235,14 @@ def compute_changes(cur, prev):
         cmap = _to_map(rows)
         pmap = _to_map(prev.get(etf, [])) if prev else {}
         name = F.ETFS.get(etf, {}).get("name", "")
+        baseline = not prev          # 僅「整個 prev 為 None/空(首次建立)」才算基準;
+                                     # prev 存在但某檔為空 → 該檔股票算新增,非基準
         recs = []
         for code, r in cmap.items():
             cw, cq = _f(r["weight"]), _f(r["qty"])
             p = pmap.get(code)
-            if not pmap:
-                action = "基準"                      # 首次無前值
+            if baseline:
+                action = "基準"                      # 首次無任何前值
             elif p is None:
                 action = "新增"
             else:
@@ -284,10 +286,13 @@ def build_json(cur_snapshot, old_json, today):
         for c in changes.get(etf, []):
             if c["action"] in ACTION_KEEP:
                 day_changes.append(c)
-    # 同日去重 + 有變動才加
+    # 同日去重:同日重跑時,若今日無新變動,保留先前已記錄的當日條目(不抹除)
+    existing_today = next((h for h in history if h.get("date") == today), None)
     history = [h for h in history if h.get("date") != today]
     if day_changes:
         history.insert(0, {"date": today, "changes": day_changes})
+    elif existing_today is not None:
+        history.insert(0, existing_today)
     history = history[:HISTORY_DAYS]
     return {
         "generated_at": today + "T00:00:00Z",
@@ -472,7 +477,7 @@ function renderEtf(){
         const grp=day.changes.filter(c=>c.etf===etf);
         if(!grp.length) continue;
         const cnt=a=>grp.filter(c=>c.action===a).length;
-        const tags=["新增","加碼","減碼","出清"].filter(a=>cnt(a)).map(a=>ETF_ACTION_ICON[a].slice(2)+cnt(a)).join(" ");
+        const tags=["新增","加碼","減碼","出清"].filter(a=>cnt(a)).map(a=>[...ETF_ACTION_ICON[a]].slice(1).join("")+cnt(a)).join(" ");
         html+='<div class="tg-gname" style="margin:10px 0 6px">▎'+esc(etf)+' '+esc(d.etfs[etf].name)+'　<span class="dim" style="font-weight:400">'+tags+'</span></div>'+
               etfChangeTable(grp);
       }

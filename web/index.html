@@ -1040,19 +1040,20 @@ function quoteCol(lbl,v){
     '<span class="'+cls(v)+'">'+(v==null?"–":sgn(v,1)+"%")+'</span></span>';
 }
 function memberCard(m){
-  const code = m.sym.replace(/\.(TW|TWO)$/,"");
-  const mkt = /\.TWO$/.test(m.sym) ? "櫃" : (/\.TW$/.test(m.sym) ? "市" : "");
+  const sym = m.sym||"";
+  const code = sym.replace(/\.(TW|TWO)$/,"");
+  const mkt = /\.TWO$/.test(sym) ? "櫃" : (/\.TW$/.test(sym) ? "市" : "");
   const tags = (m.tags||[]).map(t=>'<span class="mstock-tag">'+esc(t)+'</span>').join("");
   const quote = '<div class="mstock-quote">'+
-    quoteCol("1日", m.r1!=null?m.r1:null)+
-    quoteCol("5日", m.r5!=null?m.r5:null)+
-    quoteCol("20日", m.r20!=null?m.r20:null)+
+    quoteCol("1日", m.r1)+
+    quoteCol("5日", m.r5)+
+    quoteCol("20日", m.r20)+
   '</div>';
   const flow = (m.flow && FLOW_LABEL[m.flow])
     ? '<div class="mstock-flow '+esc(m.flow)+'">'+FLOW_LABEL[m.flow]+'</div>' : '';
   return '<div class="mstock">'+
     '<div class="mstock-top">'+
-      '<span class="mstock-sym clickable" data-stk="'+esc(m.sym)+'">'+esc(code)+'</span>'+
+      '<span class="mstock-sym clickable" data-stk="'+esc(sym)+'">'+esc(code)+'</span>'+
       '<span class="mstock-name">'+esc(m.name)+'</span>'+
       (mkt?'<span class="mstock-mkt">'+mkt+'</span>':'')+
     '</div>'+

@@ -74,6 +74,14 @@ jobs:
           cd engine
           python export_themes.py
 
+      - name: Export Taiwan industry chains (quotes + fund flow)
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_chain.py
+
       - name: Export sentiment indicators (VIX/VXN/SKEW/HYG/breadth/F&G)
         env:
           PYTHONUTF8: "1"

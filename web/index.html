@@ -255,6 +255,56 @@
   .theme-members{display:none;border-top:1px solid var(--line);padding:2px 0}
   .theme-card.open .theme-members{display:block}
   @media(max-width:680px){.theme-row .tr-desc{display:none}.theme-row .tr-name{min-width:90px}}
+
+  /* 產業鏈（上中下游分類） */
+  .chain-nav{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 18px}
+  .chain-pill{font-family:var(--mono);font-size:13px;padding:7px 15px;border-radius:9px;
+    border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer;
+    transition:.12s;letter-spacing:.3px;box-shadow:var(--shadow)}
+  .chain-pill:hover{color:var(--ink);border-color:#c5d0e0}
+  .chain-pill.active{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:700;
+    box-shadow:0 2px 8px rgba(37,99,235,.25)}
+  .chain-intro{font-size:12.5px;color:var(--ink2);line-height:1.6;margin:-6px 0 16px;
+    border-left:3px solid var(--bluebar);padding-left:12px}
+  .chain-intro .cc{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--ink2);
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin:3px 4px 0 0}
+  /* 環節（一張卡＝上中下游的一站） */
+  .stage{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--shadow);
+    margin-bottom:14px;overflow:hidden}
+  .stage-head{display:flex;align-items:center;gap:11px;padding:13px 16px;background:var(--panel2);
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .stage-pos{font-family:var(--mono);font-size:11px;font-weight:800;letter-spacing:.5px;flex:none;
+    padding:3px 10px;border-radius:7px;color:#fff}
+  .stage-pos.up{background:#2563eb} .stage-pos.mid{background:#7c3aed} .stage-pos.down{background:#16a34a}
+  .stage-pos.side{background:#9aa6b6}
+  .stage-name{font-size:14.5px;font-weight:760;letter-spacing:.2px;flex:none}
+  .stage-desc{color:var(--ink3);font-size:11.5px;line-height:1.5;flex:1;min-width:180px}
+  .stage-concepts{display:flex;flex-wrap:wrap;gap:5px;padding:11px 16px 4px}
+  .concept-tag{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--blue);
+    background:#eef4ff;border:1px solid #cfe0fb;border-radius:20px;padding:3px 11px;letter-spacing:.2px}
+  .stage-members{padding:8px 14px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:9px}
+  .stage-empty{padding:6px 16px 16px;color:var(--ink3);font-size:11.5px;line-height:1.5}
+  .mstock{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);transition:.12s}
+  .mstock:hover{border-color:#c5d0e0;background:#fafbfd}
+  .mstock-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+  .mstock-sym{font-family:var(--mono);font-size:14px;font-weight:780;color:var(--blue);cursor:pointer}
+  .mstock-sym:hover{text-decoration:underline}
+  .mstock-name{font-size:12.5px;font-weight:700;color:var(--ink)}
+  .mstock-mkt{font-family:var(--mono);font-size:9.5px;color:var(--ink3);border:1px solid var(--line);
+    border-radius:5px;padding:0 5px}
+  .mstock-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px}
+  .mstock-tag{font-size:10px;color:var(--ink2);background:var(--panel2);border-radius:5px;padding:1px 7px}
+  .mstock-note{font-size:11.5px;color:var(--ink2);line-height:1.55}
+  .mstock-quote{display:flex;gap:14px;font-family:var(--mono);font-size:11.5px;margin-bottom:6px}
+  .mstock-quote .q{display:flex;flex-direction:column;line-height:1.3}
+  .mstock-quote .q .ql{font-size:9px;color:var(--ink3);font-family:-apple-system,sans-serif}
+  .mstock-flow{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;
+    padding:2px 9px;border-radius:6px;margin-bottom:6px;letter-spacing:.2px}
+  .mstock-flow.inflow{background:#e6f6ec;color:var(--green)}
+  .mstock-flow.outflow{background:#fdeaed;color:var(--red)}
+  .mstock-flow.quiet{background:var(--panel2);color:var(--ink3)}
+  .mstock-flow.neutral{background:var(--panel2);color:var(--ink2)}
+  @media(max-width:680px){.stage-members{grid-template-columns:1fr}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
@@ -284,6 +334,7 @@
     <button class="mtab" data-view="macro">總體市場</button>
     <button class="mtab active" data-view="trend">趨勢動能榜</button>
     <button class="mtab" data-view="cross">交叉訊號</button>
+    <button class="mtab" data-view="chain">產業鏈</button>
     <button class="mtab" data-view="news">即時快訊</button>
   </nav>
 
@@ -449,9 +500,9 @@ document.addEventListener("click", function(e){
   if(wrap) wrap.innerHTML = tableInner(tid);
 });
 
-// 全域委派：點代號 → 開個股詳情
+// 全域委派：點代號 → 開個股詳情（表格 td.sym 與產業鏈 .mstock-sym 共用）
 document.addEventListener("click", function(e){
-  const cell = e.target.closest && e.target.closest("td.sym.clickable");
+  const cell = e.target.closest && e.target.closest(".clickable[data-stk]");
   if(!cell || !cell.dataset.stk) return;
   if(typeof openStock==="function") openStock(cell.dataset.stk);
 });
@@ -977,6 +1028,113 @@ async function loadThemes(){
   }
 }
 
+// ── 產業鏈頁（MoneyDJ 式上中下游分類 + 概念股標籤）──
+let CHAIN_DATA = null;   // 快取整份 tw_chain.json
+let CHAIN_CUR = 0;       // 目前選的鏈 index
+const POS_CLS = {"上游":"up","中游":"mid","下游":"down","周邊":"side"};
+
+// 資金流向徽章文字（與 export_chain flow_of 同口徑）
+const FLOW_LABEL = {inflow:"🟢 資金流入", outflow:"🔴 爆量出貨", quiet:"⚪ 縮量觀望", neutral:"◯ 量平"};
+function quoteCol(lbl,v){
+  return '<span class="q"><span class="ql">'+lbl+'</span>'+
+    '<span class="'+cls(v)+'">'+(v==null?"–":sgn(v,1)+"%")+'</span></span>';
+}
+function memberCard(m){
+  const sym = m.sym||"";
+  const code = sym.replace(/\.(TW|TWO)$/,"");
+  const mkt = /\.TWO$/.test(sym) ? "櫃" : (/\.TW$/.test(sym) ? "市" : "");
+  const tags = (m.tags||[]).map(t=>'<span class="mstock-tag">'+esc(t)+'</span>').join("");
+  const quote = '<div class="mstock-quote">'+
+    quoteCol("1日", m.r1)+
+    quoteCol("5日", m.r5)+
+    quoteCol("20日", m.r20)+
+  '</div>';
+  const flow = (m.flow && FLOW_LABEL[m.flow])
+    ? '<div class="mstock-flow '+esc(m.flow)+'">'+FLOW_LABEL[m.flow]+'</div>' : '';
+  return '<div class="mstock">'+
+    '<div class="mstock-top">'+
+      '<span class="mstock-sym clickable" data-stk="'+esc(sym)+'">'+esc(code)+'</span>'+
+      '<span class="mstock-name">'+esc(m.name)+'</span>'+
+      (mkt?'<span class="mstock-mkt">'+mkt+'</span>':'')+
+    '</div>'+
+    (tags?'<div class="mstock-tags">'+tags+'</div>':'')+
+    quote+
+    flow+
+    (m.note?'<div class="mstock-note">'+esc(m.note)+'</div>':'')+
+  '</div>';
+}
+
+function stageCard(st){
+  const pc = POS_CLS[st.pos]||"side";
+  const concepts = (st.concepts||[]).map(c=>'<span class="concept-tag"># '+esc(c)+'</span>').join("");
+  const members = (st.members||[]).length
+    ? '<div class="stage-members">'+st.members.map(memberCard).join("")+'</div>'
+    : '<div class="stage-empty">此環節目前無台股純正標的。'+esc(st.desc||"")+'</div>';
+  return '<div class="stage">'+
+    '<div class="stage-head">'+
+      '<span class="stage-pos '+pc+'">'+esc(st.pos)+'</span>'+
+      '<span class="stage-name">'+esc(st.name)+'</span>'+
+      '<span class="stage-desc">'+esc(st.desc||"")+'</span>'+
+    '</div>'+
+    (concepts?'<div class="stage-concepts">'+concepts+'</div>':'')+
+    members+
+  '</div>';
+}
+
+function renderChain(){
+  const d = CHAIN_DATA;
+  if(!d || !d.chains || !d.chains.length){
+    $("#content").innerHTML='<section><div class="sec-head"><h2>產業鏈</h2></div>'+
+      '<div class="note">⚠️ 找不到產業鏈資料（data/tw_chain.json）。</div></section>';
+    return;
+  }
+  if(CHAIN_CUR>=d.chains.length) CHAIN_CUR=0;
+  const c = d.chains[CHAIN_CUR];
+  // 鏈切換列
+  const nav = d.chains.map((x,i)=>'<button class="chain-pill'+(i===CHAIN_CUR?" active":"")+
+    '" data-chain="'+i+'">'+esc(x.name)+'</button>').join("");
+  // 鏈簡介 + 整鏈概念標籤
+  const intro = '<div class="chain-intro">'+esc(c.desc||"")+
+    ((c.concepts||[]).length?'<div>'+c.concepts.map(x=>'<span class="cc"># '+esc(x)+'</span>').join("")+'</div>':'')+
+    '</div>';
+  const stages = (c.stages||[]).map(stageCard).join("");
+
+  $("#content").innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>產業鏈分類</h2><span class="tag">MoneyDJ 式 · 上中下游</span>'+
+        '<span class="hint">選產業鏈→看每個環節的概念股標籤與個股；代號可點進個股詳情</span></div>'+
+      '<div class="chain-nav">'+nav+'</div>'+
+      intro+
+      stages+
+      '<div class="legend">分類邏輯：終端←下游←中游←上游逆向拆解。<span class="concept-tag" style="font-size:10px"># 標籤</span>＝該環節的概念主題；同一檔可橫跨多個環節（與「一家一類」的交易所分類不同）。'+
+      (d.note?'<br>'+esc(d.note):'')+
+      '　資料更新：'+esc(d.generated_at||"–")+'。</div>'+
+    '</section>';
+
+  // 鏈切換
+  document.querySelectorAll(".chain-pill").forEach(b=>b.onclick=()=>{
+    CHAIN_CUR = parseInt(b.dataset.chain,10)||0;
+    renderChain();
+    window.scrollTo({top:0,behavior:"smooth"});
+  });
+}
+
+async function loadChain(){
+  for(const k in SORT_STATE) delete SORT_STATE[k];
+  $("#meta").innerHTML='<div><b>產業鏈</b> 上中下游分類</div><div>人工維護 · 結構分類非行情</div>';
+  $("#poolNote").innerHTML="";
+  if(CHAIN_DATA){ renderChain(); return; }
+  $("#content").innerHTML = '<div class="loading-screen">載入 產業鏈 …</div>';
+  try{
+    const res = await fetch("data/tw_chain.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    CHAIN_DATA = await res.json();
+    renderChain();
+  }catch(e){
+    $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/tw_chain.json 失敗（'+esc(e.message)+'）。</div>';
+  }
+}
+
 async function loadMacro(){
   for(const k in SORT_STATE) delete SORT_STATE[k];
   $("#content").innerHTML = '<div class="loading-screen">載入 總體市場 …</div>';
@@ -1099,7 +1257,7 @@ function renderStock(d){
       eventsBlock(d.events)+
       newsBlock(d.news);
 
-  $("#backBtn").onclick = ()=> switchView(VIEW==="cross"?"cross":(VIEW==="macro"?"macro":"trend"));
+  $("#backBtn").onclick = ()=> switchView(["cross","macro","chain"].includes(VIEW)?VIEW:"trend");
   // 均線交叉訊號展開/收合
   const sigBtn=document.getElementById("sigToggle");
   if(sigBtn) sigBtn.onclick=()=>{
@@ -1359,6 +1517,7 @@ function switchView(v){
   document.querySelector(".search").style.display = (v==="news") ? "none" : "flex";
   if(v==="macro") loadMacro();
   else if(v==="news") loadNewsFeed();
+  else if(v==="chain") loadChain();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));

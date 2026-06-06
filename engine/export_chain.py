@@ -81,6 +81,7 @@ def merge_quotes(member, q):
 
 def fetch(symbols):
     """一次抓多檔，回傳 {sym: {last,r1,r5,r20,volr} or None}。volr=今日$Vol/20日均$Vol。"""
+    # 延後 import：讓 flow_of/merge_quotes 等純函式可在未安裝 yfinance 的環境被 import 測試。
     import yfinance as yf
     df = yf.download(symbols, period="2mo", interval="1d",
                      group_by="ticker", progress=False, auto_adjust=False)
@@ -160,14 +161,23 @@ def build():
         "failed": sorted(set(failed)),
     }
     blob = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    written = []
     for d in (DATA_DIR, WEB_DATA_DIR):
-        os.makedirs(d, exist_ok=True)
-        with io.open(os.path.join(d, "tw_chain.json"), "w", encoding="utf-8") as f:
-            f.write(blob)
+        try:
+            os.makedirs(d, exist_ok=True)
+            with io.open(os.path.join(d, "tw_chain.json"), "w", encoding="utf-8") as f:
+                f.write(blob)
+            written.append(d)
+        except Exception as e:
+            print(f"[chain] 寫入 {d} 失敗: {e}")
+    if DATA_DIR not in written:
+        print("[chain] 部署來源 data/tw_chain.json 未寫成功，視為失敗。")
+        raise SystemExit(1)
     nstage = sum(len(c["stages"]) for c in chains_out)
-    print(f"[chain] -> data/tw_chain.json + web/data/  ({len(chains_out)} 鏈, {nstage} 環節, {len(all_syms)} 檔, 失敗 {len(set(failed))})")
-    if failed:
-        print("[chain] 失敗:", ", ".join(sorted(set(failed))))
+    failed_u = sorted(set(failed))
+    print(f"[chain] -> {len(written)} 路徑  ({len(chains_out)} 鏈, {nstage} 環節, {len(all_syms)} 檔, 失敗 {len(failed_u)})")
+    if failed_u:
+        print("[chain] 失敗:", ", ".join(failed_u))
 
 
 if __name__ == "__main__":

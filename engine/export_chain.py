@@ -3,12 +3,13 @@
 讀 universe/tw_chain.json（純分類結構），抓每檔 1/5/20 日漲跌、量比，
 判定資金流向，輸出 ../data/tw_chain.json（並同步 ../web/data/ 供本機預覽）。
 
-資金流向 flow（與爆量榜 volrCls 同口徑，門檻 1.5/0.7）：
-  volr>=1.5 且 r1>0  -> inflow  (🟢 資金流入)
-  volr>=1.5 且 r1<0  -> outflow (🔴 爆量出貨)
+資金流向 flow（與爆量榜 volrCls 同口徑，門檻 1.5/0.7；
+  與爆量榜 export_json inflow 同口徑：volr>=1.5 且 r5>0）：
+  volr>=1.5 且 r5>0  -> inflow  (🟢 資金流入)
+  volr>=1.5 且 r5<0  -> outflow (🔴 爆量出貨)
   volr<0.7           -> quiet   (⚪ 縮量觀望)
   其餘               -> neutral (◯ 量平)
-  volr 或 r1 為 None -> None
+  volr 或 r5 為 None -> None
 
 用法: python export_chain.py
 """
@@ -46,13 +47,14 @@ def ret_n(closes, n):
     return (a / b - 1.0) * 100.0
 
 
-def flow_of(volr, r1):
-    """資金流向判定。volr=量比, r1=當日漲跌%。回傳 inflow/outflow/quiet/neutral 或 None。"""
-    if volr is None or r1 is None:
+def flow_of(volr, r5):
+    """資金流向判定。volr=量比, r5=5日漲幅%（與爆量榜 export_json.py 同口徑）。
+    回傳 inflow/outflow/quiet/neutral 或 None。"""
+    if volr is None or r5 is None:
         return None
-    if volr >= 1.5 and r1 > 0:
+    if volr >= 1.5 and r5 > 0:
         return "inflow"
-    if volr >= 1.5 and r1 < 0:
+    if volr >= 1.5 and r5 < 0:
         return "outflow"
     if volr < 0.7:
         return "quiet"
@@ -73,7 +75,7 @@ def merge_quotes(member, q):
         out["r5"] = _round(q.get("r5"), 2)
         out["r20"] = _round(q.get("r20"), 2)
         out["volr"] = _round(q.get("volr"), 2)
-        out["flow"] = flow_of(q.get("volr"), q.get("r1"))
+        out["flow"] = flow_of(q.get("volr"), q.get("r5"))
     else:
         out["last"] = out["r1"] = out["r5"] = out["r20"] = out["volr"] = out["flow"] = None
     return out

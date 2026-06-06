@@ -7,7 +7,7 @@
 
 **目標**
 - 產業鏈分頁每張個股卡片新增一列：1 日 / 5 日 / 20 日漲跌%（紅綠），與一個「資金流向」徽章。
-- 「資金流向」採量比 + 當日漲跌雙條件，口徑與網站既有「爆量榜」(`surgeGuide`/`volrCls`) 完全一致。
+- 「資金流向」採量比 + 5 日漲幅雙條件，口徑與網站既有「爆量榜」(`surgeGuide`/`volrCls`，inflow 為 volr>=1.5 且 r5>0) 完全一致。
 - 行情資料每日台股收盤後由 GitHub Actions 自動更新，比照 `tw_themes.json` 的更新模式。
 
 **非目標**
@@ -39,19 +39,19 @@
 
 ### 2.2 資金流向 `flow` 判定（與爆量榜同口徑）
 
-以量比 `volr` 與當日漲跌 `r1` 雙條件判定，門檻沿用既有 `volrCls()` 的 1.5 / 0.7：
+以量比 `volr` 與 5 日漲幅 `r5` 雙條件判定，門檻沿用既有 `volrCls()` 的 1.5 / 0.7（爆量榜 inflow 亦為 volr>=1.5 且 r5>0）：
 
 判定順序由上而下，命中即停：
 
 | 條件 | flow | 前端顯示 |
 |---|---|---|
-| volr 或 r1 為 null | `null` | （不顯示徽章） |
-| volr ≥ 1.5 且 r1 > 0 | `inflow` | 🟢 資金流入 |
-| volr ≥ 1.5 且 r1 < 0 | `outflow` | 🔴 爆量出貨 |
+| volr 或 r5 為 null | `null` | （不顯示徽章） |
+| volr ≥ 1.5 且 r5 > 0 | `inflow` | 🟢 資金流入 |
+| volr ≥ 1.5 且 r5 < 0 | `outflow` | 🔴 爆量出貨 |
 | volr < 0.7 | `quiet` | ⚪ 縮量觀望 |
-| 其餘（含 volr≥1.5 但 r1=0 的平盤爆量、0.7≤volr<1.5） | `neutral` | ◯ 量平 |
+| 其餘（含 volr≥1.5 但 r5=0 的平盤爆量、0.7≤volr<1.5） | `neutral` | ◯ 量平 |
 
-判定函式 `flow_of(volr, r1)` 寫在 `export_chain.py`，回傳上述字串或 `None`。
+判定函式 `flow_of(volr, r5)` 寫在 `export_chain.py`，回傳上述字串或 `None`。
 
 ### 2.3 錯誤處理 / 邊界
 - 單檔抓取失敗或資料 < 21 根：該檔行情欄位寫 `null`（保留 name/tags/note），不影響其他檔；收集到 `failed` 清單並印出。

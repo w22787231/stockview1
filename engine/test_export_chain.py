@@ -46,7 +46,7 @@ def test_merge_keeps_classification():
     assert out["note"] == "台積電夥伴"
     assert out["r1"] == -4.98 and out["r5"] == 3.07 and out["r20"] == 3.07
     assert out["volr"] == 2.1
-    assert out["flow"] == "outflow"   # volr>=1.5 且 r1<0
+    assert out["flow"] == "inflow"   # volr>=1.5 且 r5>0
 
 
 def test_merge_missing_quote_fills_null():

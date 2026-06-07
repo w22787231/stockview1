@@ -177,8 +177,35 @@ def fetch_fear_greed():
         return None
 
 
+def _fetch_gdp_trillions():
+    """當期名目 GDP(兆美元)。優先 FRED 季度年化(GDP 系列,十億);失敗退 World Bank 年度。
+    回傳 (gdp_兆, 來源標籤)。FRED 對齊 GuruFocus 等標準口徑(~4.1%);World Bank 年度偏舊會墊高比率。"""
+    try:
+        u = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDP"
+        d = urllib.request.urlopen(
+            urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}),
+            timeout=20).read().decode("utf-8", "ignore")
+        rows = [r for r in csv.reader(io.StringIO(d)) if r]
+        vals = [r for r in rows[1:] if r and r[-1] not in ("", ".")]
+        if vals:
+            last = vals[-1]
+            return float(last[-1]) / 1000.0, "FRED " + last[0][:7]   # 十億→兆,季度年化
+    except Exception:
+        pass
+    try:
+        gu = "https://api.worldbank.org/v2/country/USA/indicator/NY.GDP.MKTP.CD?format=json&per_page=6"
+        gd = json.loads(urllib.request.urlopen(
+            urllib.request.Request(gu, headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read().decode("utf-8", "ignore"))
+        for r in gd[1]:
+            if r.get("value"):
+                return r["value"] / 1e12, "World Bank " + r["date"] + "(年度)"
+    except Exception:
+        pass
+    return None, ""
+
+
 def fetch_leverage():
-    """市場槓桿:FINRA 融資餘額(月,百萬美元) ÷ World Bank 美國名目GDP(年) = 融資/GDP 泡沫比%。"""
+    """市場槓桿:FINRA 融資餘額(月) ÷ 名目GDP(FRED 季度年化優先) = 融資/GDP 泡沫比%。"""
     try:
         u = "https://www.finra.org/investors/learn-to-invest/advanced-investing/margin-statistics"
         html = urllib.request.urlopen(
@@ -188,22 +215,13 @@ def fetch_leverage():
         if not pairs:
             return None
         pairs = pairs[:12][::-1]   # 最新在前→取近12月→反轉成時間序(舊→新)
-        gu = "https://api.worldbank.org/v2/country/USA/indicator/NY.GDP.MKTP.CD?format=json&per_page=6"
-        gd = json.loads(urllib.request.urlopen(
-            urllib.request.Request(gu, headers={"User-Agent": "Mozilla/5.0"}), timeout=20
-        ).read().decode("utf-8", "ignore"))
-        gdp_t, gdp_year = None, ""
-        for r in gd[1]:
-            if r.get("value"):
-                gdp_t = r["value"] / 1e12
-                gdp_year = r["date"]
-                break
+        gdp_t, gdp_label = _fetch_gdp_trillions()
         if not gdp_t:
             return None
         margins = [float(a.replace(",", "")) / 1e6 for _, a in pairs]
         ratio_series = [round(mv / gdp_t * 100, 2) for mv in margins]
         return {"margin_t": round(margins[-1], 2), "margin_month": pairs[-1][0],
-                "gdp_t": round(gdp_t, 2), "gdp_year": gdp_year,
+                "gdp_t": round(gdp_t, 2), "gdp_label": gdp_label,
                 "ratio_pct": ratio_series[-1], "ratio_series": ratio_series,
                 "months": [mn for mn, _ in pairs]}
     except Exception:

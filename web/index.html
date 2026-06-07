@@ -1033,7 +1033,7 @@ function leverageBox(L){
   const cls = r>=4 ? 'neg' : (r>=3 ? '' : 'pos');
   return '<div class="guide" style="margin-top:12px">'+
     '<div class="gtitle">市場槓桿 · 融資餘額 / GDP</div>'+
-    '<div class="ex">融資餘額 <b>$'+L.margin_t+'兆</b>（FINRA '+esc(L.margin_month)+'）÷ 名目GDP <b>$'+L.gdp_t+'兆</b>（'+esc(L.gdp_year)+'）＝ <b class="'+cls+'">'+r+'%</b> · <b class="'+cls+'">'+tag+'</b>。<br>融資餘額占 GDP 比＝市場槓桿泡沫度：歷史常態約 2–3%，逼近或破 <b>4%</b> 多見於市場頂部（如 2021 末）。月更新、慢訊號，非擇時。</div>'+
+    '<div class="ex">融資餘額 <b>$'+L.margin_t+'兆</b>（FINRA '+esc(L.margin_month)+'）÷ 名目GDP <b>$'+L.gdp_t+'兆</b>（'+esc(L.gdp_label||L.gdp_year||'')+'）＝ <b class="'+cls+'">'+r+'%</b> · <b class="'+cls+'">'+tag+'</b>。<br>融資餘額占 GDP 比＝市場槓桿泡沫度：歷史常態約 2–3%，逼近或破 <b>4%</b> 多見於市場頂部（如 2021 末）。月更新、慢訊號，非擇時。</div>'+
     (L.ratio_series?'<div class="ex" style="margin-top:2px"><span style="color:var(--ink3)">近 '+L.ratio_series.length+' 個月 融資/GDP 走勢（紅區 &gt;4%=頂部區）：</span><div style="max-width:320px">'+sparkline(L.ratio_series,"#e8923a",{v:4,dir:"hi",lab:"4%"})+'</div></div>':'')+
     '</div>';
 }

@@ -1,13 +1,33 @@
-// Cloudflare Pages Function: GET /api/news
-// 在邊緣端代理台股中文 RSS(避開 CORS),合併、去重、依時間排序回 JSON。
-// 部署後即時可用;邊緣快取 120 秒(夠即時又不打爆來源)。
+// Cloudflare Pages Function: GET /api/news?feed=tw|world|tech|finance
+// 邊緣端代理 RSS(避開 CORS),合併、去重、依時間排序回 JSON。邊緣快取 120 秒。
+//   tw      = 台股中文(鉅亨/Yahoo股市/Google News台股)
+//   world   = 🌍 國際大事(Google News WORLD)
+//   tech    = 💻 科技/AI(Google News TECHNOLOGY + AI 搜尋)
+//   finance = 💰 財經/市場(Google News BUSINESS + Yahoo Finance + CNBC)
 
-const FEEDS = [
-  { url: "https://news.cnyes.com/rss/v1/news/category/tw_stock", src: "鉅亨·台股" },
-  { url: "https://news.cnyes.com/rss/v1/news/category/headline", src: "鉅亨·頭條" },
-  { url: "https://tw.stock.yahoo.com/rss?category=news", src: "Yahoo股市" },
-  { url: "https://news.google.com/rss/search?q=%E5%8F%B0%E8%82%A1+when:1d&hl=zh-TW&gl=TW&ceid=TW:zh-Hant", src: "" },
-];
+const GNT = (t) => `https://news.google.com/rss/headlines/section/topic/${t}?hl=en-US&gl=US&ceid=US:en`;
+const GNS = (q) => `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`;
+
+const GROUPS = {
+  tw: [
+    { url: "https://news.cnyes.com/rss/v1/news/category/tw_stock", src: "鉅亨·台股" },
+    { url: "https://news.cnyes.com/rss/v1/news/category/headline", src: "鉅亨·頭條" },
+    { url: "https://tw.stock.yahoo.com/rss?category=news", src: "Yahoo股市" },
+    { url: "https://news.google.com/rss/search?q=%E5%8F%B0%E8%82%A1+when:1d&hl=zh-TW&gl=TW&ceid=TW:zh-Hant", src: "" },
+  ],
+  world: [
+    { url: GNT("WORLD"), src: "" },
+  ],
+  tech: [
+    { url: GNT("TECHNOLOGY"), src: "" },
+    { url: GNS("artificial+intelligence+OR+AI+OR+semiconductor+OR+chip+when:1d"), src: "" },
+  ],
+  finance: [
+    { url: GNT("BUSINESS"), src: "" },
+    { url: "https://finance.yahoo.com/news/rssindex", src: "Yahoo Finance" },
+    { url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258", src: "CNBC" },
+  ],
+};
 
 function pick(block, tag) {
   const m = block.match(new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">", "i"));
@@ -48,12 +68,14 @@ async function fetchFeed(feed) {
   } catch (e) { return []; }
 }
 
-export async function onRequestGet() {
-  const lists = await Promise.all(FEEDS.map(fetchFeed));
+export async function onRequestGet(context) {
+  const feedKey = new URL(context.request.url).searchParams.get("feed") || "tw";
+  const feeds = GROUPS[feedKey] || GROUPS.tw;
+  const lists = await Promise.all(feeds.map(fetchFeed));
   const all = [].concat(...lists);
   const seen = new Set(), uniq = [];
   for (const it of all) {
-    const k = it.title.replace(/\s+/g, "").slice(0, 40);
+    const k = it.title.replace(/\s+/g, "").slice(0, 40).toLowerCase();
     if (!k || seen.has(k)) continue;
     seen.add(k); uniq.push(it);
   }
@@ -62,7 +84,7 @@ export async function onRequestGet() {
     title: it.title, link: it.link, src: it.src,
     time: it.ts ? new Date(it.ts).toISOString() : null,
   }));
-  const body = JSON.stringify({ generated_at: new Date().toISOString(), count: items.length, items });
+  const body = JSON.stringify({ feed: feedKey, generated_at: new Date().toISOString(), count: items.length, items });
   return new Response(body, {
     headers: {
       "Content-Type": "application/json; charset=utf-8",

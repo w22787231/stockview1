@@ -71,6 +71,10 @@
   .idx-card .spark{width:100%;height:48px;display:block}
   .idx-card .spark-thr{position:absolute;right:2px;transform:translateY(-50%);font-size:9px;font-weight:700;
     color:var(--red);background:rgba(255,255,255,.78);padding:0 3px;border-radius:3px;line-height:1.35;pointer-events:none;white-space:nowrap}
+  .news-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+  .news-tabs .ntab{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--ink)}
+  .news-tabs .ntab:hover{background:#f3f6fb}
+  .news-tabs .ntab.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
   .news-list{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden}
   .news-row{display:block;background:var(--panel);padding:10px 14px;text-decoration:none;color:inherit;transition:background .12s}
   .news-row:hover{background:#f3f6fb}
@@ -1730,13 +1734,22 @@ function fmtAgo(iso){
   if(s<86400) return Math.floor(s/3600)+" 小時前";
   return Math.floor(s/86400)+" 天前";
 }
+let NEWS_FEED="tw";
+const NEWS_TABS=[
+  {k:"tw",      lab:"🇹🇼 台股中文"},
+  {k:"world",   lab:"🌍 國際大事"},
+  {k:"tech",    lab:"💻 科技/AI"},
+  {k:"finance", lab:"💰 財經/市場"},
+];
 async function fetchNews(){
   const box=document.getElementById("newsList");
   if(!box) return;
+  const feedAtCall=NEWS_FEED;
   try{
-    const r=await fetch("/api/news?t="+Date.now(),{cache:"no-store"});
+    const r=await fetch("/api/news?feed="+feedAtCall+"&t="+Date.now(),{cache:"no-store"});
     if(!r.ok) throw new Error(r.status);
     const d=await r.json();
+    if(feedAtCall!==NEWS_FEED) return;   // 期間已切頁→丟棄這次結果
     if(!d.items||!d.items.length){ box.innerHTML='<div class="legend">暫無新聞，稍後再試。</div>'; return; }
     box.innerHTML=d.items.map(it=>
       '<a class="news-row" href="'+esc(it.link)+'" target="_blank" rel="noopener">'+
@@ -1751,16 +1764,26 @@ async function fetchNews(){
     box.innerHTML='<div class="legend">⚠️ 載入新聞失敗（'+esc(e.message)+'）。/api/news 需部署到 Cloudflare 後才有(本機預覽不會有)。</div>';
   }
 }
+function setNewsFeed(k){
+  NEWS_FEED=k;
+  document.querySelectorAll("#newsTabs .ntab").forEach(b=>b.classList.toggle("on",b.dataset.k===k));
+  const box=document.getElementById("newsList");
+  if(box) box.innerHTML='<div class="loading-screen">載入新聞 …</div>';
+  fetchNews();
+}
 function loadNewsFeed(){
   for(const k in SORT_STATE) delete SORT_STATE[k];
-  $("#meta").innerHTML='<div><b>即時快訊</b> 台股中文</div><div id="newsUpd">載入中…</div>';
+  NEWS_FEED="tw";
+  $("#meta").innerHTML='<div><b>即時快訊</b></div><div id="newsUpd">載入中…</div>';
   $("#poolNote").innerHTML="";
+  const tabs=NEWS_TABS.map(t=>'<button class="ntab'+(t.k==="tw"?" on":"")+'" data-k="'+t.k+'">'+t.lab+'</button>').join("");
   $("#content").innerHTML=
-    '<section><div class="sec-head"><h2>即時快訊</h2><span class="tag">台股中文 · 鉅亨/Yahoo/Google News</span>'+
-      '<span class="hint">每分鐘自動刷新</span></div>'+
+    '<section><div class="sec-head"><h2>即時快訊</h2><span class="hint">每分鐘自動刷新 · 點標題開原文</span></div>'+
+      '<div id="newsTabs" class="news-tabs">'+tabs+'</div>'+
       '<div id="newsList" class="news-list"><div class="loading-screen">載入新聞 …</div></div>'+
-      '<div class="legend">新聞由 鉅亨網、Yahoo奇摩股市、Google News 等 RSS 即時彙整；點標題開原文。本站僅彙整連結，不轉載全文，亦非投資建議。</div>'+
+      '<div class="legend">中文：鉅亨/Yahoo股市/Google News台股；英文：Google News(國際/科技/財經)/Yahoo Finance/CNBC。RSS 即時彙整，僅連結不轉載，非投資建議。</div>'+
     '</section>';
+  document.querySelectorAll("#newsTabs .ntab").forEach(b=>b.onclick=()=>setNewsFeed(b.dataset.k));
   fetchNews();
   if(window._newsTimer) clearInterval(window._newsTimer);
   window._newsTimer=setInterval(fetchNews, 60000);

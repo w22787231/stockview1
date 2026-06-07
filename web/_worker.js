@@ -1,9 +1,5 @@
-// Cloudflare Pages Function: GET /api/news?feed=tw|world|tech|finance
-// 邊緣端代理 RSS(避開 CORS),合併、去重、依時間排序回 JSON。邊緣快取 120 秒。
-//   tw      = 台股中文(鉅亨/Yahoo股市/Google News台股)
-//   world   = 🌍 國際大事(Google News WORLD)
-//   tech    = 💻 科技/AI(Google News TECHNOLOGY + AI 搜尋)
-//   finance = 💰 財經/市場(Google News BUSINESS + Yahoo Finance + CNBC)
+// Cloudflare Pages 進階模式 Worker:/api/news 動態代理 RSS,其餘走靜態資產。
+// (functions/ 目錄在 wrangler pages deploy 下未被編譯,故改用 _worker.js,必被識別。)
 
 const GNT = (t) => `https://news.google.com/rss/headlines/section/topic/${t}?hl=en-US&gl=US&ceid=US:en`;
 const GNS = (q) => `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`;
@@ -15,9 +11,7 @@ const GROUPS = {
     { url: "https://tw.stock.yahoo.com/rss?category=news", src: "Yahoo股市" },
     { url: "https://news.google.com/rss/search?q=%E5%8F%B0%E8%82%A1+when:1d&hl=zh-TW&gl=TW&ceid=TW:zh-Hant", src: "" },
   ],
-  world: [
-    { url: GNT("WORLD"), src: "" },
-  ],
+  world: [{ url: GNT("WORLD"), src: "" }],
   tech: [
     { url: GNT("TECHNOLOGY"), src: "" },
     { url: GNS("artificial+intelligence+OR+AI+OR+semiconductor+OR+chip+when:1d"), src: "" },
@@ -31,13 +25,11 @@ const GROUPS = {
 
 function pick(block, tag) {
   const m = block.match(new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">", "i"));
-  if (!m) return "";
-  return m[1].replace(/<!\[CDATA\[/g, "").replace(/\]\]>/g, "").trim();
+  return m ? m[1].replace(/<!\[CDATA\[/g, "").replace(/\]\]>/g, "").trim() : "";
 }
 function decode(s) {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&#160;/g, " ")
-          .replace(/&amp;/g, "&");
+          .replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&#160;/g, " ").replace(/&amp;/g, "&");
 }
 function stripTags(s) { return s.replace(/<[^>]+>/g, "").trim(); }
 
@@ -49,15 +41,14 @@ async function fetchFeed(feed) {
     });
     if (!r.ok) return [];
     const xml = await r.text();
-    const chunks = xml.split(/<item[ >]/).slice(1);
     const out = [];
-    for (const block of chunks.slice(0, 40)) {
+    for (const block of xml.split(/<item[ >]/).slice(1).slice(0, 40)) {
       let title = decode(stripTags(pick(block, "title")));
       let link = stripTags(pick(block, "link"));
       if (!link) { const lm = block.match(/<link[^>]*href="([^"]+)"/i); if (lm) link = lm[1]; }
       const pub = pick(block, "pubDate") || pick(block, "published") || pick(block, "updated");
       let src = feed.src || decode(stripTags(pick(block, "source")));
-      if (!feed.src) {                       // Google News 標題常是「標題 - 來源」
+      if (!feed.src) {
         const dash = title.lastIndexOf(" - ");
         if (dash > 0) { if (!src) src = title.slice(dash + 3); title = title.slice(0, dash); }
       }
@@ -68,13 +59,12 @@ async function fetchFeed(feed) {
   } catch (e) { return []; }
 }
 
-export async function onRequestGet(context) {
-  const feedKey = new URL(context.request.url).searchParams.get("feed") || "tw";
+async function handleNews(request) {
+  const feedKey = new URL(request.url).searchParams.get("feed") || "tw";
   const feeds = GROUPS[feedKey] || GROUPS.tw;
   const lists = await Promise.all(feeds.map(fetchFeed));
-  const all = [].concat(...lists);
   const seen = new Set(), uniq = [];
-  for (const it of all) {
+  for (const it of [].concat(...lists)) {
     const k = it.title.replace(/\s+/g, "").slice(0, 40).toLowerCase();
     if (!k || seen.has(k)) continue;
     seen.add(k); uniq.push(it);
@@ -84,8 +74,7 @@ export async function onRequestGet(context) {
     title: it.title, link: it.link, src: it.src,
     time: it.ts ? new Date(it.ts).toISOString() : null,
   }));
-  const body = JSON.stringify({ feed: feedKey, generated_at: new Date().toISOString(), count: items.length, items });
-  return new Response(body, {
+  return new Response(JSON.stringify({ feed: feedKey, generated_at: new Date().toISOString(), count: items.length, items }), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "public, max-age=120",
@@ -93,3 +82,11 @@ export async function onRequestGet(context) {
     },
   });
 }
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/news") return handleNews(request);
+    return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
+  },
+};

@@ -107,31 +107,32 @@ def market_breadth(pool=BREADTH_POOL):
     if not symbols:
         return None
     df = eng._download(symbols, period="15mo")  # 52週高低需 ~252+ 日
-    W = 252
-    cnt = {"ma20_today": 0, "ma20_prev": 0, "ma50_today": 0, "ma50_prev": 0,
-           "nh_today": 0, "nh_prev": 0, "nl_today": 0, "nl_prev": 0, "n": 0}
+    W, D = 252, 21                              # 252日窗;近 D 個交易日(約一個月)
+    cnt = {"ma20_today": 0, "ma20_prev": 0, "ma50_today": 0, "ma50_prev": 0, "n": 0}
+    nh_series = [0] * D
+    nl_series = [0] * D
     for sym in symbols:
         try:
             sub = eng._sub(df, symbols, sym)
             closes = list(sub["Close"])
-            if len(closes) < 52:
+            m = len(closes)
+            if m < 52:
                 continue
             def ma(idx, w):
                 return sum(closes[idx + 1 - w:idx + 1]) / w
-            last = len(closes) - 1
+            last = m - 1
             prev = last - 1
             cnt["n"] += 1
             if closes[last] > ma(last, 20): cnt["ma20_today"] += 1
             if closes[prev] > ma(prev, 20): cnt["ma20_prev"] += 1
             if closes[last] > ma(last, 50): cnt["ma50_today"] += 1
             if closes[prev] > ma(prev, 50): cnt["ma50_prev"] += 1
-            if len(closes) >= W + 1:        # 52週(252日)新高/新低
-                wT = closes[-W:]
-                wP = closes[-W - 1:-1]
-                if closes[last] >= max(wT): cnt["nh_today"] += 1
-                if closes[last] <= min(wT): cnt["nl_today"] += 1
-                if closes[prev] >= max(wP): cnt["nh_prev"] += 1
-                if closes[prev] <= min(wP): cnt["nl_prev"] += 1
+            if m >= W + D:                  # 近 D 日各自的 52週新高/新低
+                for j in range(D):
+                    idx = m - D + j
+                    win = closes[idx - W + 1:idx + 1]
+                    if closes[idx] >= max(win): nh_series[j] += 1
+                    if closes[idx] <= min(win): nl_series[j] += 1
         except Exception:
             continue
     if cnt["n"] == 0:
@@ -144,8 +145,9 @@ def market_breadth(pool=BREADTH_POOL):
         "above20_prev": pct("ma20_prev"),
         "above50_pct": pct("ma50_today"),
         "above50_prev": pct("ma50_prev"),
-        "nh": cnt["nh_today"], "nh_prev": cnt["nh_prev"],
-        "nl": cnt["nl_today"], "nl_prev": cnt["nl_prev"],
+        "nh": nh_series[-1], "nh_prev": nh_series[-2],
+        "nl": nl_series[-1], "nl_prev": nl_series[-2],
+        "nh_series": nh_series, "nl_series": nl_series,
     }
 
 
@@ -182,10 +184,10 @@ def fetch_leverage():
         html = urllib.request.urlopen(
             urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=20
         ).read().decode("utf-8", "ignore")
-        mm = re.search(r"([A-Z][a-z]{2}-\d{2})[\s\S]{0,400}?([1-9],\d{3},\d{3})", html)
-        if not mm:
+        pairs = re.findall(r"([A-Z][a-z]{2}-\d{2})[\s\S]{0,400}?([1-9],\d{3},\d{3})", html)
+        if not pairs:
             return None
-        margin_t = float(mm.group(2).replace(",", "")) / 1e6   # 百萬美元 → 兆
+        pairs = pairs[:12][::-1]   # 最新在前→取近12月→反轉成時間序(舊→新)
         gu = "https://api.worldbank.org/v2/country/USA/indicator/NY.GDP.MKTP.CD?format=json&per_page=6"
         gd = json.loads(urllib.request.urlopen(
             urllib.request.Request(gu, headers={"User-Agent": "Mozilla/5.0"}), timeout=20
@@ -198,9 +200,12 @@ def fetch_leverage():
                 break
         if not gdp_t:
             return None
-        return {"margin_t": round(margin_t, 2), "margin_month": mm.group(1),
+        margins = [float(a.replace(",", "")) / 1e6 for _, a in pairs]
+        ratio_series = [round(mv / gdp_t * 100, 2) for mv in margins]
+        return {"margin_t": round(margins[-1], 2), "margin_month": pairs[-1][0],
                 "gdp_t": round(gdp_t, 2), "gdp_year": gdp_year,
-                "ratio_pct": round(margin_t / gdp_t * 100, 2)}
+                "ratio_pct": ratio_series[-1], "ratio_series": ratio_series,
+                "months": [mn for mn, _ in pairs]}
     except Exception:
         return None
 

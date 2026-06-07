@@ -67,9 +67,9 @@
   .idx-card .alert-tag{display:inline-block;font-size:10px;font-weight:800;padding:1px 7px;border-radius:5px;margin-top:5px}
   .idx-card.alert-red .alert-tag{background:var(--red);color:#fff}
   .idx-card.alert-green .alert-tag{background:var(--green);color:#fff}
-  .idx-card .spark-wrap{position:relative;display:block;margin:6px 0 3px}
-  .idx-card .spark{width:100%;height:48px;display:block}
-  .idx-card .spark-thr{position:absolute;right:2px;transform:translateY(-50%);font-size:9px;font-weight:700;
+  .spark-wrap{position:relative;display:block;margin:6px 0 3px}
+  .spark{width:100%;height:48px;display:block}
+  .spark-thr{position:absolute;right:2px;transform:translateY(-50%);font-size:9px;font-weight:700;
     color:var(--red);background:rgba(255,255,255,.78);padding:0 3px;border-radius:3px;line-height:1.35;pointer-events:none;white-space:nowrap}
   .news-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
   .news-tabs .ntab{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--ink)}
@@ -1020,7 +1020,8 @@ function breadthBox(b){
     '</tbody></table>'+
     '<div class="ex">廣度＝多少%的股站上均線。<b>&gt;50% 偏多頭、&lt;50% 偏空頭</b>。<b class="pos">&lt;30% 超賣</b>(可能反彈買點)、<b class="pos">&lt;8% 極度超賣🟢</b>(歷史底部訊號)、<b class="neg">&gt;85% 過熱🔴</b>(漲多回檔風險)。今日比昨日上升＝資金擴散。</div>'+
     (b.nh!=null
-      ? '<div class="ex" style="margin-top:8px">52週 <b class="pos">新高 '+b.nh+'</b> 檔 · <b class="neg">新低 '+b.nl+'</b> 檔 · 淨新高(NH−NL) <b class="'+(b.nh-b.nl>=0?"pos":"neg")+'">'+(b.nh-b.nl>=0?"+":"")+(b.nh-b.nl)+'</b>（昨 '+(b.nh_prev-b.nl_prev>=0?"+":"")+(b.nh_prev-b.nl_prev)+'）。<b class="neg">淨值轉負或新低激增＝內部轉弱</b>；指數創高但新高家數萎縮＝<b class="neg">背離警訊</b>。</div>'
+      ? '<div class="ex" style="margin-top:8px">52週 <b class="pos">新高 '+b.nh+'</b> 檔 · <b class="neg">新低 '+b.nl+'</b> 檔 · 淨新高(NH−NL) <b class="'+(b.nh-b.nl>=0?"pos":"neg")+'">'+(b.nh-b.nl>=0?"+":"")+(b.nh-b.nl)+'</b>（昨 '+(b.nh_prev-b.nl_prev>=0?"+":"")+(b.nh_prev-b.nl_prev)+'）。<b class="neg">淨值轉負/新低激增＝內部轉弱</b>；指數創高但新高萎縮＝背離警訊。</div>'
+        +(b.nh_series?'<div class="ex" style="margin-top:2px"><span style="color:var(--ink3)">近一個月 淨新高(NH−NL) 走勢（紅區=淨值轉負）：</span><div style="max-width:320px">'+sparkline(b.nh_series.map((v,i)=>v-(b.nl_series[i]||0)),"#1f6feb",{v:0,dir:"lo",lab:"0"})+'</div></div>':'')
       : '')+
     '</div>';
 }
@@ -1032,7 +1033,9 @@ function leverageBox(L){
   const cls = r>=4 ? 'neg' : (r>=3 ? '' : 'pos');
   return '<div class="guide" style="margin-top:12px">'+
     '<div class="gtitle">市場槓桿 · 融資餘額 / GDP</div>'+
-    '<div class="ex">融資餘額 <b>$'+L.margin_t+'兆</b>（FINRA '+esc(L.margin_month)+'）÷ 名目GDP <b>$'+L.gdp_t+'兆</b>（'+esc(L.gdp_year)+'）＝ <b class="'+cls+'">'+r+'%</b> · <b class="'+cls+'">'+tag+'</b>。<br>融資餘額占 GDP 比＝市場槓桿泡沫度：歷史常態約 2–3%，逼近或破 <b>4%</b> 多見於市場頂部（如 2021 末）。月更新、慢訊號，非擇時。</div></div>';
+    '<div class="ex">融資餘額 <b>$'+L.margin_t+'兆</b>（FINRA '+esc(L.margin_month)+'）÷ 名目GDP <b>$'+L.gdp_t+'兆</b>（'+esc(L.gdp_year)+'）＝ <b class="'+cls+'">'+r+'%</b> · <b class="'+cls+'">'+tag+'</b>。<br>融資餘額占 GDP 比＝市場槓桿泡沫度：歷史常態約 2–3%，逼近或破 <b>4%</b> 多見於市場頂部（如 2021 末）。月更新、慢訊號，非擇時。</div>'+
+    (L.ratio_series?'<div class="ex" style="margin-top:2px"><span style="color:var(--ink3)">近 '+L.ratio_series.length+' 個月 融資/GDP 走勢（紅區 &gt;4%=頂部區）：</span><div style="max-width:320px">'+sparkline(L.ratio_series,"#e8923a",{v:4,dir:"hi",lab:"4%"})+'</div></div>':'')+
+    '</div>';
 }
 function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);

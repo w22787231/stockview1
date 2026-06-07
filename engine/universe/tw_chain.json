@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-06",
+  "generated_at": "2026-06-07",
   "source": "人工維護 · 依 MoneyDJ 產業價值鏈分類邏輯（上中下游）整理；個股定位參考 CPO 研究報告與公開資料",
   "note": "本分頁為產業鏈結構分類，非漲跌行情。概念股標籤＝同一檔可橫跨多環節。代號可點進個股詳情（僅涵蓋已產生詳情的清單）。資料為人工整理，可能不完整或過時，非投資建議。",
   "chains": [
@@ -1170,6 +1170,408 @@
                 "Snapdragon AR"
               ],
               "note": "周邊 SoC 主晶片近壟斷（Snapdragon AR1/AR1+）· 🔴已定價。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "800vdc",
+      "name": "800VDC / SST 固態變壓器",
+      "desc": "NVIDIA 800V HVDC 機架供電架構(Rubin/Kyber)。主瓶頸=中壓 3.3kV+ SiC 元件;純 800VDC 多落 2027 試量、2028–2029 放量。價格基準 ~2026-06-05;非投資建議。",
+      "concepts": [
+        "800VDC",
+        "SST",
+        "固態變壓器",
+        "HVDC",
+        "AI電力",
+        "SiC",
+        "GaN",
+        "垂直供電",
+        "電源管理IC"
+      ],
+      "stages": [
+        {
+          "pos": "上游",
+          "name": "終端需求 / 800VDC 推手",
+          "desc": "推動 800V HVDC 機架架構的終端 GPU 龍頭。",
+          "concepts": [
+            "GPU",
+            "800VDC推手",
+            "AI機櫃"
+          ],
+          "members": [
+            {
+              "sym": "NVDA",
+              "name": "NVIDIA 輝達",
+              "tags": [
+                "GPU",
+                "800VDC推手"
+              ],
+              "note": "800V HVDC 架構推手;Rubin Ultra/Kyber 1MW 機櫃帶動全鏈,放量 2027。"
+            }
+          ]
+        },
+        {
+          "pos": "上游",
+          "name": "高壓 SiC 元件(主瓶頸 3.3kV+)",
+          "desc": "中壓 SST 輸入級的 3.3kV–10kV SiC MOSFET,最窄物理瓶頸:集中、難替代、難 ramp。",
+          "concepts": [
+            "SiC",
+            "高壓SiC",
+            "功率半導體",
+            "主瓶頸"
+          ],
+          "members": [
+            {
+              "sym": "WOLF",
+              "name": "Wolfspeed",
+              "tags": [
+                "SiC",
+                "純瓶頸",
+                "基板"
+              ],
+              "note": "10kV SiC 領跑、垂直整合基板。執行確定性 Low:2025/9 出破產、毛利 −27%、Renesas 持 38.7% 可拋。虧損,P/S~4x。"
+            },
+            {
+              "sym": "IFX.DE",
+              "name": "Infineon 英飛凌",
+              "tags": [
+                "SiC",
+                "GaN",
+                "安全執行者"
+              ],
+              "note": "瓶頸層最強執行者;NVIDIA MGX 生態+DG Matrix 供 SiC。Fwd PE~35x。執行 High→Med-High(H1 FCF 為負)。同時跨低壓供電。"
+            },
+            {
+              "sym": "ON",
+              "name": "onsemi 安森美",
+              "tags": [
+                "SiC",
+                "DrMOS",
+                "安全執行者"
+              ],
+              "note": "AI 電源~$500M FY26(8%)已 material。Fwd PE~38x。執行 Med→Med-Low(共識 PT $92<現價、CFO 拋售)。"
+            },
+            {
+              "sym": "STM",
+              "name": "STMicroelectronics 意法",
+              "tags": [
+                "SiC",
+                "安全執行者"
+              ],
+              "note": "NVIDIA 800V 參考設計全鏈(800→50→12→6V);資料中心 $1B FY26。Fwd PE~56–63x/FY27~32x。執行 Med→Med-Low(Q1 EPS miss 28%)。"
+            },
+            {
+              "sym": "6503.T",
+              "name": "三菱電機",
+              "tags": [
+                "SiC",
+                "中壓模組"
+              ],
+              "note": "Fwd PE~25x。題材弱:不在 NVIDIA 14 家矽供應商名單;MEPPI 800VDC 是 UPS 部門非 SiC 晶片;Trench SiC 樣品給 EV。"
+            }
+          ]
+        },
+        {
+          "pos": "上游",
+          "name": "SiC 基板 / 磊晶",
+          "desc": "高壓大尺寸低缺陷 SiC 基板/磊晶,gating 高壓元件。",
+          "concepts": [
+            "SiC基板",
+            "磊晶",
+            "10kV"
+          ],
+          "members": [
+            {
+              "sym": "COHR",
+              "name": "Coherent",
+              "tags": [
+                "SiC基板",
+                "光通訊"
+              ],
+              "note": "本業是光通訊收發器(~75%營收),800VDC 連結弱:SiC 基板埋在工業段且 YoY−16%,10kV 磊晶僅 capability 公告、無 design win。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "SST 整機 / 電源模組 / 系統整合",
+          "desc": "固態變壓器整機與整櫃供電系統;認證(UL/NEC)為時程閘門。",
+          "concepts": [
+            "SST",
+            "電源模組",
+            "系統整合",
+            "HVDC"
+          ],
+          "members": [
+            {
+              "sym": "VRT",
+              "name": "Vertiv",
+              "tags": [
+                "SST",
+                "OEM",
+                "安全執行者"
+              ],
+              "note": "唯一全棧整合 OEM(匯流排+液冷+DC-DC+備電)。Fwd PE~46x。執行 High。800VDC H2'26 商業化→2027 放量。"
+            },
+            {
+              "sym": "ETN",
+              "name": "Eaton",
+              "tags": [
+                "SST",
+                "grid-to-chip",
+                "安全執行者"
+              ],
+              "note": "grid-to-chip 單一供應商;Boyd 液冷 2026 即 $1.7B。Fwd PE~29.7x。SST 訂單 H2'26→material 2028–2030。"
+            },
+            {
+              "sym": "2308.TW",
+              "name": "台達電 Delta",
+              "tags": [
+                "電源模組",
+                "純供應商",
+                "SST"
+              ],
+              "note": "AI 電源龍頭;已做全球首個商業 SST(Chindata 1MW)。Fwd PE~59–60x。±400V H2'26 小批量→2027 放量。執行 High→Med-High。"
+            },
+            {
+              "sym": "SU.PA",
+              "name": "Schneider Electric",
+              "tags": [
+                "配電",
+                "安全執行者"
+              ],
+              "note": "端到端整合,但 800VDC 最慢:執行長稱首案 2027 H2、2030 前 P&L 影響極有限。Fwd PE~26–28x。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "DC 配電 / 固態斷路器 / 母線 / 連接器",
+          "desc": "800VDC 配電保護;直流斷路器(SSCB)技術難,標準(UL857)剛起步。",
+          "concepts": [
+            "SSCB",
+            "母線",
+            "連接器",
+            "DC保護"
+          ],
+          "members": [
+            {
+              "sym": "ABBN.SW",
+              "name": "ABB",
+              "tags": [
+                "SSCB",
+                "安全執行者"
+              ],
+              "note": "全球首款 IEC 認證固態直流斷路器 SACE Infinitus。Fwd PE SWX~27.5x/ADR~33x。執行 High→Med-High(Q1 含一次性地產利益)。material 2027–2028。"
+            },
+            {
+              "sym": "APH",
+              "name": "Amphenol",
+              "tags": [
+                "連接器",
+                "母線",
+                "二階"
+              ],
+              "note": "GB200 NVLink 已 design win;但未列 NVIDIA 800VDC 官方夥伴,屬二階。Fwd PE~28x。執行 High。800VDC 連接器 2027–2028。"
+            },
+            {
+              "sym": "NVT",
+              "name": "nVent Electric",
+              "tags": [
+                "母線",
+                "液冷",
+                "二階"
+              ],
+              "note": "ERIFLEX 6300A 母線可轉 DC,但 800VDC 無路線圖、落後 Vertiv。Fwd PE~33.7x。執行 High(本業液冷已放量)。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "機內低壓供電(DC-DC / VPD / PMIC)",
+          "desc": "800→48→12→<1V 的供電 IC 與垂直供電(VPD);非物理瓶頸,拼設計+散熱+插槽份額。",
+          "concepts": [
+            "DC-DC",
+            "垂直供電",
+            "VPD",
+            "電源管理IC",
+            "DrMOS"
+          ],
+          "members": [
+            {
+              "sym": "ADI",
+              "name": "Analog Devices",
+              "tags": [
+                "VPD",
+                "PMIC"
+              ],
+              "note": "2026/5 砸 $15 億併 Empower(IVR/垂直供電),FY2027 起貢獻;DC 業務 FY25+50%。Fwd PE~34.8x。執行 High。"
+            },
+            {
+              "sym": "6723.T",
+              "name": "Renesas 瑞薩",
+              "tags": [
+                "GaN",
+                "DC-DC",
+                "多相控制器"
+              ],
+              "note": "本層最便宜 Fwd PE~21x。48→400→800V GaN LLC DCX ~98%效率+REXFET+多相控制器,整套 BOM。放量 2027。"
+            },
+            {
+              "sym": "MPWR",
+              "name": "Monolithic Power",
+              "tags": [
+                "DC-DC",
+                "VPD",
+                "龍頭"
+              ],
+              "note": "Vera Rubin 估~70% 份額(賣方估、未證實)。Fwd PE~62x。48V 已放量;800V/SiC end-2027→2028。執行 High→Med-High。"
+            },
+            {
+              "sym": "VICR",
+              "name": "Vicor",
+              "tags": [
+                "垂直供電",
+                "VPD",
+                "早期"
+              ],
+              "note": "Fwd PE~90x/FY27~49x。執行 Med→Low-Med:執行長自罵 800→6V 架構「設計失當」;ITC 鴻海權利金懸案、內部人拋售。Gen5 VPD H2'26→2027。"
+            },
+            {
+              "sym": "TXN",
+              "name": "Texas Instruments",
+              "tags": [
+                "PMIC",
+                "寬譜"
+              ],
+              "note": "12V→800V 全線;DC 營收+90%YoY 但占比小、多角化稀釋。Fwd PE~35x。執行 High。"
+            },
+            {
+              "sym": "POWI",
+              "name": "Power Integrations",
+              "tags": [
+                "GaN",
+                "DC-DC",
+                "二階"
+              ],
+              "note": "輔助 PSU 樣品 2026;主功率 GaN 2028+。Fwd PE~64x。只有 reference design、無量產 PO。執行 Med→Med-Low。"
+            },
+            {
+              "sym": "NVTS",
+              "name": "Navitas",
+              "tags": [
+                "GaN",
+                "SiC",
+                "早期顛覆"
+              ],
+              "note": "GaN/SiC 純題材,虧損 P/S~130–146x。無具名 design win;SST late 2027/2028。共識均價~$14 vs 現價$25(−45%)。執行 Low。"
+            },
+            {
+              "sym": "AOSL",
+              "name": "Alpha & Omega Semi",
+              "tags": [
+                "功率元件",
+                "早期"
+              ],
+              "note": "虧損 P/S~1.86x。僅 sampling,管理層稱 800V「2027 才開始浮現」;單一客戶佔54%、NVIDIA 未確認 design win。執行 Med→Med-Low。"
+            },
+            {
+              "sym": "8081.TW",
+              "name": "致新",
+              "tags": [
+                "PMIC",
+                "台系",
+                "電源管理IC"
+              ],
+              "note": "顯示器 PMIC 穩、切 server。AI 營收剛破 5%、估值便宜(trailing~12.6x)。早期/便宜 optionality。"
+            },
+            {
+              "sym": "6719.TW",
+              "name": "力智 uPI",
+              "tags": [
+                "多相控制器",
+                "DrMOS",
+                "台系"
+              ],
+              "note": "多相控制器+DPWM,台系受惠最直接。AI 營收破 5%、目標雙位數。TTM EPS 7.18。"
+            },
+            {
+              "sym": "6138.TWO",
+              "name": "茂達 Anpec",
+              "tags": [
+                "PMIC",
+                "DrMOS",
+                "台系"
+              ],
+              "note": "PMIC/DrMOS。Q1'26 EPS 3.68 創同期次高(trailing PE~26x)。AI 早期。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "被動 / 磁性 / 高壓電容",
+          "desc": "SST/PSU 用高頻磁性、DC-Link 高壓薄膜電容;多角化小切片。",
+          "concepts": [
+            "被動元件",
+            "薄膜電容",
+            "磁性",
+            "DC-Link"
+          ],
+          "members": [
+            {
+              "sym": "6762.T",
+              "name": "TDK",
+              "tags": [
+                "被動",
+                "磁性",
+                "薄膜電容"
+              ],
+              "note": "CeraLink 900V 電容可用於 SST;但本業 HDD 磁頭+被動,800VDC 切片小、被動『10倍』目標終點 FY2031。Fwd PE~34.7x。"
+            },
+            {
+              "sym": "2327.TW",
+              "name": "國巨 Yageo",
+              "tags": [
+                "被動元件",
+                "薄膜電容"
+              ],
+              "note": "KEMET DC-Link 高壓薄膜電容受益,但屬三層間接、無公開 800VDC 訂單。Fwd PE~47.8x(或 39.4x)。"
+            }
+          ]
+        },
+        {
+          "pos": "下游",
+          "name": "AC 前端 / HVDC 電源櫃 / PSU",
+          "desc": "415VAC→800VDC 整流櫃/PSU/Power Shelf;繞過中壓 SiC 瓶頸的近端路徑,放量最快。台系主場。",
+          "concepts": [
+            "PSU",
+            "電源櫃",
+            "HVDC",
+            "AC前端",
+            "BBU"
+          ],
+          "members": [
+            {
+              "sym": "2301.TW",
+              "name": "光寶科 Lite-On",
+              "tags": [
+                "PSU",
+                "電源櫃",
+                "BBU"
+              ],
+              "note": "800VDC 機櫃已切北美 CSP;樣機 Q3 測試→Q4 小量→放量 2027。2026『AI 元年』、AI 營收目標 30%、雲端占比破 5 成。trailing PE~26.4x。執行 Med-High。"
+            },
+            {
+              "sym": "6282.TW",
+              "name": "康舒 AcBel",
+              "tags": [
+                "HVDC",
+                "電源櫃",
+                "PSU"
+              ],
+              "note": "1MW HVDC 機櫃對標 RUBY 等級,支援 ±400V/800V,整合 100kW Power Shelf+BBU。PE 待確認。"
             }
           ]
         }

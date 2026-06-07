@@ -257,8 +257,11 @@ def fetch_tw_margin_ratio():
             return None
         mv = 0.0
         for row in tables[1]["data"]:
+            code = row[0].strip()
+            if code.startswith("00"):       # 排除 ETF(對齊標準:分子不含 ETF)
+                continue
             lots = _safe(row[6].replace(",", "")) if len(row) > 6 else None
-            p = price.get(row[0].strip())
+            p = price.get(code)
             if lots and p:
                 mv += lots * 1000 * p
         if mv <= 0:
@@ -280,8 +283,8 @@ def fetch_tw_margin_ratio():
         dates, series = dates[-60:], series[-60:]
         diff = round(series[-1] - series[-2], 2) if len(series) >= 2 else None
         return {"sym": "TWMARGIN", "label": "台股融資維持率",
-                "note": "大盤·斷頭壓力(上市)", "unit": "pt",
-                "read": "<130% 斷頭警戒(常見底部);越低代表槓桿越緊",
+                "note": "上市·不含ETF·斷頭壓力", "unit": "pt",
+                "read": "<130% 斷頭警戒(常見底部);上市口徑、分子不含ETF,絕對值略高於含上櫃版",
                 "level": ratio, "diff": diff, "spark": series, "dates": dates}
     except Exception:
         return None

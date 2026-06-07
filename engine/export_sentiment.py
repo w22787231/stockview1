@@ -45,7 +45,7 @@ def _round(x, n=2):
 
 def fetch_levels():
     syms = [x["sym"] for x in LEVELS]
-    df = yf.download(syms, period="5d", interval="1d",
+    df = yf.download(syms, period="4mo", interval="1d",
                      group_by="ticker", progress=False, auto_adjust=False)
     out, failed = [], []
     for it in LEVELS:
@@ -66,6 +66,8 @@ def fetch_levels():
                 row["diff_pct"] = _round((last/prev - 1)*100, 2)   # 價格類用%
             else:
                 row["diff"] = _round(last - prev, 2)               # 指數類用點差
+            closes = [float(x) for x in sub["Close"].tolist() if x == x]
+            row["spark"] = [round(v, 2) for v in closes[-60:]]     # ~60日迷你走勢
             out.append(row)
         except Exception:
             failed.append(s)
@@ -93,6 +95,7 @@ def fetch_cor1m():
             "note": "成分股齊漲齊跌預期", "unit": "pt",
             "read": f"越低=個股各走各、表面平靜底層脆弱(2006以來第{pct:.0f}百分位)",
             "level": _round(last, 2), "diff": _round(last - prev, 2),
+            "spark": [round(v, 2) for v in closes[-60:]],
         }
     except Exception:
         return None
@@ -150,9 +153,13 @@ def fetch_fear_greed():
         prev = _safe(fg.get("previous_close"))
         if score is None:
             return None
+        hist = data.get("fear_and_greed_historical", {}).get("data", [])
+        spark = [round(_safe(p.get("y")), 0) for p in hist[-60:]
+                 if _safe(p.get("y")) is not None]
         return {"score": _round(score, 0),
                 "prev": _round(prev, 0) if prev is not None else None,
-                "rating": fg.get("rating", "")}
+                "rating": fg.get("rating", ""),
+                "spark": spark}
     except Exception:
         return None
 

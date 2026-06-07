@@ -34,6 +34,44 @@ function decode(s) {
 }
 function stripTags(s) { return s.replace(/<[^>]+>/g, "").trim(); }
 
+function hasCJK(s) { return /[一-鿿]/.test(s || ""); }
+
+// 免金鑰 Google 翻譯:多則英文標題一次翻成繁中(換行分隔批次)。
+// 對齊 engine/export_stock.py 的 translate_zh:被擋/逾時/分行數不符→回 null(顯原文)。
+async function translateBatch(titles) {
+  if (!titles.length) return null;
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const q = encodeURIComponent(titles.join("\n"));
+    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-TW&dt=t&q=" + q;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, cf: { cacheTtl: 600 }, signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!r.ok) return null;
+    const data = await r.json();
+    const full = (data[0] || []).filter(seg => seg && seg[0]).map(seg => seg[0]).join("");
+    const lines = full.split("\n");
+    return lines.length === titles.length ? lines : null;   // 數量不符→放棄,避免錯位
+  } catch (e) { clearTimeout(tid); return null; }
+}
+
+// 對 items 的英文標題補 title_zh(分塊 20 則/批,各批獨立容錯;中文標題自動跳過)。
+async function attachZh(items) {
+  const idxs = items.map((it, i) => (hasCJK(it.title) ? -1 : i)).filter(i => i >= 0);
+  if (!idxs.length) return;
+  const CHUNK = 20, batches = [];
+  for (let i = 0; i < idxs.length; i += CHUNK) batches.push(idxs.slice(i, i + CHUNK));
+  const results = await Promise.all(batches.map(b => translateBatch(b.map(i => items[i].title))));
+  batches.forEach((b, bi) => {
+    const tr = results[bi];
+    if (!tr) return;
+    b.forEach((idx, j) => {
+      const zh = (tr[j] || "").trim();
+      if (zh && zh !== items[idx].title) items[idx].title_zh = zh;
+    });
+  });
+}
+
 async function fetchFeed(feed) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 6000);   // 單源 6 秒逾時,不拖累整體
@@ -83,6 +121,7 @@ async function handleNews(request) {
     title: it.title, link: it.link, src: it.src,
     time: it.ts ? new Date(it.ts).toISOString() : null,
   }));
+  await attachZh(items);   // 英文標題補繁中 title_zh(快取前做一次,120 秒內共用)
   const resp = new Response(JSON.stringify({ feed: feedKey, generated_at: new Date().toISOString(), count: items.length, items }), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",

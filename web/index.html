@@ -82,6 +82,7 @@
   .news-src{font-weight:700;color:var(--blue)}
   .news-time{color:var(--ink3)}
   .news-title{font-size:14px;line-height:1.5;color:var(--ink)}
+  .news-orig{font-size:12px;line-height:1.4;color:var(--ink3);margin-top:2px}
   .idx-card .src-link{display:inline-block;margin-top:5px;font-size:10.5px;color:var(--blue);text-decoration:none;font-weight:600}
   .idx-card .src-link:hover{text-decoration:underline}
   /* 持股檢查 */
@@ -413,7 +414,7 @@
     <button class="mtab" data-view="chain">產業鏈</button>
     <button class="mtab" data-view="etf">ETF持股異動</button>
     <button class="mtab" data-view="holdings">持股檢查</button>
-    <button class="mtab" data-view="news">即時快訊</button>
+    <button class="mtab" data-view="news">新聞</button>
   </nav>
 
   <div class="toolbar">
@@ -1788,7 +1789,7 @@ let TREND_SUB = "trend";  // 趨勢分頁群內目前子頁："trend" 或 "cross
 let VIEW = "trend";
 function switchView(v){
   VIEW = v;
-  if(window._newsTimer){ clearInterval(window._newsTimer); window._newsTimer=null; }  // 離開即時快訊→停止輪詢
+  if(window._newsTimer){ clearInterval(window._newsTimer); window._newsTimer=null; }  // 離開新聞→停止輪詢
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   const isPoolView = (v==="trend"||v==="cross");  // 交叉分頁與趨勢共用池分頁列
   $(".toolbar").style.display = isPoolView ? "flex" : "none";
@@ -1828,13 +1829,15 @@ async function fetchNews(){
     const d=await r.json();
     if(feedAtCall!==NEWS_FEED) return;   // 期間已切頁→丟棄這次結果
     if(!d.items||!d.items.length){ box.innerHTML='<div class="legend">暫無新聞，稍後再試。</div>'; return; }
-    box.innerHTML=d.items.map(it=>
-      '<a class="news-row" href="'+esc(it.link)+'" target="_blank" rel="noopener">'+
+    box.innerHTML=d.items.map(it=>{
+      const main = it.title_zh || it.title;                       // 有繁中譯文→當主標,否則原文
+      const orig = it.title_zh ? '<div class="news-orig">'+esc(it.title)+'</div>' : "";  // 英文原文小字
+      return '<a class="news-row" href="'+esc(it.link)+'" target="_blank" rel="noopener">'+
         '<div class="news-meta"><span class="news-src">'+esc(it.src||"新聞")+'</span>'+
         '<span class="news-time">'+esc(fmtAgo(it.time))+'</span></div>'+
-        '<div class="news-title">'+esc(it.title)+'</div>'+
-      '</a>'
-    ).join("");
+        '<div class="news-title">'+esc(main)+'</div>'+ orig +
+      '</a>';
+    }).join("");
     const upd=document.getElementById("newsUpd");
     if(upd) upd.innerHTML='更新 '+esc(fmtTime(d.generated_at))+' · 每分鐘自動刷新';
   }catch(e){
@@ -1851,11 +1854,11 @@ function setNewsFeed(k){
 function loadNewsFeed(){
   for(const k in SORT_STATE) delete SORT_STATE[k];
   NEWS_FEED="tw";
-  $("#meta").innerHTML='<div><b>即時快訊</b></div><div id="newsUpd">載入中…</div>';
+  $("#meta").innerHTML='<div><b>新聞</b></div><div id="newsUpd">載入中…</div>';
   $("#poolNote").innerHTML="";
   const tabs=NEWS_TABS.map(t=>'<button class="ntab'+(t.k==="tw"?" on":"")+'" data-k="'+t.k+'">'+t.lab+'</button>').join("");
   $("#content").innerHTML=
-    '<section><div class="sec-head"><h2>即時快訊</h2><span class="hint">每分鐘自動刷新 · 點標題開原文</span></div>'+
+    '<section><div class="sec-head"><h2>新聞</h2><span class="hint">每分鐘自動刷新 · 點標題開原文 · 英文新聞附繁中翻譯</span></div>'+
       '<div id="newsTabs" class="news-tabs">'+tabs+'</div>'+
       '<div id="newsList" class="news-list"><div class="loading-screen">載入新聞 …</div></div>'+
       '<div class="legend">台股中文：鉅亨/Yahoo股市；國際/科技/財經(英文)：CNBC、Yahoo Finance。RSS 即時彙整，僅連結不轉載，非投資建議。</div>'+

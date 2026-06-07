@@ -180,28 +180,22 @@ def fetch_fear_greed():
 def _fetch_gdp_trillions():
     """當期名目 GDP(兆美元)。優先 FRED 季度年化(GDP 系列,十億);失敗退 World Bank 年度。
     回傳 (gdp_兆, 來源標籤)。FRED 對齊 GuruFocus 等標準口徑(~4.1%);World Bank 年度偏舊會墊高比率。"""
-    try:
-        u = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDP"
-        d = urllib.request.urlopen(
-            urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}),
-            timeout=20).read().decode("utf-8", "ignore")
-        rows = [r for r in csv.reader(io.StringIO(d)) if r]
-        vals = [r for r in rows[1:] if r and r[-1] not in ("", ".")]
-        if vals:
-            last = vals[-1]
-            return float(last[-1]) / 1000.0, "FRED " + last[0][:7]   # 十億→兆,季度年化
-    except Exception:
-        pass
-    try:
-        gu = "https://api.worldbank.org/v2/country/USA/indicator/NY.GDP.MKTP.CD?format=json&per_page=6"
-        gd = json.loads(urllib.request.urlopen(
-            urllib.request.Request(gu, headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read().decode("utf-8", "ignore"))
-        for r in gd[1]:
-            if r.get("value"):
-                return r["value"] / 1e12, "World Bank " + r["date"] + "(年度)"
-    except Exception:
-        pass
-    return None, ""
+    for _ in range(3):                          # FRED 從 CI 偶爾連不到 → 重試
+        try:
+            d = urllib.request.urlopen(
+                urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDP",
+                    headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}),
+                timeout=30).read().decode("utf-8", "ignore")
+            rows = [r for r in csv.reader(io.StringIO(d)) if r]
+            vals = [r for r in rows[1:] if r and r[-1] not in ("", ".")]
+            if vals:
+                last = vals[-1]
+                return float(last[-1]) / 1000.0, "FRED " + last[0][:7]   # 十億→兆,季度年化
+        except Exception:
+            continue
+    # 後備:近期名目GDP估值(FRED 2026Q1 ~31.8兆;每季手動更新一次)。
+    # 不用 World Bank 年度(只到2024、$28.75兆,會把比率墊高到~4.5%)。
+    return 31.8, "估值~2026Q1"
 
 
 def fetch_leverage():

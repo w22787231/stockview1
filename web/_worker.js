@@ -36,32 +36,35 @@ function stripTags(s) { return s.replace(/<[^>]+>/g, "").trim(); }
 
 function hasCJK(s) { return /[一-鿿]/.test(s || ""); }
 
-// 免金鑰 Google 翻譯:多則英文標題一次翻成繁中(換行分隔批次)。
-// 對齊 engine/export_stock.py 的 translate_zh:被擋/逾時/分行數不符→回 null(顯原文)。
-async function translateBatch(titles) {
-  if (!titles.length) return null;
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), 6000);
+// Cloudflare Workers AI(env.AI)把多則英文標題翻成台灣繁中。
+// 用 LLM(非 m2m100,因 m2m100 只出簡體);要求回 JSON 陣列以逐則對位。
+// 沒綁 AI / 解析失敗 / 長度不符 → 回 null(前端顯英文原文)。
+const TRANSLATE_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+async function translateBatch(titles, env) {
+  if (!titles.length || !env || !env.AI) return null;
   try {
-    const q = encodeURIComponent(titles.join("\n"));
-    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-TW&dt=t&q=" + q;
-    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, cf: { cacheTtl: 600 }, signal: ctrl.signal });
-    clearTimeout(tid);
-    if (!r.ok) return null;
-    const data = await r.json();
-    const full = (data[0] || []).filter(seg => seg && seg[0]).map(seg => seg[0]).join("");
-    const lines = full.split("\n");
-    return lines.length === titles.length ? lines : null;   // 數量不符→放棄,避免錯位
-  } catch (e) { clearTimeout(tid); return null; }
+    const sys = "你是專業新聞編譯。把使用者提供的英文新聞標題翻成台灣慣用的繁體中文(不要簡體)。"
+      + "只輸出一個 JSON 字串陣列,長度與順序與輸入完全相同,不要任何說明、編號或 markdown。";
+    const r = await env.AI.run(TRANSLATE_MODEL, {
+      messages: [{ role: "system", content: sys }, { role: "user", content: JSON.stringify(titles) }],
+      max_tokens: 1536, temperature: 0.1,
+    });
+    let txt = ((r && r.response) || "").trim();
+    const s = txt.indexOf("["), e = txt.lastIndexOf("]");
+    if (s < 0 || e <= s) return null;
+    const arr = JSON.parse(txt.slice(s, e + 1));
+    return (Array.isArray(arr) && arr.length === titles.length) ? arr.map(x => String(x)) : null;
+  } catch (e) { return null; }
 }
 
-// 對 items 的英文標題補 title_zh(分塊 20 則/批,各批獨立容錯;中文標題自動跳過)。
-async function attachZh(items) {
+// 對 items 的英文標題補 title_zh(分塊 10 則/批,各批獨立容錯;中文標題自動跳過)。
+async function attachZh(items, env) {
+  if (!env || !env.AI) return;
   const idxs = items.map((it, i) => (hasCJK(it.title) ? -1 : i)).filter(i => i >= 0);
   if (!idxs.length) return;
-  const CHUNK = 20, batches = [];
+  const CHUNK = 10, batches = [];
   for (let i = 0; i < idxs.length; i += CHUNK) batches.push(idxs.slice(i, i + CHUNK));
-  const results = await Promise.all(batches.map(b => translateBatch(b.map(i => items[i].title))));
+  const results = await Promise.all(batches.map(b => translateBatch(b.map(i => items[i].title), env)));
   batches.forEach((b, bi) => {
     const tr = results[bi];
     if (!tr) return;
@@ -102,7 +105,7 @@ async function fetchFeed(feed) {
   } catch (e) { return []; }
 }
 
-async function handleNews(request) {
+async function handleNews(request, env) {
   const feedKey = new URL(request.url).searchParams.get("feed") || "tw";
   const cache = caches.default;
   const cacheKey = new Request("https://news.cache/api/news?feed=" + feedKey);  // 穩定 key,忽略 &t=
@@ -121,7 +124,7 @@ async function handleNews(request) {
     title: it.title, link: it.link, src: it.src,
     time: it.ts ? new Date(it.ts).toISOString() : null,
   }));
-  await attachZh(items);   // 英文標題補繁中 title_zh(快取前做一次,120 秒內共用)
+  await attachZh(items, env);   // 英文標題補繁中 title_zh(快取前做一次,120 秒內共用)
   const resp = new Response(JSON.stringify({ feed: feedKey, generated_at: new Date().toISOString(), count: items.length, items }), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -183,7 +186,7 @@ async function handleQuotes(request) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/news") return handleNews(request);
+    if (url.pathname === "/api/news") return handleNews(request, env);
     if (url.pathname === "/api/quotes") return handleQuotes(request);
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },

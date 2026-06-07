@@ -159,8 +159,15 @@ async function fetchQuote(sym, withKline) {
       wkHigh: m.fiftyTwoWeekHigh, wkLow: m.fiftyTwoWeekLow, vol: m.regularMarketVolume,
     };
     if (withKline) {
-      const c = res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close;
-      q.closes = (c || []).filter(x => x != null).map(x => Math.round(x * 100) / 100);
+      const qd = res.indicators && res.indicators.quote && res.indicators.quote[0];
+      const c = (qd && qd.close) || [], v = (qd && qd.volume) || [];
+      const cl = [], vl = [];
+      for (let i = 0; i < c.length; i++) {
+        if (c[i] == null) continue;                       // close 為 null 整列丟棄,保持 closes/volumes 對位
+        cl.push(Math.round(c[i] * 100) / 100);
+        vl.push(v[i] == null ? 0 : v[i]);
+      }
+      q.closes = cl; q.volumes = vl;
     }
     return q;
   } catch (e) { clearTimeout(tid); return null; }

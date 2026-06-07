@@ -50,6 +50,9 @@
   .mtab.active{color:var(--blue)}
   .mtab.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2.5px;
     border-radius:2px;background:var(--blue)}
+  .mtab{touch-action:pan-y;user-select:none;-webkit-user-select:none}
+  .mtab.press{background:var(--panel2);border-radius:8px}
+  .mtab.dragging{opacity:.55;background:var(--panel2);border-radius:8px;box-shadow:var(--shadow);cursor:grabbing}
 
   /* 指數總覽卡 */
   .idx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:4px}
@@ -90,6 +93,12 @@
     font-family:var(--mono);font-size:13px;line-height:1.7;resize:vertical;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
   .hold-input textarea:focus{outline:none;border-color:var(--blue)}
   .hold-btns{display:flex;gap:10px;align-items:center;margin:9px 0 6px;flex-wrap:wrap}
+  .hold-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 14px}
+  #holdInput{font-family:var(--mono);font-size:13.5px;padding:8px 13px;border-radius:9px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);box-shadow:var(--shadow);min-width:230px;flex:0 1 280px}
+  #holdInput:focus{outline:none;border-color:var(--blue)}
+  .hold-del{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:13px;padding:2px 7px;border-radius:6px;transition:.12s}
+  .hold-del:hover{background:#fdf0f3;color:var(--red)}
   .hl-tag{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:5px;white-space:nowrap;display:inline-block;margin:1px 0}
   .hl-tag.strong{background:#e6f6ec;color:var(--green)} .hl-tag.warn{background:#fdf0f3;color:var(--red)} .hl-tag.mid{background:#fff5db;color:var(--amber)}
   @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(225,29,72,.0)}50%{box-shadow:0 0 0 4px rgba(225,29,72,.28),0 0 14px rgba(225,29,72,.4)}}
@@ -407,15 +416,7 @@
     </div>
   </header>
 
-  <nav class="mainnav" id="mainnav">
-    <button class="mtab" data-view="macro">總體市場</button>
-    <button class="mtab active" data-view="trend">趨勢動能榜</button>
-    <button class="mtab" data-view="cross">交叉訊號</button>
-    <button class="mtab" data-view="chain">產業鏈</button>
-    <button class="mtab" data-view="etf">ETF持股異動</button>
-    <button class="mtab" data-view="holdings">持股檢查</button>
-    <button class="mtab" data-view="news">新聞</button>
-  </nav>
+  <nav class="mainnav" id="mainnav"><!-- 主分頁由 renderNav() 動態產生(可拖曳重排) --></nav>
 
   <div class="toolbar">
     <div class="tabs" id="tabs"></div>
@@ -1801,7 +1802,81 @@ function switchView(v){
   else if(v==="holdings") loadHoldings();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
-document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
+// ── 主分頁:動態渲染 + 可拖曳重排(順序存 localStorage navOrder)──
+const NAV=[
+  {view:"macro",   label:"總體市場"},
+  {view:"trend",   label:"趨勢動能榜"},
+  {view:"cross",   label:"交叉訊號"},
+  {view:"chain",   label:"產業鏈"},
+  {view:"etf",     label:"ETF持股異動"},
+  {view:"holdings",label:"持股分析"},
+  {view:"news",    label:"新聞"},
+];
+function navOrder(){
+  let saved=[];
+  try{ saved=JSON.parse(localStorage.getItem("navOrder")||"[]")||[]; }catch(e){}
+  const known=new Set(NAV.map(n=>n.view));
+  const ordered=saved.filter(v=>known.has(v));               // 丟掉已不存在的 view
+  NAV.forEach(n=>{ if(!ordered.includes(n.view)) ordered.push(n.view); });  // 新 view 補到尾端
+  return ordered;
+}
+function saveNavOrder(order){ try{ localStorage.setItem("navOrder",JSON.stringify(order)); }catch(e){} }
+function renderNav(){
+  const nav=$("#mainnav"); if(!nav) return;
+  const byView={}; NAV.forEach(n=>byView[n.view]=n);
+  nav.innerHTML=navOrder().map(v=>{
+    const n=byView[v]; if(!n) return "";
+    return '<button class="mtab'+(v===VIEW?" active":"")+'" data-view="'+v+'">'+esc(n.label)+'</button>';
+  }).join("");
+  nav.querySelectorAll(".mtab").forEach(bindTab);
+}
+// 找指標 x 應插入到哪個 tab 之前(回 null = 放到最後);忽略正在拖曳的那顆。
+function tabAfterPoint(x, dragBtn){
+  const others=Array.from($("#mainnav").querySelectorAll(".mtab")).filter(t=>t!==dragBtn);
+  for(const t of others){ const r=t.getBoundingClientRect(); if(x < r.left + r.width/2) return t; }
+  return null;
+}
+// 點擊=切頁;拖曳(滑鼠移動>6px / 觸控長按後移動)=重排。
+function bindTab(btn){
+  let sx=0,sy=0,armed=false,dragging=false,moved=false,lp=null;
+  const clearLP=()=>{ if(lp){clearTimeout(lp); lp=null;} };
+  btn.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse" && e.button!==0) return;
+    sx=e.clientX; sy=e.clientY; moved=false; dragging=false; btn._on=true;
+    armed = (e.pointerType==="mouse");                        // 滑鼠立即可拖;觸控需長按
+    if(!armed){ lp=setTimeout(()=>{ armed=true; btn.classList.add("press"); },300); }
+  });
+  btn.addEventListener("pointermove",e=>{
+    if(!btn._on) return;
+    const dist=Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy);
+    if(!armed){ if(dist>8){ clearLP(); btn._on=false; } return; }  // 觸控未武裝就滑=捲動意圖,交還原生
+    if(!dragging && dist>6){
+      dragging=true; moved=true;
+      try{ btn.setPointerCapture(e.pointerId); }catch(_){}
+      btn.classList.add("dragging");
+    }
+    if(dragging){
+      e.preventDefault();
+      const nav=$("#mainnav"), after=tabAfterPoint(e.clientX, btn);
+      if(after==null){ if(btn.nextSibling) nav.appendChild(btn); }
+      else if(after!==btn && after!==btn.nextSibling){ nav.insertBefore(btn, after); }
+    }
+  });
+  const end=e=>{
+    if(!btn._on) return;
+    btn._on=false; clearLP(); btn.classList.remove("press");
+    if(dragging){
+      dragging=false; btn.classList.remove("dragging");
+      try{ btn.releasePointerCapture(e.pointerId); }catch(_){}
+      saveNavOrder(Array.from($("#mainnav").querySelectorAll(".mtab")).map(t=>t.dataset.view));
+    } else if(!moved){
+      switchView(btn.dataset.view);                          // 未達門檻=點擊
+    }
+  };
+  btn.addEventListener("pointerup",end);
+  btn.addEventListener("pointercancel",end);
+}
+renderNav();
 
 function fmtAgo(iso){
   if(!iso) return "";
@@ -1934,85 +2009,112 @@ function gotoSym(sym, syms){
 
 // ── 持股檢查:自行輸入持股 → 即時報價 + 損益 + 健康檢查(存 localStorage) ──
 function loadHoldings(){
-  $("#meta").innerHTML='<div><b>持股檢查</b></div><div>即時報價 · 存於本機瀏覽器</div>';
+  $("#meta").innerHTML='<div><b>持股分析</b></div><div>即時報價+動能 · 存於本機瀏覽器</div>';
   $("#poolNote").innerHTML="";
-  const saved = localStorage.getItem("holdings") || "";
   $("#content").innerHTML =
-    '<section><div class="sec-head"><h2>持股檢查</h2><span class="hint">輸入你的持股 → 即時報價+損益+健康檢查(只存你瀏覽器,不上傳)</span></div>'+
-      '<div class="hold-input">'+
-        '<textarea id="holdText" placeholder="每行一檔:代號 [股數] [成本]&#10;例:&#10;NVDA 100 180&#10;2330.TW 1000 600&#10;6488&#10;AAPL">'+esc(saved)+'</textarea>'+
-        '<div class="hold-btns">'+
-          '<button class="btn" id="holdCheck">🔍 檢查 / 更新</button>'+
-          '<button class="btn" id="holdClear">清空</button>'+
-          '<span class="hint">代號:美股直接打(NVDA);台股加 .TW(上市)/.TWO(上櫃),或純數字自動試。股數/成本可省略。</span>'+
-        '</div>'+
+    '<section><div class="sec-head"><h2>持股分析</h2><span class="hint">逐檔加股票 → 即時報價+多日漲幅動能+健康檢查(只存你瀏覽器,不上傳)</span></div>'+
+      '<div class="hold-add">'+
+        '<input id="holdInput" type="text" placeholder="輸入代號,例 NVDA / 2330.TW / 6488" autocomplete="off">'+
+        '<button class="btn" id="holdAdd">+ 新增</button>'+
+        '<button class="btn" id="holdRefresh">🔄 重新整理</button>'+
+        '<button class="btn" id="holdClear">清空</button>'+
+        '<span class="hint">美股直接打(NVDA);台股加 .TW(上市)/.TWO(上櫃),或純數字自動試上市/櫃。</span>'+
       '</div>'+
       '<div id="holdResult"></div>'+
     '</section>';
-  $("#holdCheck").onclick = checkHoldings;
-  $("#holdClear").onclick = ()=>{ $("#holdText").value=""; localStorage.removeItem("holdings"); $("#holdResult").innerHTML=""; };
-  if(saved.trim()) checkHoldings();
+  $("#holdAdd").onclick=()=>addHoldCode($("#holdInput").value);
+  $("#holdInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addHoldCode($("#holdInput").value); } });
+  $("#holdRefresh").onclick=fetchAndRenderHold;
+  $("#holdClear").onclick=()=>{ if(holdCodes().length && !confirm("清空所有已加入的股票?")) return; saveHoldCodes([]); fetchAndRenderHold(); };
+  fetchAndRenderHold();
 }
-function parseHoldings(text){
-  return (text||"").split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l=>{
-    const p=l.split(/[\s,]+/);
-    return { code:(p[0]||"").toUpperCase(), shares:parseFloat(p[1])||null, cost:parseFloat(p[2])||null };
-  }).filter(x=>x.code);
+// 代號清單存 localStorage("holdings_codes" 為 JSON 陣列);偵測舊 "holdings" 多行文字→自動遷移一次。
+function holdCodes(){
+  try{ const j=localStorage.getItem("holdings_codes"); if(j) return JSON.parse(j)||[]; }catch(e){}
+  const old=localStorage.getItem("holdings")||"", codes=[];
+  old.split(/\n+/).forEach(l=>{ const t=(l.trim().split(/[\s,]+/)[0]||"").toUpperCase(); if(t && !codes.includes(t)) codes.push(t); });
+  if(codes.length) saveHoldCodes(codes);
+  return codes;
 }
+function saveHoldCodes(arr){ try{ localStorage.setItem("holdings_codes",JSON.stringify(arr)); }catch(e){} }
+function addHoldCode(raw){
+  const code=(raw||"").trim().toUpperCase();
+  if(!code) return;
+  const codes=holdCodes();
+  if(codes.includes(code)){ const i=$("#holdInput"); if(i) i.value=""; return; }   // 已存在
+  codes.push(code); saveHoldCodes(codes);
+  const i=$("#holdInput"); if(i){ i.value=""; i.focus(); }
+  fetchAndRenderHold();
+}
+function removeHoldCode(code){ saveHoldCodes(holdCodes().filter(c=>c!==code)); fetchAndRenderHold(); }
 const _holdCand = code => /^\d/.test(code) ? [code+".TW", code+".TWO"] : (/\.(TW|TWO)$/.test(code)?[code]:[code]);
-async function checkHoldings(){
-  const text=$("#holdText").value;
-  localStorage.setItem("holdings", text);
-  const items=parseHoldings(text);
-  if(!items.length){ $("#holdResult").innerHTML='<div class="legend">尚未輸入持股。每行打一檔代號即可。</div>'; return; }
-  const allCands=[...new Set(items.flatMap(it=>_holdCand(it.code)))];
-  $("#holdResult").innerHTML='<div class="loading-screen">即時查詢 '+items.length+' 檔 …</div>';
+// N 日漲幅:對齊 adr_screen._ret_n → closes[-1]/closes[-(n+1)]-1。
+function _retN(cl,n){ return (cl && cl.length>n) ? (cl[cl.length-1]/cl[cl.length-1-n]-1)*100 : null; }
+// 量比:對齊 adr_screen → 最後一日成交金額 ÷ 近20日均成交金額(dv=close×vol)。
+function _volr(cl,vl){
+  if(!cl || !vl || cl.length<2) return null;
+  const n=Math.min(20,cl.length); let sum=0;
+  for(let i=cl.length-n;i<cl.length;i++) sum+=cl[i]*(vl[i]||0);
+  const mean=sum/n, dv1=cl[cl.length-1]*(vl[vl.length-1]||0);
+  return mean>0 ? dv1/mean : null;
+}
+async function fetchAndRenderHold(){
+  const codes=holdCodes(), box=$("#holdResult");
+  if(!box) return;
+  if(!codes.length){ box.innerHTML='<div class="legend">尚未加入任何股票。上方輸入代號按「+ 新增」即可。</div>'; return; }
+  const cands=[...new Set(codes.flatMap(_holdCand))], batches=[];
+  for(let i=0;i<cands.length;i+=5) batches.push(cands.slice(i,i+5));   // kline 模式上限 5 檔/批
+  box.innerHTML='<div class="loading-screen">即時查詢 '+codes.length+' 檔 …</div>';
+  const Q={};
   try{
-    const d=await (await fetch("/api/quotes?syms="+encodeURIComponent(allCands.join(","))+"&t="+Date.now(),{cache:"no-store"})).json();
-    const Q=d.quotes||{};
-    const rows=items.map(it=>{ let qt=null,used=null; for(const c of _holdCand(it.code)){ if(Q[c]){qt=Q[c];used=c;break;} } return {it,qt,used}; });
-    renderHoldings(rows);
-  }catch(e){ $("#holdResult").innerHTML='<div class="loading-screen">查詢失敗:'+esc(e.message)+'(需部署後 /api/quotes 才可用)</div>'; }
+    const results=await Promise.all(batches.map(b=>
+      fetch("/api/quotes?kline=1&syms="+encodeURIComponent(b.join(","))+"&t="+Date.now(),{cache:"no-store"})
+        .then(r=>r.json()).catch(()=>({quotes:{}}))
+    ));
+    results.forEach(d=>Object.assign(Q,d.quotes||{}));
+  }catch(e){ box.innerHTML='<div class="loading-screen">查詢失敗:'+esc(e.message)+'(需部署後 /api/quotes 才可用)</div>'; return; }
+  const rows=codes.map(code=>{ let qt=null,used=null; for(const c of _holdCand(code)){ if(Q[c]){qt=Q[c];used=c;break;} } return {code,qt,used}; });
+  renderHoldings(rows);
 }
 function renderHoldings(rows){
   const fmt=v=>v==null?"–":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const sg=v=>v==null?"":(v>=0?"+":""), c=v=>v==null?"dim":(v>=0?"pos":"neg");
-  let totVal=0, totCost=0, hasCost=false;
-  const trs=rows.map(({it,qt,used})=>{
-    if(!qt) return '<tr><td class="sym">'+esc(it.code)+'</td><td colspan="9" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td></tr>';
+  const pctTd=v=>'<td class="'+c(v)+'">'+(v!=null?sg(v)+v.toFixed(1)+"%":"–")+'</td>';
+  const trs=rows.map(({code,qt,used})=>{
+    const del='<td><button class="hold-del" data-code="'+esc(code)+'" title="刪除">✕</button></td>';
+    if(!qt) return '<tr><td class="sym">'+esc(code)+'</td><td colspan="11" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td>'+del+'</tr>';
+    const cl=qt.closes||[], vl=qt.volumes||[];
     const chg=(qt.price!=null&&qt.prev!=null)?(qt.price-qt.prev):null;
     const cpct=(chg!=null&&qt.prev)?chg/qt.prev*100:null;
+    const r1=_retN(cl,1), r5=_retN(cl,5), r20=_retN(cl,20), volr=_volr(cl,vl);
     const fromHi=(qt.price!=null&&qt.wkHigh)?(qt.price/qt.wkHigh-1)*100:null;
     const fromLo=(qt.price!=null&&qt.wkLow)?(qt.price/qt.wkLow-1)*100:null;
-    const val=(it.shares&&qt.price!=null)?it.shares*qt.price:null;
-    const plpct=(it.cost&&qt.price!=null)?(qt.price/it.cost-1)*100:null;
-    if(val!=null) totVal+=val;
-    if(it.cost&&it.shares){ totCost+=it.shares*it.cost; hasCost=true; }
+    let flow='<span class="dim">—</span>';
+    if(volr!=null && volr>=1.5 && r5!=null && r5>0) flow='<span class="hl-tag strong">🟢流入</span>';
+    else if(volr!=null && volr>=1.5) flow='<span class="hl-tag warn">🔴爆量下跌</span>';
     const tags=[];
     if(fromHi!=null && fromHi>=-1) tags.push('<span class="hl-tag strong">創新高區</span>');
     else if(fromHi!=null && fromHi<=-25) tags.push('<span class="hl-tag warn">遠離高點 '+fromHi.toFixed(0)+'%</span>');
     if(fromLo!=null && fromLo<=8) tags.push('<span class="hl-tag warn">逼近52週低</span>');
     if(cpct!=null && cpct<=-3) tags.push('<span class="hl-tag warn">今日重挫</span>');
-    if(plpct!=null && plpct<=-20) tags.push('<span class="hl-tag mid">套牢 '+plpct.toFixed(0)+'%</span>');
     return '<tr>'+
-      '<td class="sym">'+esc(used||it.code)+'</td>'+
-      '<td style="text-align:left;max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(qt.name||"")+'</td>'+
+      '<td class="sym">'+esc(used||code)+'</td>'+
+      '<td style="text-align:left;max-width:150px;overflow:hidden;text-overflow:ellipsis">'+esc(qt.name||"")+'</td>'+
       '<td>'+fmt(qt.price)+'</td>'+
       '<td class="'+c(cpct)+'">'+sg(cpct)+(cpct!=null?cpct.toFixed(2):"–")+'%</td>'+
+      pctTd(r1)+pctTd(r5)+pctTd(r20)+
+      '<td>'+(volr!=null?volr.toFixed(2)+"×":"–")+'</td>'+
+      '<td style="text-align:left">'+flow+'</td>'+
       '<td class="'+c(fromHi)+'">'+(fromHi!=null?fromHi.toFixed(1):"–")+'%</td>'+
       '<td class="'+c(fromLo)+'">'+sg(fromLo)+(fromLo!=null?fromLo.toFixed(1):"–")+'%</td>'+
-      '<td>'+(it.shares?fmt(it.shares):"–")+'</td>'+
-      '<td>'+(val!=null?fmt(Math.round(val)):"–")+'</td>'+
-      '<td class="'+c(plpct)+'">'+(plpct!=null?sg(plpct)+plpct.toFixed(1)+"%":"–")+'</td>'+
       '<td style="text-align:left">'+(tags.join(" ")||'<span class="dim">—</span>')+'</td>'+
+      del+
     '</tr>';
   }).join("");
-  const totPl=hasCost&&totCost?((totVal/totCost-1)*100):null;
-  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>日漲跌</th><th>距52週高</th><th>距52週低</th><th>股數</th><th>市值</th><th>損益</th><th style="text-align:left">健康檢查</th></tr>';
-  const summary = totVal>0
-    ? '<div class="legend">總市值 <b>'+fmt(Math.round(totVal))+'</b>'+(totPl!=null?(' · 總損益 <b class="'+(totPl>=0?"pos":"neg")+'">'+(totPl>=0?"+":"")+totPl.toFixed(1)+'%</b>'):'')+'(混幣別時市值/損益加總僅供參考)</div>' : '';
-  $("#holdResult").innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+summary+
-    '<div class="legend">距52週高/低=現價相對52週高(負值)/低(正值)的%。健康檢查:創新高區 / 遠離高點≥25% / 逼近52週低 / 今日重挫≥3% / 套牢≥20%。即時報價(Yahoo,可能延遲約15分)。</div>';
+  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>日漲跌</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th><th style="text-align:left">資金流向</th><th>距52週高</th><th>距52週低</th><th style="text-align:left">健康檢查</th><th></th></tr>';
+  $("#holdResult").innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
+    '<div class="legend">1/5/20日=多日漲幅。量比=最後一日成交金額÷近20日均(≥1.5× 且 5日漲→資金流入🟢;≥1.5× 但 5日跌→爆量下跌🔴)。距52週高/低=現價相對高(負)/低(正)。健康檢查:創新高區 / 遠離高點≥25% / 逼近52週低 / 今日重挫≥3%。即時報價(Yahoo,可能延遲約15分)。</div>';
+  $("#holdResult").querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code));
 }
 
 // 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes

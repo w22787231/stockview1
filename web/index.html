@@ -334,6 +334,46 @@
   .mstock-flow.quiet{background:var(--panel2);color:var(--ink3)}
   .mstock-flow.neutral{background:var(--panel2);color:var(--ink2)}
   @media(max-width:680px){.stage-members{grid-template-columns:1fr}}
+
+  /* ===== 手機 RWD ===== */
+  @media (max-width:640px){
+    .wrap{padding:12px 12px 56px}
+    /* header 緊湊;搜尋列佔滿、更新資訊靠右 */
+    header{padding:10px 0 12px;gap:10px}
+    .brand{gap:10px}
+    .brand .logo{width:36px;height:36px;font-size:13px}
+    .title h1{font-size:16px}
+    .title .sub{font-size:11px}
+    .head-right{width:100%;justify-content:space-between;gap:8px;align-items:center}
+    .search{flex:1;min-width:0;padding:6px 10px}
+    .search input{width:100%;min-width:0}
+    .meta{font-size:10px;line-height:1.5;white-space:nowrap}
+    /* 主分頁:橫向可滑、不換行不爆版(滿版出血) */
+    .mainnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none;margin:10px -12px 4px;padding:0 12px}
+    .mainnav::-webkit-scrollbar{display:none}
+    .mtab{padding:9px 12px;font-size:13.5px;white-space:nowrap;flex:none}
+    .mtab.active::after{left:10px;right:10px}
+    /* 工具列 / 池籤 / 按鈕 */
+    .toolbar{margin:12px 0 10px;gap:8px}
+    .tab{font-size:12px;padding:6px 11px}
+    .btn{font-size:12px;padding:7px 12px}
+    /* 區塊標題 */
+    section{margin:18px 0}
+    .sec-head h2{font-size:14px}
+    /* 表格更省空間(仍可橫向滑) */
+    table{font-size:11.5px}
+    th,td{padding:6px 8px}
+    td.sym .nm{font-size:10.5px}
+    /* 卡片 / 新聞 / 個股詳情縮放 */
+    .idx-card{padding:11px 13px}
+    .idx-card .ic-val{font-size:19px}
+    .news-title{font-size:13.5px}
+    .news-tabs .ntab{padding:5px 10px;font-size:12.5px}
+    .stk-head .ssym{font-size:22px}
+    .stk-price{font-size:25px}
+    #chart{height:280px}
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>

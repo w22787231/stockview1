@@ -93,7 +93,7 @@ def fetch_cor1m():
         return {
             "sym": "COR1M", "label": "COR1M 隱含相關性",
             "note": "成分股齊漲齊跌預期", "unit": "pt",
-            "read": f"越低=個股各走各、表面平靜底層脆弱(2006以來第{pct:.0f}百分位)",
+            "read": f"越低=個股各走各、表面平靜底層脆弱(2006以來第{pct:.0f}百分位)；⚠️ 低於8危險",
             "level": _round(last, 2), "diff": _round(last - prev, 2),
             "spark": [round(v, 2) for v in closes[-60:]],
         }

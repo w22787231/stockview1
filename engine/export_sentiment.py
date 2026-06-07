@@ -5,7 +5,7 @@
 - F&G(Fear & Greed)：試爬 CNN 非官方 API，抓不到則略過。
 輸出 ../data/sentiment.json。
 """
-import sys, os, io, json, csv, datetime
+import sys, os, io, json, csv, re, datetime
 import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -102,12 +102,14 @@ def fetch_cor1m():
 
 
 def market_breadth(pool=BREADTH_POOL):
-    """SP500 中站上 20MA/50MA 的家數%，並與昨日比。"""
+    """SP500 廣度：站上 20MA/50MA 家數% + 52週新高/新低家數，皆與昨日比。"""
     symbols = eng.load_pool(pool) or []
     if not symbols:
         return None
-    df = eng._download(symbols, period="4mo")  # 50MA + 看昨日 需要 ~3mo+
-    cnt = {"ma20_today": 0, "ma20_prev": 0, "ma50_today": 0, "ma50_prev": 0, "n": 0}
+    df = eng._download(symbols, period="15mo")  # 52週高低需 ~252+ 日
+    W = 252
+    cnt = {"ma20_today": 0, "ma20_prev": 0, "ma50_today": 0, "ma50_prev": 0,
+           "nh_today": 0, "nh_prev": 0, "nl_today": 0, "nl_prev": 0, "n": 0}
     for sym in symbols:
         try:
             sub = eng._sub(df, symbols, sym)
@@ -123,6 +125,13 @@ def market_breadth(pool=BREADTH_POOL):
             if closes[prev] > ma(prev, 20): cnt["ma20_prev"] += 1
             if closes[last] > ma(last, 50): cnt["ma50_today"] += 1
             if closes[prev] > ma(prev, 50): cnt["ma50_prev"] += 1
+            if len(closes) >= W + 1:        # 52週(252日)新高/新低
+                wT = closes[-W:]
+                wP = closes[-W - 1:-1]
+                if closes[last] >= max(wT): cnt["nh_today"] += 1
+                if closes[last] <= min(wT): cnt["nl_today"] += 1
+                if closes[prev] >= max(wP): cnt["nh_prev"] += 1
+                if closes[prev] <= min(wP): cnt["nl_prev"] += 1
         except Exception:
             continue
     if cnt["n"] == 0:
@@ -135,6 +144,8 @@ def market_breadth(pool=BREADTH_POOL):
         "above20_prev": pct("ma20_prev"),
         "above50_pct": pct("ma50_today"),
         "above50_prev": pct("ma50_prev"),
+        "nh": cnt["nh_today"], "nh_prev": cnt["nh_prev"],
+        "nl": cnt["nl_today"], "nl_prev": cnt["nl_prev"],
     }
 
 
@@ -164,6 +175,36 @@ def fetch_fear_greed():
         return None
 
 
+def fetch_leverage():
+    """市場槓桿:FINRA 融資餘額(月,百萬美元) ÷ World Bank 美國名目GDP(年) = 融資/GDP 泡沫比%。"""
+    try:
+        u = "https://www.finra.org/investors/learn-to-invest/advanced-investing/margin-statistics"
+        html = urllib.request.urlopen(
+            urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=20
+        ).read().decode("utf-8", "ignore")
+        mm = re.search(r"([A-Z][a-z]{2}-\d{2})[\s\S]{0,400}?([1-9],\d{3},\d{3})", html)
+        if not mm:
+            return None
+        margin_t = float(mm.group(2).replace(",", "")) / 1e6   # 百萬美元 → 兆
+        gu = "https://api.worldbank.org/v2/country/USA/indicator/NY.GDP.MKTP.CD?format=json&per_page=6"
+        gd = json.loads(urllib.request.urlopen(
+            urllib.request.Request(gu, headers={"User-Agent": "Mozilla/5.0"}), timeout=20
+        ).read().decode("utf-8", "ignore"))
+        gdp_t, gdp_year = None, ""
+        for r in gd[1]:
+            if r.get("value"):
+                gdp_t = r["value"] / 1e12
+                gdp_year = r["date"]
+                break
+        if not gdp_t:
+            return None
+        return {"margin_t": round(margin_t, 2), "margin_month": mm.group(1),
+                "gdp_t": round(gdp_t, 2), "gdp_year": gdp_year,
+                "ratio_pct": round(margin_t / gdp_t * 100, 2)}
+    except Exception:
+        return None
+
+
 def build():
     levels, failed = fetch_levels()
     cor = fetch_cor1m()
@@ -173,13 +214,15 @@ def build():
         failed.append("COR1M")
     breadth = market_breadth()
     fng = fetch_fear_greed()
+    leverage = fetch_leverage()
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "yfinance (daily) + CNN F&G",
+        "source": "yfinance + CNN F&G + FINRA/WorldBank",
         "levels": levels,
         "breadth": breadth,
         "fear_greed": fng,
+        "leverage": leverage,
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

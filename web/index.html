@@ -1018,14 +1018,27 @@ function breadthBox(b){
       row("站上 20MA", b.above20_pct, b.above20_prev)+
       row("站上 50MA", b.above50_pct, b.above50_prev)+
     '</tbody></table>'+
-    '<div class="ex">廣度＝多少%的股站上均線。<b>&gt;50% 偏多頭、&lt;50% 偏空頭</b>。<b class="pos">&lt;30% 超賣</b>(可能反彈買點)、<b class="pos">&lt;8% 極度超賣🟢</b>(歷史底部訊號)、<b class="neg">&gt;85% 過熱🔴</b>(漲多回檔風險)。今日比昨日上升＝資金擴散。</div></div>';
+    '<div class="ex">廣度＝多少%的股站上均線。<b>&gt;50% 偏多頭、&lt;50% 偏空頭</b>。<b class="pos">&lt;30% 超賣</b>(可能反彈買點)、<b class="pos">&lt;8% 極度超賣🟢</b>(歷史底部訊號)、<b class="neg">&gt;85% 過熱🔴</b>(漲多回檔風險)。今日比昨日上升＝資金擴散。</div>'+
+    (b.nh!=null
+      ? '<div class="ex" style="margin-top:8px">52週 <b class="pos">新高 '+b.nh+'</b> 檔 · <b class="neg">新低 '+b.nl+'</b> 檔 · 淨新高(NH−NL) <b class="'+(b.nh-b.nl>=0?"pos":"neg")+'">'+(b.nh-b.nl>=0?"+":"")+(b.nh-b.nl)+'</b>（昨 '+(b.nh_prev-b.nl_prev>=0?"+":"")+(b.nh_prev-b.nl_prev)+'）。<b class="neg">淨值轉負或新低激增＝內部轉弱</b>；指數創高但新高家數萎縮＝<b class="neg">背離警訊</b>。</div>'
+      : '')+
+    '</div>';
 }
 
+function leverageBox(L){
+  if(!L) return '';
+  const r=L.ratio_pct;
+  const tag = r>=4 ? '🔴 偏高（歷史頂部區 &gt;4%）' : (r>=3 ? '⚠️ 偏高' : '正常');
+  const cls = r>=4 ? 'neg' : (r>=3 ? '' : 'pos');
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">市場槓桿 · 融資餘額 / GDP</div>'+
+    '<div class="ex">融資餘額 <b>$'+L.margin_t+'兆</b>（FINRA '+esc(L.margin_month)+'）÷ 名目GDP <b>$'+L.gdp_t+'兆</b>（'+esc(L.gdp_year)+'）＝ <b class="'+cls+'">'+r+'%</b> · <b class="'+cls+'">'+tag+'</b>。<br>融資餘額占 GDP 比＝市場槓桿泡沫度：歷史常態約 2–3%，逼近或破 <b>4%</b> 多見於市場頂部（如 2021 末）。月更新、慢訊號，非擇時。</div></div>';
+}
 function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
 }

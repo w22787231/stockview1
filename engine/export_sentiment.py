@@ -5,7 +5,7 @@
 - F&G(Fear & Greed)：試爬 CNN 非官方 API，抓不到則略過。
 輸出 ../data/sentiment.json。
 """
-import sys, os, io, json, datetime
+import sys, os, io, json, csv, datetime
 import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -72,6 +72,32 @@ def fetch_levels():
     return out, failed
 
 
+def fetch_cor1m():
+    """Cboe COR1M 隱含相關性。yfinance 的 ^COR1M 只回單點,改用 Cboe 官方 CSV:
+    取最新收盤 + 昨收(算日差) + 2006 以來歷史百分位。"""
+    url = "https://cdn.cboe.com/api/global/us_indices/daily_prices/COR1M_History.csv"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        data = urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "ignore")
+        closes = []
+        for r in list(csv.reader(io.StringIO(data)))[1:]:
+            v = _safe(r[4]) if len(r) >= 5 else None
+            if v is not None:
+                closes.append(v)
+        if len(closes) < 2:
+            return None
+        last, prev = closes[-1], closes[-2]
+        pct = sum(1 for v in closes if v <= last) / len(closes) * 100
+        return {
+            "sym": "COR1M", "label": "COR1M 隱含相關性",
+            "note": "成分股齊漲齊跌預期", "unit": "pt",
+            "read": f"越低=個股各走各、表面平靜底層脆弱(2006以來第{pct:.0f}百分位)",
+            "level": _round(last, 2), "diff": _round(last - prev, 2),
+        }
+    except Exception:
+        return None
+
+
 def market_breadth(pool=BREADTH_POOL):
     """SP500 中站上 20MA/50MA 的家數%，並與昨日比。"""
     symbols = eng.load_pool(pool) or []
@@ -133,6 +159,11 @@ def fetch_fear_greed():
 
 def build():
     levels, failed = fetch_levels()
+    cor = fetch_cor1m()
+    if cor:
+        levels.append(cor)
+    else:
+        failed.append("COR1M")
     breadth = market_breadth()
     fng = fetch_fear_greed()
     payload = {

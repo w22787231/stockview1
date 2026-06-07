@@ -894,6 +894,9 @@ function sentAlert(sym, level, diffPct){
     case "^SKEW": // >150 尾部風險高(紅閃)
       if(level>=150) return {cls:"alert-red", tag:"🔴 尾部風險高"};
       return null;
+    case "COR1M": // 隱含相關性越低=越自滿/脆弱(<=15 歷史低檔，紅閃)
+      if(level<=15) return {cls:"alert-red", tag:"🔴 相關性極低·脆弱"};
+      return null;
     case "HYG":   // 單日跌 >1% = 信用惡化(紅閃)
       if(diffPct!=null && diffPct<=-1) return {cls:"alert-red", tag:"🔴 信用轉弱"};
       return null;
@@ -968,7 +971,7 @@ function renderSentiment(d){
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
     breadthBox(d.breadth)+
-    '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
+    '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
 }
 

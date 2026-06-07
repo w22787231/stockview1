@@ -1001,8 +1001,8 @@ function fngCard(fg){
 
 function breadthBox(b){
   if(!b) return '';
-  const mNH=(b.nh_series||[]).reduce((a,v)=>a+v,0);   // 近一個月累計創新高檔次
-  const mNL=(b.nl_series||[]).reduce((a,v)=>a+v,0);   // 近一個月累計創新低檔次
+  const mNH=(b.nh_uniq!=null?b.nh_uniq:(b.nh_series||[]).reduce((a,v)=>a+v,0));  // 近一個月不重複創新高家數
+  const mNL=(b.nl_uniq!=null?b.nl_uniq:(b.nl_series||[]).reduce((a,v)=>a+v,0));  // 近一個月不重複創新低家數
   const mNet=mNH-mNL;
   const bar=(p)=>'<span style="display:inline-block;height:7px;width:'+Math.round(p*0.9)+'px;background:'+(p>=50?"var(--green)":"var(--red)")+';border-radius:2px;opacity:.55;vertical-align:middle;margin-left:6px"></span>';
   // 廣度極端：<8 極度超賣(綠閃)、<30 超賣(綠標)、>85 過熱(紅閃)
@@ -1027,7 +1027,7 @@ function breadthBox(b){
     '</tbody></table>'+
     '<div class="ex">廣度＝多少%的股站上均線。<b>&gt;50% 偏多頭、&lt;50% 偏空頭</b>。<b class="pos">&lt;30% 超賣</b>(可能反彈買點)、<b class="pos">&lt;8% 極度超賣🟢</b>(歷史底部訊號)、<b class="neg">&gt;85% 過熱🔴</b>(漲多回檔風險)。今日比昨日上升＝資金擴散。</div>'+
     (b.nh!=null
-      ? '<div class="ex" style="margin-top:8px"><b>近一個月(21交易日)累計</b>：創52週新高 <b class="pos">'+mNH+'</b> 檔次 · 創新低 <b class="neg">'+mNL+'</b> 檔次 · 淨新高 <b class="'+(mNet>=0?"pos":"neg")+'">'+(mNet>=0?"+":"")+mNet+'</b>（今日淨 '+(b.nh-b.nl>=0?"+":"")+(b.nh-b.nl)+'：新高'+b.nh+'/新低'+b.nl+'）。<b class="neg">累計淨值轉負/新低激增＝內部轉弱</b>；指數創高但新高萎縮＝背離警訊。</div>'
+      ? '<div class="ex" style="margin-top:8px"><b>近一個月(21交易日)不重複家數</b>：曾創52週新高 <b class="pos">'+mNH+'</b> 檔 · 曾創新低 <b class="neg">'+mNL+'</b> 檔 · 淨 <b class="'+(mNet>=0?"pos":"neg")+'">'+(mNet>=0?"+":"")+mNet+'</b>（今日 新高'+b.nh+'/新低'+b.nl+'）。<b class="neg">淨值轉負/新低家數激增＝內部轉弱</b>；指數創高但新高家數萎縮＝背離警訊。</div>'
         +(b.nh_series?'<div class="ex" style="margin-top:2px"><span style="color:var(--ink3)">近一個月 每日淨新高 走勢（紅區=當日淨值轉負）：</span><div style="max-width:320px">'+sparkline(b.nh_series.map((v,i)=>v-(b.nl_series[i]||0)),"#1f6feb",{v:0,dir:"lo",lab:"0"})+'</div></div>':'')
       : '')+
     '</div>';

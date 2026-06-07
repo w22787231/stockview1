@@ -131,6 +131,7 @@ def market_breadth(pool=BREADTH_POOL):
     cnt = {"ma20_today": 0, "ma20_prev": 0, "ma50_today": 0, "ma50_prev": 0, "n": 0}
     nh_series = [0] * D
     nl_series = [0] * D
+    uniq_nh = uniq_nl = 0                 # 近一個月內「曾」創新高/新低的不重複家數
     for sym in symbols:
         try:
             sub = eng._sub(df, symbols, sym)
@@ -147,12 +148,15 @@ def market_breadth(pool=BREADTH_POOL):
             if closes[prev] > ma(prev, 20): cnt["ma20_prev"] += 1
             if closes[last] > ma(last, 50): cnt["ma50_today"] += 1
             if closes[prev] > ma(prev, 50): cnt["ma50_prev"] += 1
-            if m >= W + D:                  # 近 D 日各自的 52週新高/新低
+            if m >= W + D:                  # 近 D 日:逐日序列 + 整月不重複家數
+                hit_hi = hit_lo = False
                 for j in range(D):
                     idx = m - D + j
                     win = closes[idx - W + 1:idx + 1]
-                    if closes[idx] >= max(win): nh_series[j] += 1
-                    if closes[idx] <= min(win): nl_series[j] += 1
+                    if closes[idx] >= max(win): nh_series[j] += 1; hit_hi = True
+                    if closes[idx] <= min(win): nl_series[j] += 1; hit_lo = True
+                if hit_hi: uniq_nh += 1
+                if hit_lo: uniq_nl += 1
         except Exception:
             continue
     if cnt["n"] == 0:
@@ -168,6 +172,7 @@ def market_breadth(pool=BREADTH_POOL):
         "nh": nh_series[-1], "nh_prev": nh_series[-2],
         "nl": nl_series[-1], "nl_prev": nl_series[-2],
         "nh_series": nh_series, "nl_series": nl_series,
+        "nh_uniq": uniq_nh, "nl_uniq": uniq_nl,
     }
 
 

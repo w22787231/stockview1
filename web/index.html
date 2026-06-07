@@ -84,6 +84,13 @@
   .news-title{font-size:14px;line-height:1.5;color:var(--ink)}
   .idx-card .src-link{display:inline-block;margin-top:5px;font-size:10.5px;color:var(--blue);text-decoration:none;font-weight:600}
   .idx-card .src-link:hover{text-decoration:underline}
+  /* 持股檢查 */
+  .hold-input textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;
+    font-family:var(--mono);font-size:13px;line-height:1.7;resize:vertical;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+  .hold-input textarea:focus{outline:none;border-color:var(--blue)}
+  .hold-btns{display:flex;gap:10px;align-items:center;margin:9px 0 6px;flex-wrap:wrap}
+  .hl-tag{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:5px;white-space:nowrap;display:inline-block;margin:1px 0}
+  .hl-tag.strong{background:#e6f6ec;color:var(--green)} .hl-tag.warn{background:#fdf0f3;color:var(--red)} .hl-tag.mid{background:#fff5db;color:var(--amber)}
   @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(225,29,72,.0)}50%{box-shadow:0 0 0 4px rgba(225,29,72,.28),0 0 14px rgba(225,29,72,.4)}}
   @keyframes pulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.0)}50%{box-shadow:0 0 0 4px rgba(22,163,74,.28),0 0 14px rgba(22,163,74,.4)}}
   .breadth-alert-green{animation:pulseGreen 1.1s ease-in-out infinite;border-radius:6px}
@@ -405,6 +412,7 @@
     <button class="mtab" data-view="cross">交叉訊號</button>
     <button class="mtab" data-view="chain">產業鏈</button>
     <button class="mtab" data-view="etf">ETF持股異動</button>
+    <button class="mtab" data-view="holdings">持股檢查</button>
     <button class="mtab" data-view="news">即時快訊</button>
   </nav>
 
@@ -1789,6 +1797,7 @@ function switchView(v){
   else if(v==="news") loadNewsFeed();
   else if(v==="chain") loadChain();
   else if(v==="etf") loadEtf();
+  else if(v==="holdings") loadHoldings();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
@@ -1918,6 +1927,89 @@ function gotoSym(sym, syms){
   if(syms.includes(sym)){ openStock(sym); return; }
   if(highlightInList(sym)) banner("🔍「"+esc(sym)+"」尚無個股詳情，已在榜單中高亮。詳情僅涵蓋已產生的清單。");
   else banner("🔍「"+esc(sym)+"」尚無個股詳情，且不在目前榜單池中（榜單搜尋請先切到對應池）。");
+}
+
+// ── 持股檢查:自行輸入持股 → 即時報價 + 損益 + 健康檢查(存 localStorage) ──
+function loadHoldings(){
+  $("#meta").innerHTML='<div><b>持股檢查</b></div><div>即時報價 · 存於本機瀏覽器</div>';
+  $("#poolNote").innerHTML="";
+  const saved = localStorage.getItem("holdings") || "";
+  $("#content").innerHTML =
+    '<section><div class="sec-head"><h2>持股檢查</h2><span class="hint">輸入你的持股 → 即時報價+損益+健康檢查(只存你瀏覽器,不上傳)</span></div>'+
+      '<div class="hold-input">'+
+        '<textarea id="holdText" placeholder="每行一檔:代號 [股數] [成本]&#10;例:&#10;NVDA 100 180&#10;2330.TW 1000 600&#10;6488&#10;AAPL">'+esc(saved)+'</textarea>'+
+        '<div class="hold-btns">'+
+          '<button class="btn" id="holdCheck">🔍 檢查 / 更新</button>'+
+          '<button class="btn" id="holdClear">清空</button>'+
+          '<span class="hint">代號:美股直接打(NVDA);台股加 .TW(上市)/.TWO(上櫃),或純數字自動試。股數/成本可省略。</span>'+
+        '</div>'+
+      '</div>'+
+      '<div id="holdResult"></div>'+
+    '</section>';
+  $("#holdCheck").onclick = checkHoldings;
+  $("#holdClear").onclick = ()=>{ $("#holdText").value=""; localStorage.removeItem("holdings"); $("#holdResult").innerHTML=""; };
+  if(saved.trim()) checkHoldings();
+}
+function parseHoldings(text){
+  return (text||"").split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    const p=l.split(/[\s,]+/);
+    return { code:(p[0]||"").toUpperCase(), shares:parseFloat(p[1])||null, cost:parseFloat(p[2])||null };
+  }).filter(x=>x.code);
+}
+const _holdCand = code => /^\d/.test(code) ? [code+".TW", code+".TWO"] : (/\.(TW|TWO)$/.test(code)?[code]:[code]);
+async function checkHoldings(){
+  const text=$("#holdText").value;
+  localStorage.setItem("holdings", text);
+  const items=parseHoldings(text);
+  if(!items.length){ $("#holdResult").innerHTML='<div class="legend">尚未輸入持股。每行打一檔代號即可。</div>'; return; }
+  const allCands=[...new Set(items.flatMap(it=>_holdCand(it.code)))];
+  $("#holdResult").innerHTML='<div class="loading-screen">即時查詢 '+items.length+' 檔 …</div>';
+  try{
+    const d=await (await fetch("/api/quotes?syms="+encodeURIComponent(allCands.join(","))+"&t="+Date.now(),{cache:"no-store"})).json();
+    const Q=d.quotes||{};
+    const rows=items.map(it=>{ let qt=null,used=null; for(const c of _holdCand(it.code)){ if(Q[c]){qt=Q[c];used=c;break;} } return {it,qt,used}; });
+    renderHoldings(rows);
+  }catch(e){ $("#holdResult").innerHTML='<div class="loading-screen">查詢失敗:'+esc(e.message)+'(需部署後 /api/quotes 才可用)</div>'; }
+}
+function renderHoldings(rows){
+  const fmt=v=>v==null?"–":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+  const sg=v=>v==null?"":(v>=0?"+":""), c=v=>v==null?"dim":(v>=0?"pos":"neg");
+  let totVal=0, totCost=0, hasCost=false;
+  const trs=rows.map(({it,qt,used})=>{
+    if(!qt) return '<tr><td class="sym">'+esc(it.code)+'</td><td colspan="9" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td></tr>';
+    const chg=(qt.price!=null&&qt.prev!=null)?(qt.price-qt.prev):null;
+    const cpct=(chg!=null&&qt.prev)?chg/qt.prev*100:null;
+    const fromHi=(qt.price!=null&&qt.wkHigh)?(qt.price/qt.wkHigh-1)*100:null;
+    const fromLo=(qt.price!=null&&qt.wkLow)?(qt.price/qt.wkLow-1)*100:null;
+    const val=(it.shares&&qt.price!=null)?it.shares*qt.price:null;
+    const plpct=(it.cost&&qt.price!=null)?(qt.price/it.cost-1)*100:null;
+    if(val!=null) totVal+=val;
+    if(it.cost&&it.shares){ totCost+=it.shares*it.cost; hasCost=true; }
+    const tags=[];
+    if(fromHi!=null && fromHi>=-1) tags.push('<span class="hl-tag strong">創新高區</span>');
+    else if(fromHi!=null && fromHi<=-25) tags.push('<span class="hl-tag warn">遠離高點 '+fromHi.toFixed(0)+'%</span>');
+    if(fromLo!=null && fromLo<=8) tags.push('<span class="hl-tag warn">逼近52週低</span>');
+    if(cpct!=null && cpct<=-3) tags.push('<span class="hl-tag warn">今日重挫</span>');
+    if(plpct!=null && plpct<=-20) tags.push('<span class="hl-tag mid">套牢 '+plpct.toFixed(0)+'%</span>');
+    return '<tr>'+
+      '<td class="sym">'+esc(used||it.code)+'</td>'+
+      '<td style="text-align:left;max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(qt.name||"")+'</td>'+
+      '<td>'+fmt(qt.price)+'</td>'+
+      '<td class="'+c(cpct)+'">'+sg(cpct)+(cpct!=null?cpct.toFixed(2):"–")+'%</td>'+
+      '<td class="'+c(fromHi)+'">'+(fromHi!=null?fromHi.toFixed(1):"–")+'%</td>'+
+      '<td class="'+c(fromLo)+'">'+sg(fromLo)+(fromLo!=null?fromLo.toFixed(1):"–")+'%</td>'+
+      '<td>'+(it.shares?fmt(it.shares):"–")+'</td>'+
+      '<td>'+(val!=null?fmt(Math.round(val)):"–")+'</td>'+
+      '<td class="'+c(plpct)+'">'+(plpct!=null?sg(plpct)+plpct.toFixed(1)+"%":"–")+'</td>'+
+      '<td style="text-align:left">'+(tags.join(" ")||'<span class="dim">—</span>')+'</td>'+
+    '</tr>';
+  }).join("");
+  const totPl=hasCost&&totCost?((totVal/totCost-1)*100):null;
+  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>日漲跌</th><th>距52週高</th><th>距52週低</th><th>股數</th><th>市值</th><th>損益</th><th style="text-align:left">健康檢查</th></tr>';
+  const summary = totVal>0
+    ? '<div class="legend">總市值 <b>'+fmt(Math.round(totVal))+'</b>'+(totPl!=null?(' · 總損益 <b class="'+(totPl>=0?"pos":"neg")+'">'+(totPl>=0?"+":"")+totPl.toFixed(1)+'%</b>'):'')+'(混幣別時市值/損益加總僅供參考)</div>' : '';
+  $("#holdResult").innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+summary+
+    '<div class="legend">距52週高/低=現價相對52週高(負值)/低(正值)的%。健康檢查:創新高區 / 遠離高點≥25% / 逼近52週低 / 今日重挫≥3% / 套牢≥20%。即時報價(Yahoo,可能延遲約15分)。</div>';
 }
 
 // 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes

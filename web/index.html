@@ -71,6 +71,13 @@
   .idx-card .spark{width:100%;height:48px;display:block}
   .idx-card .spark-thr{position:absolute;right:2px;transform:translateY(-50%);font-size:9px;font-weight:700;
     color:var(--red);background:rgba(255,255,255,.78);padding:0 3px;border-radius:3px;line-height:1.35;pointer-events:none;white-space:nowrap}
+  .news-list{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  .news-row{display:block;background:var(--panel);padding:10px 14px;text-decoration:none;color:inherit;transition:background .12s}
+  .news-row:hover{background:#f3f6fb}
+  .news-meta{display:flex;gap:10px;align-items:center;font-size:11.5px;margin-bottom:3px}
+  .news-src{font-weight:700;color:var(--blue)}
+  .news-time{color:var(--ink3)}
+  .news-title{font-size:14px;line-height:1.5;color:var(--ink)}
   @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(225,29,72,.0)}50%{box-shadow:0 0 0 4px rgba(225,29,72,.28),0 0 14px rgba(225,29,72,.4)}}
   @keyframes pulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.0)}50%{box-shadow:0 0 0 4px rgba(22,163,74,.28),0 0 14px rgba(22,163,74,.4)}}
   .breadth-alert-green{animation:pulseGreen 1.1s ease-in-out infinite;border-radius:6px}
@@ -1701,6 +1708,7 @@ let TREND_SUB = "trend";  // 趨勢分頁群內目前子頁："trend" 或 "cross
 let VIEW = "trend";
 function switchView(v){
   VIEW = v;
+  if(window._newsTimer){ clearInterval(window._newsTimer); window._newsTimer=null; }  // 離開即時快訊→停止輪詢
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   const isPoolView = (v==="trend"||v==="cross");  // 交叉分頁與趨勢共用池分頁列
   $(".toolbar").style.display = isPoolView ? "flex" : "none";
@@ -1713,37 +1721,49 @@ function switchView(v){
 }
 document.querySelectorAll(".mtab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
 
+function fmtAgo(iso){
+  if(!iso) return "";
+  const t=Date.parse(iso); if(isNaN(t)) return "";
+  const s=(Date.now()-t)/1000;
+  if(s<60) return "剛剛";
+  if(s<3600) return Math.floor(s/60)+" 分前";
+  if(s<86400) return Math.floor(s/3600)+" 小時前";
+  return Math.floor(s/86400)+" 天前";
+}
+async function fetchNews(){
+  const box=document.getElementById("newsList");
+  if(!box) return;
+  try{
+    const r=await fetch("/api/news?t="+Date.now(),{cache:"no-store"});
+    if(!r.ok) throw new Error(r.status);
+    const d=await r.json();
+    if(!d.items||!d.items.length){ box.innerHTML='<div class="legend">暫無新聞，稍後再試。</div>'; return; }
+    box.innerHTML=d.items.map(it=>
+      '<a class="news-row" href="'+esc(it.link)+'" target="_blank" rel="noopener">'+
+        '<div class="news-meta"><span class="news-src">'+esc(it.src||"新聞")+'</span>'+
+        '<span class="news-time">'+esc(fmtAgo(it.time))+'</span></div>'+
+        '<div class="news-title">'+esc(it.title)+'</div>'+
+      '</a>'
+    ).join("");
+    const upd=document.getElementById("newsUpd");
+    if(upd) upd.innerHTML='更新 '+esc(fmtTime(d.generated_at))+' · 每分鐘自動刷新';
+  }catch(e){
+    box.innerHTML='<div class="legend">⚠️ 載入新聞失敗（'+esc(e.message)+'）。/api/news 需部署到 Cloudflare 後才有(本機預覽不會有)。</div>';
+  }
+}
 function loadNewsFeed(){
   for(const k in SORT_STATE) delete SORT_STATE[k];
-  $("#meta").innerHTML='<div><b>即時快訊</b> FinancialJuice</div><div>市場即時新聞牆</div>';
+  $("#meta").innerHTML='<div><b>即時快訊</b> 台股中文</div><div id="newsUpd">載入中…</div>';
   $("#poolNote").innerHTML="";
-  const FJ="https://www.financialjuice.com/home";
   $("#content").innerHTML=
-    '<section><div class="sec-head"><h2>即時快訊</h2><span class="tag">FinancialJuice · 即時市場新聞</span>'+
-      '<span class="hint">即時快訊牆，內容由 FinancialJuice 提供</span></div>'+
-      '<div class="events-box" style="margin-bottom:12px">'+
-        '<span class="ev-date">FinancialJuice 即時財經新聞快訊（英文）。下方為嵌入牆，若空白請點右側按鈕開完整版。</span>'+
-        '<a class="ev-link" href="'+FJ+'" target="_blank" rel="noopener">開完整版 ↗</a>'+
-      '</div>'+
-      '<div class="news-frame-wrap">'+
-        '<iframe id="fjFrame" class="news-frame" src="https://www.financialjuice.com/widgets/news-widget?backColor=ffffff&fontColor=1a2433&newsColor=2563eb&width=100%25&height=720&mode=Light" '+
-          'title="FinancialJuice 即時快訊" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>'+
-        '<div class="frame-fallback" id="fjFallback">'+
-          '<div style="font-size:14px;font-weight:700;margin-bottom:6px">即時快訊牆無法在此嵌入</div>'+
-          '<div class="legend" style="border:none">FinancialJuice 可能不允許被嵌入(X-Frame-Options)。請直接開完整版查看即時快訊。</div>'+
-          '<a class="btn" href="'+FJ+'" target="_blank" rel="noopener" style="margin-top:10px;display:inline-flex">前往 FinancialJuice ↗</a>'+
-        '</div>'+
-      '</div>'+
-      '<div class="legend">即時快訊由 <a href="'+FJ+'" target="_blank" rel="noopener">FinancialJuice</a> 提供，為即時內容(不受本站每日更新影響)。本站僅嵌入/連結，不轉載。</div>'+
+    '<section><div class="sec-head"><h2>即時快訊</h2><span class="tag">台股中文 · 鉅亨/Yahoo/Google News</span>'+
+      '<span class="hint">每分鐘自動刷新</span></div>'+
+      '<div id="newsList" class="news-list"><div class="loading-screen">載入新聞 …</div></div>'+
+      '<div class="legend">新聞由 鉅亨網、Yahoo奇摩股市、Google News 等 RSS 即時彙整；點標題開原文。本站僅彙整連結，不轉載全文，亦非投資建議。</div>'+
     '</section>';
-  // iframe 載入失敗或被擋 → 顯示後備
-  const f=document.getElementById("fjFrame"), fb=document.getElementById("fjFallback");
-  let loaded=false;
-  if(f){
-    f.onload=()=>{ loaded=true; if(fb) fb.style.display="none"; };
-    // 6 秒內沒成功載入(被 X-Frame 擋通常 onload 不觸發或空白)→ 顯示後備
-    setTimeout(()=>{ if(!loaded && fb) fb.style.display="flex"; }, 6000);
-  }
+  fetchNews();
+  if(window._newsTimer) clearInterval(window._newsTimer);
+  window._newsTimer=setInterval(fetchNews, 60000);
 }
 
 async function load(){

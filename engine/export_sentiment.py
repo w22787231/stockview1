@@ -285,7 +285,9 @@ def fetch_tw_margin_ratio():
         return {"sym": "TWMARGIN", "label": "台股融資維持率",
                 "note": "上市·不含ETF·斷頭壓力", "unit": "pt",
                 "read": "<130% 斷頭警戒(常見底部);上市口徑、分子不含ETF,絕對值略高於含上櫃版",
-                "level": ratio, "diff": diff, "spark": series, "dates": dates}
+                "level": ratio, "diff": diff, "spark": series, "dates": dates,
+                "url": "https://www.macromicro.me/charts/53117/taiwan-taiex-maintenance-margin",
+                "src": "財經M平方"}
     except Exception:
         return None
 

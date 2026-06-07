@@ -19,11 +19,11 @@ BREADTH_POOL = "sp500"   # 用 SP500 當美股大盤廣度代表
 
 # yield_like 概念：這些指標用「水準 + 日差」呈現，不是漲跌%。
 LEVELS = [
-    {"sym": "^VIX",  "label": "VIX 恐慌指數",  "note": "標普500波動率", "unit": "pt",
+    {"sym": "^VIX",  "cboe": "VIX",  "label": "VIX 恐慌指數",  "note": "標普500波動率", "unit": "pt",
      "read": "高=恐慌、低=貪婪(<15 偏自滿、>30 偏恐慌)"},
-    {"sym": "^VXN",  "label": "VXN 那指波動",  "note": "Nasdaq-100 波動率", "unit": "pt",
+    {"sym": "^VXN",  "cboe": "VXN",  "label": "VXN 那指波動",  "note": "Nasdaq-100 波動率", "unit": "pt",
      "read": "那指版 VIX，科技股恐慌程度"},
-    {"sym": "^SKEW", "label": "SKEW 尾部風險", "note": "黑天鵝/崩盤避險需求", "unit": "pt",
+    {"sym": "^SKEW", "cboe": "SKEW", "label": "SKEW 尾部風險", "note": "黑天鵝/崩盤避險需求", "unit": "pt",
      "read": "越高=市場越在買崩盤保險(>145 偏警戒)"},
     {"sym": "HYG",   "label": "HYG 高收益債",  "note": "信用風險(跌=避險升溫)", "unit": "px",
      "read": "高收益債價，跌代表信用市場轉趨避險"},
@@ -43,31 +43,51 @@ def _round(x, n=2):
     return round(v, n) if v is not None else None
 
 
+def _cboe_index(name):
+    """Cboe 指數日線 CSV → 收盤序列(最後一欄=CLOSE,兼容 2 欄與 OHLC 格式)。"""
+    try:
+        d = urllib.request.urlopen(urllib.request.Request(
+            f"https://cdn.cboe.com/api/global/us_indices/daily_prices/{name}_History.csv",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read().decode("utf-8", "ignore")
+        closes = []
+        for r in list(csv.reader(io.StringIO(d)))[1:]:
+            v = _safe(r[-1]) if r else None
+            if v is not None:
+                closes.append(v)
+        return closes if len(closes) >= 2 else None
+    except Exception:
+        return None
+
+
 def fetch_levels():
-    syms = [x["sym"] for x in LEVELS]
-    df = yf.download(syms, period="4mo", interval="1d",
-                     group_by="ticker", progress=False, auto_adjust=False)
     out, failed = [], []
+    # HYG(ETF)用 yfinance;VIX/VXN/SKEW 改用 Cboe 官方 CSV(yfinance 指數常掉資料)
+    yf_syms = [x["sym"] for x in LEVELS if not x.get("cboe")]
+    ydf = (yf.download(yf_syms, period="4mo", interval="1d", group_by="ticker",
+                       progress=False, auto_adjust=False) if yf_syms else None)
     for it in LEVELS:
         s = it["sym"]
         try:
-            if getattr(df.columns, "nlevels", 1) > 1 and s in df.columns.get_level_values(0):
-                sub = df[s].dropna()
+            if it.get("cboe"):
+                closes = _cboe_index(it["cboe"])
+                if not closes:
+                    failed.append(s); continue
             else:
-                sub = df.dropna()
-            if len(sub) < 2:
-                failed.append(s); continue
-            last = float(sub["Close"].iloc[-1])
-            prev = float(sub["Close"].iloc[-2])
+                if getattr(ydf.columns, "nlevels", 1) > 1 and s in ydf.columns.get_level_values(0):
+                    sub = ydf[s].dropna()
+                else:
+                    sub = ydf.dropna()
+                closes = [float(x) for x in sub["Close"].tolist() if x == x]
+                if len(closes) < 2:
+                    failed.append(s); continue
+            last, prev = closes[-1], closes[-2]
             row = {"sym": s, "label": it["label"], "note": it["note"],
-                   "read": it["read"], "unit": it["unit"],
-                   "level": _round(last, 2)}
+                   "read": it["read"], "unit": it["unit"], "level": _round(last, 2)}
             if it["unit"] == "px":
-                row["diff_pct"] = _round((last/prev - 1)*100, 2)   # 價格類用%
+                row["diff_pct"] = _round((last / prev - 1) * 100, 2)   # 價格類用%
             else:
-                row["diff"] = _round(last - prev, 2)               # 指數類用點差
-            closes = [float(x) for x in sub["Close"].tolist() if x == x]
-            row["spark"] = [round(v, 2) for v in closes[-60:]]     # ~60日迷你走勢
+                row["diff"] = _round(last - prev, 2)                   # 指數類用點差
+            row["spark"] = [round(v, 2) for v in closes[-60:]]         # ~60日迷你走勢
             out.append(row)
         except Exception:
             failed.append(s)

@@ -1804,7 +1804,7 @@ function loadNewsFeed(){
     '<section><div class="sec-head"><h2>即時快訊</h2><span class="hint">每分鐘自動刷新 · 點標題開原文</span></div>'+
       '<div id="newsTabs" class="news-tabs">'+tabs+'</div>'+
       '<div id="newsList" class="news-list"><div class="loading-screen">載入新聞 …</div></div>'+
-      '<div class="legend">中文：鉅亨/Yahoo股市/Google News台股；英文：Google News(國際/科技/財經)/Yahoo Finance/CNBC。RSS 即時彙整，僅連結不轉載，非投資建議。</div>'+
+      '<div class="legend">台股中文：鉅亨/Yahoo股市；國際/科技/財經(英文)：CNBC、Yahoo Finance。RSS 即時彙整，僅連結不轉載，非投資建議。</div>'+
     '</section>';
   document.querySelectorAll("#newsTabs .ntab").forEach(b=>b.onclick=()=>setNewsFeed(b.dataset.k));
   fetchNews();

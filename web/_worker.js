@@ -1,30 +1,26 @@
 // Cloudflare Pages 進階模式 Worker:/api/news 動態代理 RSS,其餘走靜態資產。
 // (functions/ 目錄在 wrangler pages deploy 下未被編譯,故改用 _worker.js,必被識別。)
 
-const GNT = (t) => `https://news.google.com/rss/headlines/section/topic/${t}?hl=en-US&gl=US&ceid=US:en`;
-const GNS = (q) => `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`;
-
+// 只用「從 Cloudflare 邊緣可成功抓」的源:cnyes / Yahoo / CNBC。
+// (Google News、BBC、Al Jazeera 等會被邊緣資料中心 IP 擋,故不用。)
+const CNBC = (id) => `https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=${id}`;
 const GROUPS = {
   tw: [
     { url: "https://news.cnyes.com/rss/v1/news/category/tw_stock", src: "鉅亨·台股" },
     { url: "https://news.cnyes.com/rss/v1/news/category/headline", src: "鉅亨·頭條" },
     { url: "https://tw.stock.yahoo.com/rss?category=news", src: "Yahoo股市" },
-    { url: "https://news.google.com/rss/search?q=%E5%8F%B0%E8%82%A1+when:1d&hl=zh-TW&gl=TW&ceid=TW:zh-Hant", src: "" },
   ],
-  world: [   // Google News 從邊緣 IP 會被擋,改用非 Google 國際源
-    { url: "https://feeds.bbci.co.uk/news/world/rss.xml", src: "BBC" },
-    { url: "https://www.aljazeera.com/xml/rss/all.xml", src: "Al Jazeera" },
-    { url: "https://feeds.npr.org/1004/rss.xml", src: "NPR" },
+  world: [
+    { url: CNBC(100727362), src: "CNBC World" },
+    { url: CNBC(100003114), src: "CNBC" },
   ],
   tech: [
-    { url: "https://feeds.bbci.co.uk/news/technology/rss.xml", src: "BBC" },
-    { url: "https://techcrunch.com/feed/", src: "TechCrunch" },
-    { url: "https://feeds.arstechnica.com/arstechnica/index", src: "Ars Technica" },
+    { url: CNBC(19854910), src: "CNBC Tech" },
+    { url: CNBC(10001147), src: "CNBC Biz" },
   ],
   finance: [
-    { url: GNT("BUSINESS"), src: "" },
     { url: "https://finance.yahoo.com/news/rssindex", src: "Yahoo Finance" },
-    { url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258", src: "CNBC" },
+    { url: CNBC(20910258), src: "CNBC 市場" },
   ],
 };
 
@@ -39,11 +35,15 @@ function decode(s) {
 function stripTags(s) { return s.replace(/<[^>]+>/g, "").trim(); }
 
 async function fetchFeed(feed) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 6000);   // 單源 6 秒逾時,不拖累整體
   try {
     const r = await fetch(feed.url, {
       headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/rss+xml,application/xml,text/xml,*/*" },
       cf: { cacheTtl: 120, cacheEverything: true },
+      signal: ctrl.signal,
     });
+    clearTimeout(tid);
     if (!r.ok) return [];
     const xml = await r.text();
     const out = [];
@@ -66,6 +66,10 @@ async function fetchFeed(feed) {
 
 async function handleNews(request) {
   const feedKey = new URL(request.url).searchParams.get("feed") || "tw";
+  const cache = caches.default;
+  const cacheKey = new Request("https://news.cache/api/news?feed=" + feedKey);  // 穩定 key,忽略 &t=
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
   const feeds = GROUPS[feedKey] || GROUPS.tw;
   const lists = await Promise.all(feeds.map(fetchFeed));
   const seen = new Set(), uniq = [];
@@ -79,13 +83,15 @@ async function handleNews(request) {
     title: it.title, link: it.link, src: it.src,
     time: it.ts ? new Date(it.ts).toISOString() : null,
   }));
-  return new Response(JSON.stringify({ feed: feedKey, generated_at: new Date().toISOString(), count: items.length, items }), {
+  const resp = new Response(JSON.stringify({ feed: feedKey, generated_at: new Date().toISOString(), count: items.length, items }), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "public, max-age=120",
       "Access-Control-Allow-Origin": "*",
     },
   });
+  if (items.length) { try { await cache.put(cacheKey, resp.clone()); } catch (e) {} }  // 有內容才快取
+  return resp;
 }
 
 export default {

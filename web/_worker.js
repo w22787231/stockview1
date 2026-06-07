@@ -11,10 +11,15 @@ const GROUPS = {
     { url: "https://tw.stock.yahoo.com/rss?category=news", src: "Yahoo股市" },
     { url: "https://news.google.com/rss/search?q=%E5%8F%B0%E8%82%A1+when:1d&hl=zh-TW&gl=TW&ceid=TW:zh-Hant", src: "" },
   ],
-  world: [{ url: GNT("WORLD"), src: "" }],
+  world: [   // Google News 從邊緣 IP 會被擋,改用非 Google 國際源
+    { url: "https://feeds.bbci.co.uk/news/world/rss.xml", src: "BBC" },
+    { url: "https://www.aljazeera.com/xml/rss/all.xml", src: "Al Jazeera" },
+    { url: "https://feeds.npr.org/1004/rss.xml", src: "NPR" },
+  ],
   tech: [
-    { url: GNT("TECHNOLOGY"), src: "" },
-    { url: GNS("artificial+intelligence+OR+AI+OR+semiconductor+OR+chip+when:1d"), src: "" },
+    { url: "https://feeds.bbci.co.uk/news/technology/rss.xml", src: "BBC" },
+    { url: "https://techcrunch.com/feed/", src: "TechCrunch" },
+    { url: "https://feeds.arstechnica.com/arstechnica/index", src: "Ars Technica" },
   ],
   finance: [
     { url: GNT("BUSINESS"), src: "" },

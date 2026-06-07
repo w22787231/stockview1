@@ -228,6 +228,65 @@ def fetch_leverage():
         return None
 
 
+def fetch_tw_margin_ratio():
+    """台股大盤融資維持率(上市)= 融資市值 / 融資金額。
+    來源:TWSE STOCK_DAY_ALL(逐檔收盤)+ 舊版 MI_MARGN(融資金額總額 + 逐檔張)。
+    歷史:回讀已發布 sentiment.json 逐日累積(免額外儲存)。"""
+    def _g(u, t=25):
+        return urllib.request.urlopen(
+            urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=t
+        ).read().decode("utf-8", "ignore")
+    try:
+        sd = json.loads(_g("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"))
+        price, roc = {}, ""
+        for r in sd:
+            c = _safe(r.get("ClosingPrice"))
+            if c:
+                price[r["Code"]] = c
+            roc = r.get("Date", roc)
+        if not price or not roc:
+            return None
+        ymd = str(int(roc[:3]) + 1911) + roc[3:]   # 1150605 -> 20260605
+        mj = json.loads(_g(f"https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={ymd}&selectType=ALL&response=json"))
+        tables = mj.get("tables", [])
+        loan = None
+        for row in tables[0]["data"]:
+            if "融資金額" in row[0]:
+                loan = float(row[5].replace(",", "")) * 1000   # 仟元→元(今日餘額)
+        if not loan:
+            return None
+        mv = 0.0
+        for row in tables[1]["data"]:
+            lots = _safe(row[6].replace(",", "")) if len(row) > 6 else None
+            p = price.get(row[0].strip())
+            if lots and p:
+                mv += lots * 1000 * p
+        if mv <= 0:
+            return None
+        ratio = round(mv / loan * 100, 2)
+        dates, series = [], []
+        try:
+            prev = json.loads(_g("https://stockview1.pages.dev/data/sentiment.json", 10))
+            for lv in prev.get("levels", []):
+                if lv.get("sym") == "TWMARGIN":
+                    dates = list(lv.get("dates") or [])
+                    series = list(lv.get("spark") or [])
+        except Exception:
+            pass
+        if dates and dates[-1] == ymd:
+            series[-1] = ratio
+        else:
+            dates.append(ymd); series.append(ratio)
+        dates, series = dates[-60:], series[-60:]
+        diff = round(series[-1] - series[-2], 2) if len(series) >= 2 else None
+        return {"sym": "TWMARGIN", "label": "台股融資維持率",
+                "note": "大盤·斷頭壓力(上市)", "unit": "pt",
+                "read": "<130% 斷頭警戒(常見底部);越低代表槓桿越緊",
+                "level": ratio, "diff": diff, "spark": series, "dates": dates}
+    except Exception:
+        return None
+
+
 def build():
     levels, failed = fetch_levels()
     cor = fetch_cor1m()
@@ -235,6 +294,11 @@ def build():
         levels.append(cor)
     else:
         failed.append("COR1M")
+    tw = fetch_tw_margin_ratio()
+    if tw:
+        levels.append(tw)
+    else:
+        failed.append("TWMARGIN")
     breadth = market_breadth()
     fng = fetch_fear_greed()
     leverage = fetch_leverage()

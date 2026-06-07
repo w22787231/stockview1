@@ -1,0 +1,8 @@
+# Cloudflare Pages 標頭規則。
+# 讓瀏覽器每次都重新驗證 HTML(CSS/JS 內嵌其中),改版後不必手動強制重整。
+# 資料 JSON 已由前端各自帶 ?t=timestamp cache-bust,不受此影響。
+# no-cache = 可暫存但使用前必須向伺服器驗證(未變回 304 很快、已變抓新版)。
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache

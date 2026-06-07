@@ -1374,19 +1374,24 @@ function renderEtf(){
   });
 }
 
-async function loadMacro(){
-  for(const k in SORT_STATE) delete SORT_STATE[k];
-  $("#content").innerHTML = '<div class="loading-screen">載入 總體市場 …</div>';
+async function loadMacro(silent){
+  if(!silent){
+    for(const k in SORT_STATE) delete SORT_STATE[k];
+    $("#content").innerHTML = '<div class="loading-screen">載入 總體市場 …</div>';
+  }
   try{
     const res = await fetch("data/macro.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(res.status);
     const d = await res.json();
+    if(silent && _lastGen.macro === d.generated_at) return;   // 指數無新資料 → 不重繪(情緒區另抓)
+    _lastGen.macro = d.generated_at;
     $("#meta").innerHTML = '<div><b>指數</b> '+(d.indices||[]).length+' · <b>ETF</b> '+(d.etfs||[]).length+'</div>'+
       '<div><b>更新</b> '+esc(fmtTime(d.generated_at))+' · '+esc(d.source||"yfinance")+'</div>';
     $("#poolNote").innerHTML = '美股總體市場快照。指數價格用收盤、收益率/VIX 用水準＋日差。';
-    renderMacro(d);
+    renderMacro(d);   // 內含 #sentBox + loadSentiment()
+    if(silent) flashUpdated();
   }catch(e){
-    $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/macro.json 失敗（'+esc(e.message)+'）。<br>'+
+    if(!silent) $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/macro.json 失敗（'+esc(e.message)+'）。<br>'+
       '首次部署或尚未產生資料時會這樣，請先在 GitHub Actions 跑一次 export。</div>';
   }
 }
@@ -1852,14 +1857,19 @@ function loadNewsFeed(){
   window._newsTimer=setInterval(fetchNews, 60000);
 }
 
-async function load(){
-  // 切池/重新整理 → 清掉排序狀態，回到各表預設順序。
-  for(const k in SORT_STATE) delete SORT_STATE[k];
-  $("#content").innerHTML = '<div class="loading-screen">載入 '+current.toUpperCase()+' …</div>';
+async function load(silent){
+  if(!silent){
+    // 切池/手動 → 清掉排序狀態並顯示載入畫面。自動刷新(silent)則保留排序、不閃。
+    for(const k in SORT_STATE) delete SORT_STATE[k];
+    $("#content").innerHTML = '<div class="loading-screen">載入 '+current.toUpperCase()+' …</div>';
+  }
   try{
     const res = await fetch("data/"+current+".json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(res.status);
     const d = await res.json();
+    const gkey = "pool:"+current+":"+TREND_SUB;
+    if(silent && _lastGen[gkey] === d.generated_at) return;   // 無新資料 → 不重繪
+    _lastGen[gkey] = d.generated_at;
     const cur=(d.currencies||[]).join("/");
     $("#meta").innerHTML = '<div><b>池</b> '+esc(d.pool_label)+' · '+d.n_ok+'/'+d.n_list+' 檔 · '+esc(cur)+'</div>'+
       '<div><b>更新</b> '+esc(fmtTime(d.generated_at))+' · '+esc(d.source||"yfinance")+'</div>';
@@ -1867,8 +1877,9 @@ async function load(){
       ? '⚠️ 本池含多幣別，Score / avg$Vol 跨幣別不可直接比（TWD 金額天生大於 USD）。'
       : '本池幣別 '+esc(cur)+'。Score 同幣別內比較有意義。';
     if(TREND_SUB==="cross") renderCross(d); else render(d);
+    if(silent) flashUpdated();
   }catch(e){
-    $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/'+current+'.json 失敗（'+esc(e.message)+'）。<br>'+
+    if(!silent) $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/'+current+'.json 失敗（'+esc(e.message)+'）。<br>'+
       '首次部署或尚未產生資料時會這樣，請先在 GitHub Actions 跑一次 export，或按「更新資料」。</div>';
   }
 }
@@ -1984,12 +1995,35 @@ $("#refreshBtn").onclick = async ()=>{
   }
 };
 
+// ── 自動更新:每 N 分鐘重抓當前分頁,generated_at 變了才重繪(不閃、保留排序) ──
+let _lastGen = {};
+const AUTO_MS = 300000;   // 5 分鐘
+function flashUpdated(){
+  let t=document.getElementById("autoToast");
+  if(!t){ t=document.createElement("div"); t.id="autoToast";
+    t.style.cssText="position:fixed;right:14px;bottom:14px;background:var(--green);color:#fff;font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.22);z-index:60;opacity:0;transition:opacity .3s";
+    document.body.appendChild(t); }
+  t.textContent="✅ 資料已更新 "+new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"});
+  t.style.opacity="1"; clearTimeout(t._h); t._h=setTimeout(()=>{t.style.opacity="0";},3000);
+}
+function refreshCurrent(){
+  // 新聞分頁有自己的 60s 計時器;產業鏈/ETF 變動少且已快取 → 不在此自動刷新
+  if(VIEW==="macro") loadMacro(true);
+  else if(VIEW==="trend"||VIEW==="cross") load(true);
+  const b=document.getElementById("autoBadge");
+  if(b) b.textContent="🔄 自動更新 · 檢查 "+new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"});
+}
+
 // ── 啟動 ──
 (async function init(){
   let idx=null;
   try{ idx=await (await fetch("data/index.json?t="+Date.now(),{cache:"no-store"})).json(); }catch(e){}
   renderTabs(idx);
   load();
+  const b=document.createElement("div"); b.id="autoBadge";   // 自動更新指示徽章
+  b.style.cssText="position:fixed;left:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);color:var(--ink3);font-size:10.5px;padding:4px 9px;border-radius:8px;box-shadow:var(--shadow);z-index:40";
+  b.textContent="🔄 自動更新 每5分"; document.body.appendChild(b);
+  setInterval(refreshCurrent, AUTO_MS);
 })();
 </script>
 </body>

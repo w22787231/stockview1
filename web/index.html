@@ -914,9 +914,6 @@ function sentAlert(sym, level, diffPct){
     case "COR1M": // 隱含相關性越低=越自滿/脆弱(<=15 歷史低檔，紅閃)
       if(level<=15) return {cls:"alert-red", tag:"🔴 相關性極低·脆弱"};
       return null;
-    case "TWMARGIN": // 融資維持率越低=斷頭壓力越大(<=140 警戒，130 為追繳線)
-      if(level<=140) return {cls:"alert-red", tag:"🔴 斷頭警戒"};
-      return null;
     case "HYG":   // 單日跌 >1% = 信用惡化(紅閃)
       if(diffPct!=null && diffPct<=-1) return {cls:"alert-red", tag:"🔴 信用轉弱"};
       return null;
@@ -930,7 +927,6 @@ const SENT_THR = {
   "^VXN":  {v:32,  dir:"hi", lab:"恐慌32"},
   "^SKEW": {v:150, dir:"hi", lab:"警戒150"},
   "COR1M": {v:8,   dir:"lo", lab:"危險8"},
-  "TWMARGIN": {v:130, dir:"lo", lab:"斷頭130"},
 };
 
 function sparkline(data, col, thr){

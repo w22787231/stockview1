@@ -299,11 +299,6 @@ def build():
         levels.append(cor)
     else:
         failed.append("COR1M")
-    tw = fetch_tw_margin_ratio()
-    if tw:
-        levels.append(tw)
-    else:
-        failed.append("TWMARGIN")
     breadth = market_breadth()
     fng = fetch_fear_greed()
     leverage = fetch_leverage()

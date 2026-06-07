@@ -1920,19 +1920,58 @@ function gotoSym(sym, syms){
   else banner("🔍「"+esc(sym)+"」尚無個股詳情，且不在目前榜單池中（榜單搜尋請先切到對應池）。");
 }
 
+// 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes
+async function showLiveQuote(raw){
+  const q=(raw||"").trim().toUpperCase();
+  let cands;
+  if(/^\d/.test(q)) cands=[q+".TW", q+".TWO"];          // 台股數字 → 試上市/上櫃
+  else if(/\.(TW|TWO)$/.test(q)) cands=[q];
+  else cands=[q];                                        // 美股等
+  $("#content").innerHTML='<div class="loading-screen">即時查詢 '+esc(raw)+' …</div>';
+  try{
+    const d=await (await fetch("/api/quotes?kline=1&syms="+encodeURIComponent(cands.join(","))+"&t="+Date.now(),{cache:"no-store"})).json();
+    let qt=null;
+    for(const c of cands){ if(d.quotes && d.quotes[c]){ qt=d.quotes[c]; break; } }
+    if(!qt){ $("#content").innerHTML='<div class="loading-screen">🔍 找不到「'+esc(raw)+'」的即時報價(代號可能不存在或暫無資料)。</div>'; return; }
+    renderLiveQuote(qt);
+  }catch(e){ $("#content").innerHTML='<div class="loading-screen">即時查詢失敗:'+esc(e.message)+'</div>'; }
+}
+function renderLiveQuote(q){
+  const chg=(q.price!=null&&q.prev!=null)?(q.price-q.prev):null;
+  const pct=(chg!=null&&q.prev)?(chg/q.prev*100):null;
+  const cls=chg==null?"dim":(chg>=0?"pos":"neg"), sign=chg>0?"+":"";
+  const fmt=v=>v==null?"–":Number(v).toLocaleString();
+  const spk=(q.closes&&q.closes.length>1)?sparkline(q.closes, chg>=0?"#16a34a":"#e11d48"):"";
+  $("#content").innerHTML=
+    '<div class="backbtn" id="backBtn">← 返回</div>'+
+    '<div class="stk-head"><span class="ssym">'+esc(q.sym)+'</span><span class="snm">'+esc(q.name||"")+'</span>'+
+      '<span class="ssec">即時報價 · '+esc(q.currency||"")+'</span></div>'+
+    '<div class="stk-price '+cls+'">'+fmt(q.price)+'</div>'+
+    '<div class="ic-chg '+cls+'" style="font-size:15px">'+sign+(chg!=null?chg.toFixed(2):"–")+' ('+sign+(pct!=null?pct.toFixed(2):"–")+'%)</div>'+
+    (spk?'<div style="max-width:460px;margin:12px 0 4px">'+spk+'<div style="font-size:11px;color:var(--ink3)">近 6 個月日K(收盤)</div></div>':'')+
+    '<div class="stk-metrics">'+
+      '<div class="mc"><div class="k">前收</div><div class="v">'+fmt(q.prev)+'</div></div>'+
+      '<div class="mc"><div class="k">當日 高/低</div><div class="v">'+fmt(q.dayHigh)+' / '+fmt(q.dayLow)+'</div></div>'+
+      '<div class="mc"><div class="k">52週 高/低</div><div class="v">'+fmt(q.wkHigh)+' / '+fmt(q.wkLow)+'</div></div>'+
+      '<div class="mc"><div class="k">成交量</div><div class="v">'+fmt(q.vol)+'</div></div>'+
+    '</div>'+
+    '<div class="legend">即時報價(Yahoo,可能延遲約 15 分)。任意代號即時查詢;財報/評分/翻譯新聞等深度詳情僅 1700 檔預生清單內提供。</div>';
+  $("#meta").innerHTML='<div><b>即時查詢</b> '+esc(q.sym)+'</div><div>'+esc(q.name||"")+'</div>';
+  $("#poolNote").innerHTML="";
+  const b=document.getElementById("backBtn"); if(b) b.onclick=()=>switchView(["cross","macro","chain","etf"].includes(VIEW)?VIEW:"trend");
+}
+
 async function doSearch(){
   const raw = ($("#searchInput").value||"").trim();
   if(!raw) return;
   await loadStockIndex();
   const syms = (STOCK_IDX&&STOCK_IDX.syms)||[];
 
-  // 1) 代號（含數字、或已帶 .TW/.TWO）優先
-  if(/^[0-9]/.test(raw) || /\.(TW|TWO)$/i.test(raw)){
+  // 1) 代號(數字 / 帶 .TW.TWO / 英文代號如 NVDA)→ 1700檔內開詳情,否則即時報價卡
+  if(/^[A-Za-z0-9][A-Za-z0-9.\-=^]*$/.test(raw)){
     const target = resolveSymByCode(syms, raw);
     if(target){ openStock(target); return; }
-    // 代號沒詳情 → 榜單高亮
-    if(highlightInList(raw)){ banner("🔍「"+esc(raw)+"」尚無個股詳情，已在榜單中高亮。"); return; }
-    banner("🔍 找不到「"+esc(raw)+"」。個股詳情僅涵蓋已產生清單("+syms.length+"檔)；榜單搜尋請先切到對應池。");
+    showLiveQuote(raw);
     return;
   }
 

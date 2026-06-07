@@ -94,10 +94,58 @@ async function handleNews(request) {
   return resp;
 }
 
+// ── 即時報價:代理 Yahoo chart API(任意代號,不限預生的 1700 檔)──
+async function fetchQuote(sym, withKline) {
+  const range = withKline ? "6mo" : "1d";
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const r = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=${range}`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, cf: { cacheTtl: 20 }, signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const res = j && j.chart && j.chart.result && j.chart.result[0];
+    if (!res || !res.meta) return null;
+    const m = res.meta;
+    if (m.regularMarketPrice == null) return null;
+    const q = {
+      sym: m.symbol || sym, name: m.longName || m.shortName || sym, currency: m.currency || "",
+      price: m.regularMarketPrice, prev: (m.chartPreviousClose != null ? m.chartPreviousClose : m.previousClose),
+      dayHigh: m.regularMarketDayHigh, dayLow: m.regularMarketDayLow,
+      wkHigh: m.fiftyTwoWeekHigh, wkLow: m.fiftyTwoWeekLow, vol: m.regularMarketVolume,
+    };
+    if (withKline) {
+      const c = res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close;
+      q.closes = (c || []).filter(x => x != null).map(x => Math.round(x * 100) / 100);
+    }
+    return q;
+  } catch (e) { clearTimeout(tid); return null; }
+}
+
+async function handleQuotes(request) {
+  const url = new URL(request.url);
+  const withKline = url.searchParams.get("kline") === "1";
+  let syms = (url.searchParams.get("syms") || "").split(",").map(s => s.trim()).filter(Boolean);
+  syms = syms.slice(0, withKline ? 5 : 40);
+  const arr = await Promise.all(syms.map(s => fetchQuote(s, withKline)));
+  const quotes = {};
+  syms.forEach((s, i) => { if (arr[i]) quotes[s] = arr[i]; });
+  return new Response(JSON.stringify({ quotes, ts: new Date().toISOString() }), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=20",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/news") return handleNews(request);
+    if (url.pathname === "/api/quotes") return handleQuotes(request);
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },
 };

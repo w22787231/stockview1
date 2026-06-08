@@ -86,6 +86,21 @@
   .news-time{color:var(--ink3)}
   .news-title{font-size:14px;line-height:1.5;color:var(--ink)}
   .news-orig{font-size:12px;line-height:1.4;color:var(--ink3);margin-top:2px}
+  /* 財報/數據 行事曆 */
+  .cal-day{margin:0 0 14px}
+  .cal-date{font-weight:800;font-size:13.5px;color:var(--ink);padding:6px 0 4px;border-bottom:1px solid var(--line);margin-bottom:3px}
+  .cal-wd{color:var(--ink3);font-weight:600;font-size:12px}
+  .cal-cd{color:var(--blue);font-weight:700;font-size:11.5px;margin-left:4px}
+  .cal-ev{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px}
+  .cal-ev:hover{background:var(--panel2)}
+  .cal-time{font-family:var(--mono);font-size:12px;color:var(--ink2);min-width:46px}
+  .cal-badge{font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;white-space:nowrap}
+  .cal-badge.econ{background:#eaf2ff;color:var(--blue)}
+  .cal-badge.earn{background:#fff3e0;color:#b9770e}
+  .cal-dot{display:inline-block;width:7px;height:7px;border-radius:50%}
+  .cal-dot.hi{background:var(--red)} .cal-dot.mid{background:var(--amber)}
+  .cal-title{font-size:13.5px;color:var(--ink);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cal-sub{font-size:11px;color:var(--ink3);white-space:nowrap}
   .idx-card .src-link{display:inline-block;margin-top:5px;font-size:10.5px;color:var(--blue);text-decoration:none;font-weight:600}
   .idx-card .src-link:hover{text-decoration:underline}
   /* 持股分析 */
@@ -1808,6 +1823,7 @@ function switchView(v){
   else if(v==="chain") loadChain();
   else if(v==="etf") loadEtf();
   else if(v==="holdings") loadHoldings();
+  else if(v==="calendar") loadCalendar();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 // ── 主分頁:動態渲染 + 可拖曳重排(順序存 localStorage navOrder)──
@@ -1818,6 +1834,7 @@ const NAV=[
   {view:"chain",   label:"產業鏈"},
   {view:"etf",     label:"ETF持股異動"},
   {view:"holdings",label:"持股分析"},
+  {view:"calendar",label:"財報/數據"},
   {view:"news",    label:"新聞"},
 ];
 function navOrder(){
@@ -2120,6 +2137,53 @@ function renderHoldings(rows){
   $("#holdResult").innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
     '<div class="legend">1/5/20日=多日漲幅。量比=最後一日成交金額÷近20日均(≥1.5× 且 5日漲→資金流入🟢;≥1.5× 但 5日跌→爆量下跌🔴)。距52週高/低=現價相對高(負)/低(正)。健康檢查:創新高區 / 遠離高點≥25% / 逼近52週低 / 今日重挫≥3%。即時報價(Yahoo,可能延遲約15分)。</div>';
   $("#holdResult").querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code));
+}
+
+// ── 財報/數據:未來30天重要總經數據 + 企業財報/法說(台北時間,data/calendar.json)──
+function loadCalendar(){
+  $("#meta").innerHTML='<div><b>財報/數據</b></div><div>未來30天 · 台北時間</div>';
+  $("#poolNote").innerHTML="";
+  $("#content").innerHTML='<div class="loading-screen">載入 財報/數據 …</div>';
+  fetch("data/calendar.json?t="+Date.now(),{cache:"no-store"})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(renderCalendar)
+    .catch(e=>{ $("#content").innerHTML='<section><div class="sec-head"><h2>財報/數據</h2></div><div class="note">⚠️ 找不到行事曆資料(data/calendar.json)。請在 GitHub Actions 跑一次 export。</div></section>'; });
+}
+function renderCalendar(d){
+  const ev=[];
+  (d.econ||[]).forEach(e=>ev.push({date:e.date,time:e.time,type:"econ",region:e.region||"US",imp:e.importance,title:e.name,sub:e.et||""}));
+  (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),sub:"財報(預估)"}));
+  (d.earnings_tw||[]).forEach(e=>ev.push({date:e.date,time:e.time||"",type:"earn",region:"TW",title:e.sym+(e.name?" "+e.name:""),sub:e.kind||"法說會"}));
+  const today=new Date(); today.setHours(0,0,0,0);
+  const end=new Date(today); end.setDate(end.getDate()+30);
+  const inRange=ev.filter(e=>{ const dt=new Date(e.date+"T00:00:00"); return dt>=today && dt<=end; });
+  const wd=["日","一","二","三","四","五","六"];
+  const dot=imp=>imp==="high"?'<span class="cal-dot hi" title="高重要度"></span>':(imp==="mid"?'<span class="cal-dot mid" title="中重要度"></span>':'');
+  const flag=r=>r==="TW"?"🇹🇼":"🇺🇸";
+  let html='<section><div class="sec-head"><h2>財報/數據</h2><span class="tag">未來30天 · 台北時間</span>'+
+    '<span class="hint">📊 重要總經數據(美股)· 📈 企業財報/法說(美/台)。時間皆換算台北時間。</span></div>';
+  if(!inRange.length){
+    $("#content").innerHTML=html+'<div class="legend">未來30天暫無資料(或尚未產生 data/calendar.json)。</div></section>'; return;
+  }
+  const byDate={};
+  inRange.forEach(e=>{ (byDate[e.date]=byDate[e.date]||[]).push(e); });
+  Object.keys(byDate).sort().forEach(ds=>{
+    const dt=new Date(ds+"T00:00:00");
+    const diff=Math.round((dt-today)/86400000);
+    const cd=diff===0?"今天":(diff===1?"明天":diff+"天後");
+    html+='<div class="cal-day"><div class="cal-date">'+ds.slice(5).replace("-","/")+
+      ' <span class="cal-wd">(週'+wd[dt.getDay()]+')</span> <span class="cal-cd">'+cd+'</span></div>';
+    byDate[ds].sort((a,b)=>((a.time||"99:99")>(b.time||"99:99")?1:-1)).forEach(e=>{
+      const badge=e.type==="econ"?'<span class="cal-badge econ">📊 數據</span>':'<span class="cal-badge earn">📈 財報</span>';
+      html+='<div class="cal-ev">'+
+        '<span class="cal-time">'+(e.time||"–")+'</span>'+badge+dot(e.imp)+
+        '<span class="cal-title">'+flag(e.region)+' '+esc(e.title)+'</span>'+
+        '<span class="cal-sub">'+esc(e.sub||"")+'</span></div>';
+    });
+    html+='</div>';
+  });
+  html+='<div class="legend">'+esc(d.note||"")+' · 資料更新 '+esc(fmtTime(d.generated_at))+'。</div></section>';
+  $("#content").innerHTML=html;
 }
 
 // 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes

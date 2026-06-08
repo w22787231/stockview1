@@ -98,6 +98,14 @@ jobs:
           cd engine
           python export_sentiment.py || true
 
+      - name: Export calendar (econ data + earnings, Taipei time)
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_calendar.py || true
+
       - name: Export per-stock detail (top names per pool)
         # 全 5 池(不加數字=全池) + 台股主題成分股，約 1700 檔。
         # 減重：關新聞翻譯(17000次翻譯太慢)、K線抽2年(回測仍自抓5年)。

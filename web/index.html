@@ -2351,12 +2351,19 @@ async function fetchAndRenderHold(){
   for(let i=0;i<cands.length;i+=5) batches.push(cands.slice(i,i+5));   // kline 模式上限 5 檔/批
   box.innerHTML='<div class="loading-screen">即時查詢 '+codes.length+' 檔 …</div>';
   const Q={};
+  // 單批最多重試 3 次:/api/quotes 偶發失敗時不讓整批變「查無」。
+  const fetchBatch=async b=>{
+    for(let i=0;i<3;i++){
+      try{
+        const d=await (await fetch("/api/quotes?kline=1&syms="+encodeURIComponent(b.join(","))+"&t="+Date.now()+"_"+i,{cache:"no-store"})).json();
+        if(d && d.quotes && Object.keys(d.quotes).length) return d.quotes;
+      }catch(e){}
+    }
+    return {};
+  };
   try{
-    const results=await Promise.all(batches.map(b=>
-      fetch("/api/quotes?kline=1&syms="+encodeURIComponent(b.join(","))+"&t="+Date.now(),{cache:"no-store"})
-        .then(r=>r.json()).catch(()=>({quotes:{}}))
-    ));
-    results.forEach(d=>Object.assign(Q,d.quotes||{}));
+    const results=await Promise.all(batches.map(fetchBatch));
+    results.forEach(q=>Object.assign(Q,q||{}));
   }catch(e){ box.innerHTML='<div class="loading-screen">查詢失敗:'+esc(e.message)+'(需部署後 /api/quotes 才可用)</div>'; return; }
   const rows=codes.map(code=>{ let qt=null,used=null; for(const c of _holdCand(code)){ if(Q[c]){qt=Q[c];used=c;break;} } return {code,qt,used}; });
   // 基本面(Yahoo quoteSummary)+ 同業PE 中位數,平行抓;失敗則相關欄顯「–」。

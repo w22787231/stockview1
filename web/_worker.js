@@ -249,12 +249,54 @@ async function handleFundamentals(request) {
   return resp;
 }
 
+// ── 選擇權鏈:Yahoo options(需 crumb+cookie)→ 各履約價 OI/量/IV(算 PCR/MaxPain/分布)──
+async function fetchOptions(sym, crumb, cookie, date) {
+  try {
+    let u = "https://query1.finance.yahoo.com/v7/finance/options/" + encodeURIComponent(sym) +
+      "?crumb=" + encodeURIComponent(crumb);
+    if (date) u += "&date=" + encodeURIComponent(date);
+    const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0", "Cookie": cookie }, cf: { cacheTtl: 180 } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const res = j.optionChain && j.optionChain.result && j.optionChain.result[0];
+    if (!res) return null;
+    const q = res.quote || {};
+    const opt = (res.options || [])[0] || {};
+    const leg = a => (a || []).map(o => ({
+      strike: o.strike, oi: o.openInterest || 0, vol: o.volume || 0,
+      iv: o.impliedVolatility != null ? o.impliedVolatility : null, last: o.lastPrice != null ? o.lastPrice : null,
+    }));
+    return {
+      sym: sym, name: q.shortName || q.longName || sym,
+      price: q.regularMarketPrice != null ? q.regularMarketPrice : null,
+      currency: q.currency || "", expiry: opt.expirationDate || null,
+      expirations: res.expirationDates || [],
+      calls: leg(opt.calls), puts: leg(opt.puts),
+    };
+  } catch (e) { return null; }
+}
+async function handleOptions(request) {
+  const url = new URL(request.url);
+  const sym = (url.searchParams.get("sym") || "").trim().toUpperCase();
+  const date = (url.searchParams.get("date") || "").trim();
+  const cors = { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" };
+  if (!sym) return new Response(JSON.stringify({ error: "no sym" }), { status: 400, headers: cors });
+  let crumb = "", cookie = "";
+  try { ({ crumb, cookie } = await _yahooCrumb()); } catch (e) {}
+  let data = null;
+  if (crumb && !/Invalid|Unauthorized/i.test(crumb)) data = await fetchOptions(sym, crumb, cookie, date);
+  return new Response(JSON.stringify(data || { error: "not found", sym: sym }), {
+    headers: Object.assign({ "Cache-Control": "public, max-age=120" }, cors),
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/news") return handleNews(request, env);
     if (url.pathname === "/api/quotes") return handleQuotes(request);
     if (url.pathname === "/api/fundamentals") return handleFundamentals(request);
+    if (url.pathname === "/api/options") return handleOptions(request);
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },
 };

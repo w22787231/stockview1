@@ -454,36 +454,37 @@ def fetch_sp500_fwd_pe():
     eps_hist = dict(prev.get("eps_hist") or {})    # {報告週五 ISO: forward EPS}
     a5, a10 = prev.get("avg5"), prev.get("avg10")
     et = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)
-    fetched = 0
-    for back in range(0, 190):                     # 近 ~26 個週五
+    fetched, newest_av = 0, None
+    for back in range(0, 800):                     # 回溯 ~2 年的週五
         dd = et.date() - datetime.timedelta(days=back)
         if dd.weekday() != 4:
             continue
         iso = dd.isoformat()
-        if iso in eps_hist:
-            continue
+        ym = iso[:7]
+        if iso in eps_hist or any(k[:7] == ym for k in eps_hist):
+            continue                               # 每月只抓一份(forward EPS 月變化小,月粒度夠準)
         if fetched >= 26:
             break
         fetched += 1
         got = _factset_week(dd, _io)
         if got:
             eps_hist[iso] = got[0]
-            if got[1]:
-                a5 = got[1]
-            if got[2]:
-                a10 = got[2]
-    eps_hist = dict(sorted(eps_hist.items())[-40:])
+            if newest_av is None:                  # 第一個成功的=最新一期 → 用它的 5/10 年均
+                newest_av = (got[1], got[2])
+    if newest_av:
+        a5 = newest_av[0] or a5; a10 = newest_av[1] or a10
+    eps_hist = dict(sorted(eps_hist.items())[-30:])    # 保留近 ~30 期(~2.5 年)
     if not eps_hist:
         return None
-    sorted_eps = sorted(eps_hist.items())          # [(週五ISO, eps), ...] 由舊到新
+    sorted_eps = sorted(eps_hist.items())          # [(報告ISO, eps), ...] 由舊到新
     latest_eps = sorted_eps[-1][1]
     try:
         ch = json.loads(urllib.request.urlopen(urllib.request.Request(
-            "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=6mo",
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=2y",
             headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
         res = ch["chart"]["result"][0]
         ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
-        pairs = [(t, c) for t, c in zip(ts, cl) if c is not None][-150:]
+        pairs = [(t, c) for t, c in zip(ts, cl) if c is not None][-520:]
         live = (res.get("meta") or {}).get("regularMarketPrice") or pairs[-1][1]
     except Exception:
         return None

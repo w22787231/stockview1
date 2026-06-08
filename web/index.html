@@ -2343,18 +2343,18 @@ function renderCalList(d){
 // 美股最新經濟數據表(FRED:實際/前期/MoM·YoY;預期無免費源→「—」)。
 function usMacroTable(rows){
   if(!rows || !rows.length) return '<div class="legend">美股實際數據尚未產生(data/calendar.json us_data)。</div>';
-  const head='<tr><th style="text-align:left">指標</th><th>實際</th><th>預期</th><th>前期</th><th>YoY</th><th>期間</th></tr>';
+  const head='<tr><th style="text-align:left">指標</th><th>實際</th><th>預期</th><th>前值</th><th style="text-align:left">補充</th><th>期間</th></tr>';
   const body=rows.map(r=>'<tr>'+
     '<td class="sym" style="text-align:left;cursor:default">'+esc(r.label)+'</td>'+
     '<td><b>'+esc(r.actual||"–")+'</b></td>'+
     '<td class="dim">—</td>'+
     '<td class="dim">'+esc(r.prev||"–")+'</td>'+
-    '<td>'+esc(r.yoy||"–")+'</td>'+
+    '<td class="dim" style="text-align:left">'+esc(r.extra||"")+'</td>'+
     '<td class="dim">'+esc((r.period||"").slice(0,7))+'</td>'+
   '</tr>').join("");
   return '<div class="cal-datahead">📊 最新美股經濟數據</div>'+
     '<div class="tbl-wrap" style="margin-bottom:6px"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+
-    '<div class="legend" style="margin:0 0 14px">實際=最近一期:物價類為 MoM%、非農為月增、失業率為水準、GDP 為年化季增。'+
+    '<div class="legend" style="margin:0 0 14px">實際=最新公布頭條數字:物價類(CPI/核心CPI/PCE/PPI)為<b>年增YoY</b>(同月去年比,對齊官方/Investing)、補充欄附月增;零售為月增、補充附年增;非農為月增人數;失業率為水準;GDP 為年化季增。前值=上一期。'+
       '<b>預期(consensus)無免費資料源,故「—」</b>。來源 FRED。</div>'+
     '<div class="cal-datahead">🗓️ 未來釋出時程(台北時間)</div>';
 }

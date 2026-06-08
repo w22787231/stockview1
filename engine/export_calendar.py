@@ -209,13 +209,14 @@ def _fred(sid):
     return None
 
 
-# (中文標籤, FRED 代號, 類型)。idx=指數→MoM/YoY%;jobs=月增K;claims=水準K;rate=%水準;gdp=年化%
+# (中文標籤, FRED 代號, 類型)。infl=通膨(實際=YoY,補充MoM,用NSA對齊官方);retail=實際MoM補充YoY;
+# jobs=月增K;claims=水準K;rate=%水準;gdp=年化%。YoY 一律「同月去年」精確比對。
 US_MACRO = [
-    ("CPI 消費者物價", "CPIAUCSL", "idx"),
-    ("核心 CPI", "CPILFESL", "idx"),
-    ("核心 PCE 物價", "PCEPILFE", "idx"),
-    ("PPI 生產者物價", "PPIFIS", "idx"),
-    ("零售銷售", "RSAFS", "idx"),
+    ("CPI 消費者物價", "CPIAUCNS", "infl"),      # NSA → 對齊官方頭條年增
+    ("核心 CPI", "CPILFENS", "infl"),
+    ("核心 PCE 物價", "PCEPILFE", "infl"),
+    ("PPI 生產者物價", "PPIFIS", "infl"),
+    ("零售銷售", "RSAFS", "retail"),
     ("非農就業", "PAYEMS", "jobs"),
     ("失業率", "UNRATE", "rate"),
     ("初領失業金", "ICSA", "claims"),
@@ -230,27 +231,40 @@ def fetch_us_macro_data():
         if not r or len(r) < 2:
             continue
         try:
-            period = r[-1][0]
-            lv, pv = float(r[-1][1]), float(r[-2][1])
-            yoy = actual = prev = None
-            if kind == "idx":
-                actual = "%+.2f%%" % ((lv / pv - 1) * 100)
-                if len(r) >= 3:
-                    prev = "%+.2f%%" % ((pv / float(r[-3][1]) - 1) * 100)
-                if len(r) >= 13:
-                    yoy = "%+.2f%%" % ((lv / float(r[-13][1]) - 1) * 100)
+            m = {row[0]: float(row[1]) for row in r}          # {date: value}
+            dates = [row[0] for row in r]
+            d0, d1 = dates[-1], dates[-2]
+            v0, v1 = m[d0], m[d1]
+            period = d0[:7]
+
+            def yoy(d):                                       # 同月去年精確比對
+                dy = "%d%s" % (int(d[:4]) - 1, d[4:])
+                return (m[d] / m[dy] - 1) * 100 if dy in m else None
+
+            actual = prev = extra = None
+            if kind == "infl":
+                y0, y1 = yoy(d0), yoy(d1)
+                actual = "%+.2f%%" % y0 if y0 is not None else None
+                prev = "%+.2f%%" % y1 if y1 is not None else None
+                extra = "月增 %+.2f%%" % ((v0 / v1 - 1) * 100)
+            elif kind == "retail":
+                actual = "%+.2f%%" % ((v0 / v1 - 1) * 100)
+                if len(dates) >= 3:
+                    prev = "%+.2f%%" % ((v1 / m[dates[-3]] - 1) * 100)
+                y0 = yoy(d0)
+                extra = "年增 %+.2f%%" % y0 if y0 is not None else None
             elif kind == "jobs":
-                actual = "%+,.0fK" % (lv - pv)
-                if len(r) >= 3:
-                    prev = "%+,.0fK" % (pv - float(r[-3][1]))
+                actual = "%+,.0fK" % (v0 - v1)
+                if len(dates) >= 3:
+                    prev = "%+,.0fK" % (v1 - m[dates[-3]])
             elif kind == "claims":
-                actual = "%,.0fK" % (lv / 1000.0); prev = "%,.0fK" % (pv / 1000.0)
+                actual = "%,.0fK" % (v0 / 1000.0); prev = "%,.0fK" % (v1 / 1000.0)
             elif kind == "rate":
-                actual = "%.2f%%" % lv; prev = "%.2f%%" % pv
+                actual = "%.2f%%" % v0; prev = "%.2f%%" % v1
             elif kind == "gdp":
-                actual = "%+.1f%%" % lv; prev = "%+.1f%%" % pv
+                actual = "%+.1f%%" % v0; prev = "%+.1f%%" % v1
             out.append({"label": label, "period": period, "actual": actual,
-                        "prev": prev, "yoy": yoy, "kind": kind})
+                        "prev": prev, "extra": extra, "kind": kind})
         except Exception:
             continue
     return out or None

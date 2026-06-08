@@ -2672,6 +2672,7 @@ function loadOptions(){
         '<button class="btn opt-quick" data-s="QQQ">QQQ</button>'+
         '<button class="btn opt-quick" data-s="NVDA">NVDA</button>'+
         '<button class="btn opt-quick" data-s="TSLA">TSLA</button>'+
+        '<button class="btn" id="optScan" style="margin-left:auto">🔍 掃全市場異常</button>'+
       '</div>'+
       '<div id="optExp" class="news-tabs" style="margin:4px 0 2px"></div>'+
       '<div id="optResult"></div>'+
@@ -2680,6 +2681,7 @@ function loadOptions(){
   $("#optGo").onclick=go;
   $("#optInput").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.isComposing&&e.keyCode!==229){ e.preventDefault(); go(); } });
   document.querySelectorAll(".opt-quick").forEach(b=>b.onclick=()=>{ OPT_SYM=b.dataset.s; OPT_EXP=null; $("#optInput").value=b.dataset.s; fetchOptions(); });
+  $("#optScan").onclick=scanMarket;
   $("#optInput").value=OPT_SYM;
   fetchOptions();
 }
@@ -2738,8 +2740,95 @@ function renderOptions(d){
       '<div class="mc"><div class="k">Call / Put OI</div><div class="v">'+fmt(coi)+' / '+fmt(poi)+'</div></div>'+
     '</div>'+
     '<div id="optChart" class="m1m2-chart" style="height:340px"></div>'+
-    '<div class="legend">未平倉(OI)分布:<b style="color:#1f6feb">藍=Call</b>、<b style="color:#e11d48">紅=Put</b>;下方大量 Put=<b>Put wall(支撐)</b>、上方大量 Call=<b>Call wall(壓力)</b>。<b>Max Pain</b>=結算時最多選擇權歸零的價位(理論磁吸點)。P/C&gt;1.3 偏空避險、&lt;0.7 偏多樂觀。資料 Yahoo(延遲);切換上方到期日可看不同週期。</div>';
+    '<div class="legend">未平倉(OI)分布:<b style="color:#1f6feb">藍=Call</b>、<b style="color:#e11d48">紅=Put</b>;下方大量 Put=<b>Put wall(支撐)</b>、上方大量 Call=<b>Call wall(壓力)</b>。<b>Max Pain</b>=結算時最多選擇權歸零的價位(理論磁吸點)。P/C&gt;1.3 偏空避險、&lt;0.7 偏多樂觀。資料 Yahoo(延遲);切換上方到期日可看不同週期。</div>'+
+    renderOptAnomaly(d, pcrOi, pcrVol);
   drawOptChart(calls,puts,price,mp);
+}
+// 個股選擇權異常偵測:Vol/OI 異常、今日爆量 Top5、IV 離群、PCR 極端旗標。
+function _optAnomalies(d){
+  const price=d.price, calls=d.calls||[], puts=d.puts||[];
+  const pct=k=>price?((k/price-1)*100):null;
+  const tag=(t,k)=>price?((t==="C"?(k<price):(k>price))?"價內":"價外"):"";
+  const mkVOI=(arr,t)=>arr.filter(o=>(o.vol||0)>=200&&(o.oi||0)>0&&(o.vol/o.oi)>=2)
+    .map(o=>({t,strike:o.strike,vol:o.vol,oi:o.oi,ratio:o.vol/o.oi,pct:pct(o.strike),m:tag(t,o.strike)}));
+  const volOi=mkVOI(calls,"C").concat(mkVOI(puts,"P")).sort((a,b)=>b.ratio-a.ratio).slice(0,12);
+  const topVol=(arr,t)=>arr.filter(o=>(o.vol||0)>0).slice().sort((a,b)=>b.vol-a.vol).slice(0,5)
+    .map(o=>({t,strike:o.strike,vol:o.vol,oi:o.oi,pct:pct(o.strike),m:tag(t,o.strike)}));
+  const ivLeg=(arr,t)=>{ const a=arr.filter(o=>o.iv!=null&&(o.vol||0)>=50).slice().sort((x,y)=>x.strike-y.strike), out=[];
+    for(let i=0;i<a.length;i++){ const nb=[]; for(let j=Math.max(0,i-2);j<=Math.min(a.length-1,i+2);j++) if(j!==i) nb.push(a[j].iv);
+      if(!nb.length) continue; nb.sort((x,y)=>x-y); const med=nb[Math.floor(nb.length/2)];
+      if(med>0&&a[i].iv>med*1.4) out.push({t,strike:a[i].strike,iv:a[i].iv,med,pct:pct(a[i].strike),m:tag(t,a[i].strike)}); }
+    return out; };
+  const ivOut=ivLeg(calls,"C").concat(ivLeg(puts,"P")).sort((a,b)=>(b.iv/b.med)-(a.iv/a.med)).slice(0,8);
+  return {volOi, topCall:topVol(calls,"C"), topPut:topVol(puts,"P"), ivOut};
+}
+function renderOptAnomaly(d, pcrOi, pcrVol){
+  const a=_optAnomalies(d);
+  const fmt=v=>v==null?"–":Number(v).toLocaleString();
+  const cp=t=>t==="C"?'<span class="pos">Call</span>':'<span class="neg">Put</span>';
+  const pc=v=>v==null?"–":((v>=0?"+":"")+v.toFixed(1)+"%");
+  // PCR 旗標
+  let flags="";
+  const f=(v,lab)=>{ if(v==null)return""; if(v>=1.3)return'<span class="hl-tag warn">'+lab+' P/C '+v.toFixed(2)+' 偏空/避險濃</span>';
+    if(v<=0.7)return'<span class="hl-tag strong">'+lab+' P/C '+v.toFixed(2)+' 偏多/樂觀</span>'; return'<span class="hl-tag mid">'+lab+' P/C '+v.toFixed(2)+' 中性</span>'; };
+  flags=f(pcrOi,"未平倉")+" "+f(pcrVol,"成交量");
+  // Vol/OI 異常表
+  const voiRows=a.volOi.length?a.volOi.map(x=>'<tr><td>'+cp(x.t)+'</td><td>'+fmt(x.strike)+'</td><td class="dim">'+pc(x.pct)+'</td><td class="dim">'+x.m+'</td><td>'+fmt(x.vol)+'</td><td class="dim">'+fmt(x.oi)+'</td><td><b>'+x.ratio.toFixed(1)+'×</b></td></tr>').join("")
+    :'<tr><td colspan="7" class="dim">無(門檻:量≥200 且 Vol/OI≥2)</td></tr>';
+  const topRows=arr=>arr.length?arr.map(x=>'<tr><td>'+cp(x.t)+'</td><td>'+fmt(x.strike)+'</td><td class="dim">'+pc(x.pct)+'</td><td class="dim">'+x.m+'</td><td>'+fmt(x.vol)+'</td><td class="dim">'+fmt(x.oi)+'</td></tr>').join(""):'<tr><td colspan="6" class="dim">–</td></tr>';
+  const ivRows=a.ivOut.length?a.ivOut.map(x=>'<tr><td>'+cp(x.t)+'</td><td>'+fmt(x.strike)+'</td><td class="dim">'+pc(x.pct)+'</td><td><b>'+(x.iv*100).toFixed(1)+'%</b></td><td class="dim">'+(x.med*100).toFixed(1)+'%</td><td class="neg">'+((x.iv/x.med-1)*100).toFixed(0)+'%↑</td></tr>').join("")
+    :'<tr><td colspan="6" class="dim">無明顯 IV 離群</td></tr>';
+  const tbl=(head,body)=>'<div class="tbl-wrap" style="margin:4px 0 10px"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+  return '<div class="cal-datahead" style="margin-top:16px">⚠️ 異常偵測（'+esc(d.sym)+'·本到期）</div>'+
+    '<div style="margin:4px 0 8px">'+flags+'</div>'+
+    '<div class="tg-gname" style="margin:8px 0 2px">🔥 Vol/OI 異常（今日新單 ≫ 既有未平倉,常為大戶布局）</div>'+
+    tbl('<tr><th>類型</th><th>履約價</th><th>距現價</th><th>價內外</th><th>今日量</th><th>未平倉</th><th>Vol/OI</th></tr>', voiRows)+
+    '<div class="tg-gname" style="margin:8px 0 2px">📈 今日爆量 Call Top5</div>'+
+    tbl('<tr><th>類型</th><th>履約價</th><th>距現價</th><th>價內外</th><th>今日量</th><th>未平倉</th></tr>', topRows(a.topCall))+
+    '<div class="tg-gname" style="margin:8px 0 2px">📉 今日爆量 Put Top5</div>'+
+    tbl('<tr><th>類型</th><th>履約價</th><th>距現價</th><th>價內外</th><th>今日量</th><th>未平倉</th></tr>', topRows(a.topPut))+
+    '<div class="tg-gname" style="margin:8px 0 2px">🌋 IV 離群（隱含波動率明顯高於鄰近履約價→該價位被搶買）</div>'+
+    tbl('<tr><th>類型</th><th>履約價</th><th>距現價</th><th>IV</th><th>鄰近中位</th><th>高出</th></tr>', ivRows)+
+    '<div class="legend">門檻:Vol/OI 取「量≥200 且 Vol/OI≥2」;IV 離群取「比鄰近±2檔中位高 40%↑且量≥50」。皆為當日鏈快照,非逐筆掃單(sweep/block 需付費源)。</div>';
+}
+// 全市場掃描:掃一籃熱門期權股,找今日異常最多的(點了才掃)。
+const OPT_SCAN_LIST=["SPY","QQQ","IWM","AAPL","NVDA","TSLA","AMD","MSFT","AMZN","META","GOOGL","NFLX","AVGO","MU","INTC","COIN","PLTR","SMCI","MSTR","MARA","SOFI","BABA","BA","DIS","UBER","CRM","XLF","GLD","TLT","ARM"];
+async function scanMarket(){
+  const box=$("#optResult"); if(!box) return;
+  const eb=$("#optExp"); if(eb) eb.innerHTML="";
+  const syms=[...new Set(OPT_SCAN_LIST)];
+  box.innerHTML='<div class="loading-screen">掃描全市場熱門期權股('+syms.length+' 檔)…約 10-20 秒</div>';
+  const results=[], conc=6;
+  for(let i=0;i<syms.length;i+=conc){
+    const part=await Promise.all(syms.slice(i,i+conc).map(async s=>{
+      try{ const d=await (await fetch("/api/options?sym="+s+"&t="+Date.now(),{cache:"no-store"})).json();
+        if(!d||d.error||!d.calls) return null;
+        const calls=d.calls,puts=d.puts,sum=(a,k)=>a.reduce((x,o)=>x+(o[k]||0),0);
+        const coi=sum(calls,"oi"),poi=sum(puts,"oi"),cv=sum(calls,"vol"),pv=sum(puts,"vol");
+        let mx=null; calls.concat(puts).forEach((o)=>{ if((o.vol||0)>=200&&(o.oi||0)>0){ const r=o.vol/o.oi; if(!mx||r>mx.ratio) mx={ratio:r,strike:o.strike,t:(calls.indexOf(o)>=0?"C":"P")}; } });
+        return {sym:s,price:d.price,pcrOi:coi>0?poi/coi:null,pcrVol:cv>0?pv/cv:null,totVol:cv+pv,maxVOI:mx};
+      }catch(e){ return null; } }));
+    results.push(...part.filter(Boolean));
+    box.innerHTML='<div class="loading-screen">掃描中… '+results.length+'/'+syms.length+'</div>';
+  }
+  renderMarketScan(results);
+}
+function renderMarketScan(rows){
+  const box=$("#optResult"); if(!box) return;
+  const eb=$("#optExp"); if(eb) eb.innerHTML="";
+  rows.sort((a,b)=>((b.maxVOI?b.maxVOI.ratio:0)-(a.maxVOI?a.maxVOI.ratio:0)));
+  const fmt=v=>v==null?"–":Number(v).toLocaleString();
+  const pcrCell=v=>{ if(v==null)return'<td class="dim">–</td>'; const c=v>=1.3?"neg":(v<=0.7?"pos":"dim"); return '<td class="'+c+'">'+v.toFixed(2)+'</td>'; };
+  const body=rows.map(r=>'<tr class="clickable" data-osym="'+esc(r.sym)+'">'+
+    '<td class="sym" style="color:var(--blue);cursor:pointer">'+esc(r.sym)+'</td>'+
+    '<td>'+fmt(r.price)+'</td>'+
+    '<td>'+(r.maxVOI?'<b>'+r.maxVOI.ratio.toFixed(1)+'×</b> <span class="dim" style="font-size:11px">'+(r.maxVOI.t==="C"?"C":"P")+fmt(r.maxVOI.strike)+'</span>':'–')+'</td>'+
+    pcrCell(r.pcrOi)+pcrCell(r.pcrVol)+
+    '<td class="dim">'+fmt(r.totVol)+'</td></tr>').join("");
+  box.innerHTML='<div class="cal-datahead">🔍 全市場選擇權異常掃描（'+rows.length+' 檔·依最大 Vol/OI 排序）</div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">代號</th><th>現價</th><th>最大 Vol/OI</th><th>P/C 未平倉</th><th>P/C 量</th><th>今日總量</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<div class="legend">點代號→看該股完整選擇權與異常偵測。最大 Vol/OI=該股今日「新單最爆」的履約價(量≥200);P/C&gt;1.3 偏空避險(紅)、&lt;0.7 偏多樂觀(綠)。資料 Yahoo(延遲)。</div>';
+  box.querySelectorAll("tr.clickable[data-osym]").forEach(tr=>tr.onclick=()=>{ OPT_SYM=tr.dataset.osym; OPT_EXP=null; const ip=$("#optInput"); if(ip) ip.value=OPT_SYM; fetchOptions(); });
 }
 function drawOptChart(calls,puts,price,mp){
   const el=$("#optChart"); if(!el||!window.echarts) return;

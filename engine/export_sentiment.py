@@ -542,7 +542,7 @@ def fetch_sp500_fwd_pe():
     return {"label": "S&P500 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
             "report_date": sorted_eps[-1][0], "avg5": a5, "avg10": a10,
             "eps_hist": eps_hist, "dates": dates, "pe": pe, "spy": spy,
-            "thr": {"high": 21.5, "low": 20, "oversold": 15}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC + SPY 價"}
+            "thr": {"high": 21.5, "low": 20, "oversold": 16}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC + SPY 價"}
 
 
 def fetch_0dte():

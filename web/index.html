@@ -1189,7 +1189,7 @@ function renderSentiment(d){
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
 function sp500FwdPeBox(v){
   if(!v || !v.pe || !v.pe.length) return '';
-  const cur=v.cur, t=v.thr||{high:21.5,low:20,oversold:15};
+  const cur=v.cur, t=Object.assign({high:21.5,low:20,oversold:16}, v.thr||{}, {oversold:16});
   const vd = cur>=t.high?{t:"偏高",c:"neg"}:(cur<t.oversold?{t:"超賣",c:"pos"}:(cur<t.low?{t:"偏低",c:"pos"}:{t:"中性",c:"dim"}));
   const _rb=(k,lab)=>'<button class="ntab'+(FWDPE_RANGE===k?" on":"")+'" data-fr="'+k+'">'+lab+'</button>';
   return '<div class="guide" style="margin-top:12px">'+
@@ -1216,7 +1216,7 @@ function drawSp500FwdPe(v){
 function _renderFwdPe(){
   const v=window._fwdpe, el=document.getElementById("fwdpeChart");
   if(!el || !window.echarts || !v || !v.pe || !v.pe.length) return;
-  const t=v.thr||{high:21.5,low:20,oversold:15};
+  const t=Object.assign({high:21.5,low:20,oversold:16}, v.thr||{}, {oversold:16});
   const n={"1y":52,"3y":156,"5y":260,"all":v.pe.length}[FWDPE_RANGE]||v.pe.length;
   const dates=v.dates.slice(-n), pe=v.pe.slice(-n);
   const spy=(Array.isArray(v.spy)&&v.spy.length)?v.spy.slice(-n):null;   // SPY 收盤價(右軸比較)
@@ -2252,6 +2252,13 @@ function addHoldCode(raw){
 }
 function removeHoldCode(code){ saveHoldCodes(holdCodes().filter(c=>c!==code)); fetchAndRenderHold(); }
 // 購買價:localStorage("holdings_buy") = {CODE:number}。現價低於購買價→該列紅色閃爍燈。
+// 把輸入字串當算式求值(只允許數字與四則運算,如「50*2」→100)。回正數或 null。
+function evalNum(s){
+  s=(s||"").trim(); if(!s) return null;
+  if(!/^[0-9.+\-*/() ]+$/.test(s)) return null;          // 只放行數字與 + - * / ( ) 空白
+  try{ const v=Function('"use strict";return ('+s+')')(); return (typeof v==="number"&&isFinite(v)&&v>0)?Math.round(v*1e6)/1e6:null; }
+  catch(e){ return null; }
+}
 function buyPrices(){ try{ return JSON.parse(localStorage.getItem("holdings_buy")||"{}")||{}; }catch(e){ return {}; } }
 function saveBuyPrice(code,val){
   const m=buyPrices();
@@ -2360,8 +2367,8 @@ function drawHoldTable(){
       return dir*(x-y);
     });
   }
-  const buyCell=r=>'<td style="text-align:right"><input class="buy-in" type="number" inputmode="decimal" step="any" '+
-    'data-code="'+esc(r.code)+'" value="'+(r.buy!=null?r.buy:"")+'" placeholder="–"></td>';
+  const buyCell=r=>'<td style="text-align:right"><input class="buy-in" type="text" inputmode="text" '+
+    'data-code="'+esc(r.code)+'" value="'+(r.buy!=null?r.buy:"")+'" placeholder="如 50*2" title="可輸入算式,例 50*2 → 100"></td>';
   const trs=data.map(r=>{
     const symTd='<td class="sym clk" data-code="'+esc(r.code)+'" data-used="'+esc(r.used||"")+'" title="點擊看個股分析">'+esc(r.used||r.code)+'</td>';
     const del='<td><button class="hold-del" data-code="'+esc(r.code)+'" title="刪除">✕</button></td>';
@@ -2398,9 +2405,10 @@ function drawHoldTable(){
   });
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
   box.querySelectorAll(".buy-in").forEach(inp=>{
-    const commit=()=>{ saveBuyPrice(inp.dataset.code, inp.value);
+    const commit=()=>{ const v=evalNum(inp.value);      // 支援算式,如 50*2 → 100
+      saveBuyPrice(inp.dataset.code, v==null?"":v);
       const row=(window._HOLD.data||[]).find(x=>x.code===inp.dataset.code);
-      if(row) row.buy=(inp.value===""||isNaN(+inp.value)||+inp.value<=0)?null:+inp.value;
+      if(row) row.buy=v;
       drawHoldTable(); };
     inp.addEventListener("change",commit);
     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); inp.blur(); } });
@@ -2439,7 +2447,18 @@ function renderCalList(d){
   const box=$("#calList"); if(!box) return;
   const ev=[];
   if(CAL_REGION==="usdata"){
-    (d.econ||[]).forEach(e=>ev.push({date:e.date,time:e.time,type:"econ",region:"US",imp:e.importance,title:e.name,sub:e.et||""}));
+    // 排程名稱 → us_data 指標 label;把「前值(上期已公布值)/實際(待公布)」併進每筆時程。
+    const E2D={"非農就業報告":"非農就業","CPI 消費者物價":"CPI 消費者物價","核心 CPI":"核心 CPI",
+      "核心 PCE 物價":"核心 PCE 物價","零售銷售":"零售銷售",
+      "Q1 GDP 初值":"GDP 年化季增","Q2 GDP 初值":"GDP 年化季增","Q3 GDP 初值":"GDP 年化季增","Q4 GDP 初值":"GDP 年化季增"};
+    const vmap={}; (d.us_data||[]).forEach(r=>{ vmap[r.label]=r; });
+    (d.econ||[]).forEach(e=>{
+      const row=vmap[E2D[e.name]]; let sub;
+      if(row){ const mm=(row.period||"").slice(5,7);
+        sub='前值 '+(row.actual||row.prev||"–")+(mm?'（'+parseInt(mm,10)+'月）':'')+' · 實際 待公布'; }
+      else sub=e.et||"";   // 如 FOMC 利率決議,無對應數據
+      ev.push({date:e.date,time:e.time,type:"econ",region:"US",imp:e.importance,title:e.name,sub:sub});
+    });
   }else if(CAL_REGION==="usearn"){
     (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),sub:"財報(預估)"}));
   }else{
@@ -2448,7 +2467,12 @@ function renderCalList(d){
   const today=new Date(); today.setHours(0,0,0,0);
   const end=new Date(today); end.setDate(end.getDate()+30);
   const inRange=ev.filter(e=>{ const dt=new Date(e.date+"T00:00:00"); return dt>=today && dt<=end; });
-  const pre=(CAL_REGION==="usdata")?usMacroTable(d.us_data):"";   // 美股數據:最前面放最新數據表
+  const pre=(CAL_REGION==="usdata")
+    ? '<div class="cal-datahead">🗓️ 未來釋出時程(台北時間)· 含前值/實際</div>'+
+      '<div class="legend" style="margin:0 0 10px">每筆附<b>前值</b>(上一期已公布數字)與<b>實際</b>(本次公布後更新,未公布顯「待公布」)。'+
+      '物價類(CPI/核心CPI/PCE/PPI)為年增YoY、零售為月增、非農為月增人數、GDP 為年化季增。'+
+      '<b>預期(consensus)無免費資料源</b>。來源 FRED。</div>'
+    : "";
   const _emptyTxt={usdata:"美股重要數據",usearn:"美股大型股財報(財報季約季中起,屆時自動帶出)",tw:"台股正式法說會"}[CAL_REGION];
   if(!inRange.length){ box.innerHTML=pre+'<div class="legend">未來30天暫無'+_emptyTxt+'時程。</div>'; return; }
   const wd=["日","一","二","三","四","五","六"];
@@ -2475,25 +2499,6 @@ function renderCalList(d){
   });
   box.innerHTML=pre+html;
 }
-// 美股最新經濟數據表(FRED:實際/前期/MoM·YoY;預期無免費源→「—」)。
-function usMacroTable(rows){
-  if(!rows || !rows.length) return '<div class="legend">美股實際數據尚未產生(data/calendar.json us_data)。</div>';
-  const head='<tr><th style="text-align:left">指標</th><th>實際</th><th>預期</th><th>前值</th><th style="text-align:left">補充</th><th>期間</th></tr>';
-  const body=rows.map(r=>'<tr>'+
-    '<td class="sym" style="text-align:left;cursor:default">'+esc(r.label)+'</td>'+
-    '<td><b>'+esc(r.actual||"–")+'</b></td>'+
-    '<td class="dim">—</td>'+
-    '<td class="dim">'+esc(r.prev||"–")+'</td>'+
-    '<td class="dim" style="text-align:left">'+esc(r.extra||"")+'</td>'+
-    '<td class="dim">'+esc((r.period||"").slice(0,7))+'</td>'+
-  '</tr>').join("");
-  return '<div class="cal-datahead">📊 最新美股經濟數據</div>'+
-    '<div class="tbl-wrap" style="margin-bottom:6px"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+
-    '<div class="legend" style="margin:0 0 14px">實際=最新公布頭條數字:物價類(CPI/核心CPI/PCE/PPI)為<b>年增YoY</b>(同月去年比,對齊官方/Investing)、補充欄附月增;零售為月增、補充附年增;非農為月增人數;失業率為水準;GDP 為年化季增。前值=上一期。'+
-      '<b>預期(consensus)無免費資料源,故「—」</b>。來源 FRED。</div>'+
-    '<div class="cal-datahead">🗓️ 未來釋出時程(台北時間)</div>';
-}
-
 // 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes
 async function showLiveQuote(raw){
   const q=(raw||"").trim().toUpperCase();

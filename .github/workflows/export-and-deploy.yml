@@ -20,7 +20,13 @@ on:
     # 取兩個時間各跑一次，確保台美都拿到當日收盤。可自行增減。
     - cron: "30 6 * * 1-5"    # 14:30 台北，台股收盤後
     - cron: "30 21 * * 1-5"   # 美東 16:30/17:30(夏令)，美股收盤後
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      skip_stocks:
+        description: "快速部署:跳過 ~1700 檔個股詳情(約省40分),改從線上沿用既有詳情"
+        required: false
+        type: boolean
+        default: false
   repository_dispatch:
     types: [refresh-data]
 
@@ -112,6 +118,8 @@ jobs:
         # 全 5 池(不加數字=全池) + 台股主題成分股，約 1700 檔。
         # 減重：關新聞翻譯(17000次翻譯太慢)、K線抽2年(回測仍自抓5年)。
         # continue-on-error + || true：單池失敗不中斷部署。
+        # skip_stocks=true(快速部署)時跳過此步,改由下一步從線上沿用既有詳情。
+        if: ${{ github.event.inputs.skip_stocks != 'true' }}
         continue-on-error: true
         env:
           PYTHONUTF8: "1"
@@ -128,6 +136,16 @@ jobs:
           python export_stock.py --from-pool sp500  || true
           python export_stock.py --from-pool sp400  || true
           python export_stock.py --from-pool sp600  || true
+
+      - name: Rehydrate per-stock detail from live (fast deploy)
+        # skip_stocks=true 時:從線上沿用既有 data/stock/*.json,免重跑 yfinance。
+        if: ${{ github.event.inputs.skip_stocks == 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python rehydrate_stock.py || true
 
       - name: Export industry median PE (for holdings 同業PE)
         env:

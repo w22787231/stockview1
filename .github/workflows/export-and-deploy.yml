@@ -127,6 +127,14 @@ jobs:
           python export_stock.py --from-pool sp400  || true
           python export_stock.py --from-pool sp600  || true
 
+      - name: Export industry median PE (for holdings 同業PE)
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_industry_pe.py || true
+
       - name: Stage web output
         run: |
           mkdir -p public

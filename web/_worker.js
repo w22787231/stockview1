@@ -193,11 +193,68 @@ async function handleQuotes(request) {
   });
 }
 
+// ── 基本面:Yahoo quoteSummary(需 crumb+cookie)→ fwdEPS/fwdPE/PEG/目標價/產業 ──
+async function _yahooCrumb() {
+  let cookie = "";
+  try {
+    const r = await fetch("https://fc.yahoo.com/", { headers: { "User-Agent": "Mozilla/5.0" }, redirect: "manual" });
+    const sc = (r.headers.getSetCookie ? r.headers.getSetCookie() : [r.headers.get("set-cookie")]).filter(Boolean);
+    cookie = sc.map(s => s.split(";")[0]).join("; ");
+  } catch (e) {}
+  const cr = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb",
+    { headers: { "User-Agent": "Mozilla/5.0", "Cookie": cookie } });
+  return { crumb: (await cr.text()).trim(), cookie };
+}
+async function fetchFund(sym, crumb, cookie) {
+  const raw = o => (o && o.raw != null) ? o.raw : (typeof o === "number" ? o : null);
+  try {
+    const u = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/" + encodeURIComponent(sym) +
+      "?modules=defaultKeyStatistics,financialData,summaryProfile,price&crumb=" + encodeURIComponent(crumb);
+    const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0", "Cookie": cookie }, cf: { cacheTtl: 600 } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const res = j.quoteSummary && j.quoteSummary.result && j.quoteSummary.result[0];
+    if (!res) return null;
+    const ks = res.defaultKeyStatistics || {}, fd = res.financialData || {}, sp = res.summaryProfile || {}, pr = res.price || {};
+    return {
+      name: pr.longName || pr.shortName || sym,
+      fwdEps: raw(ks.forwardEps), fwdPe: raw(ks.forwardPE), trailPe: raw(ks.trailingPE),
+      peg: raw(ks.trailingPegRatio) != null ? raw(ks.trailingPegRatio) : raw(ks.pegRatio),
+      target: raw(fd.targetMeanPrice), industry: sp.industry || null,
+    };
+  } catch (e) { return null; }
+}
+async function handleFundamentals(request) {
+  const url = new URL(request.url);
+  const syms = (url.searchParams.get("syms") || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 30);
+  const cache = caches.default;
+  const ckey = new Request("https://fund.cache/api/fundamentals?syms=" + syms.join(","));
+  const hit = await cache.match(ckey);
+  if (hit) return hit;
+  let crumb = "", cookie = "";
+  try { ({ crumb, cookie } = await _yahooCrumb()); } catch (e) {}
+  const fundamentals = {};
+  if (crumb && !/Invalid|Unauthorized/i.test(crumb)) {
+    const arr = await Promise.all(syms.map(s => fetchFund(s, crumb, cookie)));
+    syms.forEach((s, i) => { if (arr[i]) fundamentals[s] = arr[i]; });
+  }
+  const resp = new Response(JSON.stringify({ fundamentals, ts: new Date().toISOString() }), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=600",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+  if (Object.keys(fundamentals).length) { try { await cache.put(ckey, resp.clone()); } catch (e) {} }
+  return resp;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/news") return handleNews(request, env);
     if (url.pathname === "/api/quotes") return handleQuotes(request);
+    if (url.pathname === "/api/fundamentals") return handleFundamentals(request);
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },
 };

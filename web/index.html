@@ -2138,43 +2138,49 @@ async function fetchAndRenderHold(){
     results.forEach(d=>Object.assign(Q,d.quotes||{}));
   }catch(e){ box.innerHTML='<div class="loading-screen">查詢失敗:'+esc(e.message)+'(需部署後 /api/quotes 才可用)</div>'; return; }
   const rows=codes.map(code=>{ let qt=null,used=null; for(const c of _holdCand(code)){ if(Q[c]){qt=Q[c];used=c;break;} } return {code,qt,used}; });
-  renderHoldings(rows);
+  // 基本面(Yahoo quoteSummary)+ 同業PE 中位數,平行抓;失敗則相關欄顯「–」。
+  const usedSyms=[...new Set(rows.map(r=>r.used).filter(Boolean))];
+  const [FUND, INDPE]=await Promise.all([
+    usedSyms.length
+      ? fetch("/api/fundamentals?syms="+encodeURIComponent(usedSyms.join(","))+"&t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>d.fundamentals||{}).catch(()=>({}))
+      : Promise.resolve({}),
+    window._indPe ? Promise.resolve(window._indPe)
+      : fetch("data/industry_pe.json?t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>(window._indPe=d.industries||{})).catch(()=>({}))
+  ]);
+  renderHoldings(rows, FUND, INDPE);
 }
-function renderHoldings(rows){
+function renderHoldings(rows, FUND, INDPE){
+  FUND=FUND||{}; INDPE=INDPE||{};
   const fmt=v=>v==null?"–":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const sg=v=>v==null?"":(v>=0?"+":""), c=v=>v==null?"dim":(v>=0?"pos":"neg");
   const pctTd=v=>'<td class="'+c(v)+'">'+(v!=null?sg(v)+v.toFixed(1)+"%":"–")+'</td>';
+  const n1=v=>v==null?"–":Number(v).toFixed(1), n2=v=>v==null?"–":Number(v).toFixed(2);
   const trs=rows.map(({code,qt,used})=>{
     const del='<td><button class="hold-del" data-code="'+esc(code)+'" title="刪除">✕</button></td>';
-    if(!qt) return '<tr><td class="sym">'+esc(code)+'</td><td colspan="10" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td>'+del+'</tr>';
+    if(!qt) return '<tr><td class="sym">'+esc(code)+'</td><td colspan="11" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td>'+del+'</tr>';
     const cl=qt.closes||[], vl=qt.volumes||[];
     const r1=_retN(cl,1), r5=_retN(cl,5), r20=_retN(cl,20), volr=_volr(cl,vl);
-    const fromHi=(qt.price!=null&&qt.wkHigh)?(qt.price/qt.wkHigh-1)*100:null;
-    const fromLo=(qt.price!=null&&qt.wkLow)?(qt.price/qt.wkLow-1)*100:null;
-    let flow='<span class="dim">—</span>';
-    if(volr!=null && volr>=1.5 && r5!=null && r5>0) flow='<span class="hl-tag strong">🟢流入</span>';
-    else if(volr!=null && volr>=1.5) flow='<span class="hl-tag warn">🔴爆量下跌</span>';
-    const tags=[];
-    if(fromHi!=null && fromHi>=-1) tags.push('<span class="hl-tag strong">創新高區</span>');
-    else if(fromHi!=null && fromHi<=-25) tags.push('<span class="hl-tag warn">遠離高點 '+fromHi.toFixed(0)+'%</span>');
-    if(fromLo!=null && fromLo<=8) tags.push('<span class="hl-tag warn">逼近52週低</span>');
-    if(r1!=null && r1<=-3) tags.push('<span class="hl-tag warn">今日重挫</span>');
+    const f=FUND[used]||{};
+    const indPe=(f.industry && INDPE[f.industry])?INDPE[f.industry].pe_med:null;
+    const tgt=f.target, tgtUp=(tgt!=null&&qt.price)?(tgt/qt.price-1)*100:null;     // 目標價較現價空間
+    const pegCls=f.peg==null?"dim":(f.peg<1?"pos":(f.peg>2?"neg":""));
     return '<tr>'+
       '<td class="sym">'+esc(used||code)+'</td>'+
-      '<td style="text-align:left;max-width:150px;overflow:hidden;text-overflow:ellipsis">'+esc(qt.name||"")+'</td>'+
+      '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(f.name||qt.name||"")+'</td>'+
       '<td>'+fmt(qt.price)+'</td>'+
       pctTd(r1)+pctTd(r5)+pctTd(r20)+
       '<td>'+(volr!=null?volr.toFixed(2)+"×":"–")+'</td>'+
-      '<td style="text-align:left">'+flow+'</td>'+
-      '<td class="'+c(fromHi)+'">'+(fromHi!=null?fromHi.toFixed(1):"–")+'%</td>'+
-      '<td class="'+c(fromLo)+'">'+sg(fromLo)+(fromLo!=null?fromLo.toFixed(1):"–")+'%</td>'+
-      '<td style="text-align:left">'+(tags.join(" ")||'<span class="dim">—</span>')+'</td>'+
+      '<td>'+n2(f.fwdEps)+'</td>'+
+      '<td>'+n1(f.fwdPe)+'</td>'+
+      '<td class="dim">'+n1(indPe)+'</td>'+
+      '<td class="'+pegCls+'">'+n2(f.peg)+'</td>'+
+      '<td>'+(tgt!=null?fmt(tgt)+(tgtUp!=null?' <span class="'+c(tgtUp)+'" style="font-size:11px">('+sg(tgtUp)+tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
       del+
     '</tr>';
   }).join("");
-  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th><th style="text-align:left">資金流向</th><th>距52週高</th><th>距52週低</th><th style="text-align:left">健康檢查</th><th></th></tr>';
+  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th><th>fwd EPS</th><th>fwd PE</th><th>同業PE</th><th>PEG</th><th>分析師目標價</th><th></th></tr>';
   $("#holdResult").innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
-    '<div class="legend">1/5/20日=多日漲幅。量比=最後一日成交金額÷近20日均(≥1.5× 且 5日漲→資金流入🟢;≥1.5× 但 5日跌→爆量下跌🔴)。距52週高/低=現價相對高(負)/低(正)。健康檢查:創新高區 / 遠離高點≥25% / 逼近52週低 / 今日重挫≥3%。即時報價(Yahoo,可能延遲約15分)。</div>';
+    '<div class="legend">fwd EPS/PE=分析師預估;同業PE=同產業中位數(站上股票池);PEG=預估(<span class="pos">&lt;1 偏低估</span>、<span class="neg">&gt;2 偏高估</span>);分析師目標價括號=較現價空間。1/5/20日=多日漲幅、量比=成交金額相對近20日均。基本面來源 Yahoo(部分小型股/池外可能無)。即時報價可能延遲約15分。</div>';
   $("#holdResult").querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code));
 }
 

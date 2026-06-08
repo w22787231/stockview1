@@ -122,6 +122,16 @@
   @keyframes pulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.0)}50%{box-shadow:0 0 0 4px rgba(22,163,74,.28),0 0 14px rgba(22,163,74,.4)}}
   .breadth-alert-green{animation:pulseGreen 1.1s ease-in-out infinite;border-radius:6px}
   .breadth-alert-red{animation:pulseRed 1.1s ease-in-out infinite;border-radius:6px}
+  @keyframes blinkDot{0%,49%{opacity:1}50%,100%{opacity:.12}}
+  .blink-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);
+    box-shadow:0 0 6px rgba(225,29,72,.85);margin-left:5px;vertical-align:middle;animation:blinkDot .7s steps(1,end) infinite}
+  td.below-buy{color:var(--red);font-weight:700}
+  .buy-in{width:64px;font-family:var(--mono);font-size:12.5px;padding:3px 6px;border-radius:6px;
+    border:1px solid var(--line);background:var(--panel);color:var(--ink);text-align:right}
+  .buy-in:focus{outline:none;border-color:var(--blue)}
+  th.sortable{cursor:pointer;user-select:none;white-space:nowrap} th.sortable:hover{color:var(--blue)}
+  th.sortable .sar{font-size:9px;opacity:.55;margin-left:2px}
+  td.sym.clk{cursor:pointer;color:var(--blue)} td.sym.clk:hover{text-decoration:underline}
   @media (prefers-reduced-motion: reduce){.idx-card.alert-red,.idx-card.alert-green,.breadth-alert-green,.breadth-alert-red{animation:none}}
 
   .toolbar{display:flex;align-items:center;justify-content:space-between;
@@ -2216,6 +2226,21 @@ function addHoldCode(raw){
   fetchAndRenderHold();
 }
 function removeHoldCode(code){ saveHoldCodes(holdCodes().filter(c=>c!==code)); fetchAndRenderHold(); }
+// 購買價:localStorage("holdings_buy") = {CODE:number}。現價低於購買價→該列紅色閃爍燈。
+function buyPrices(){ try{ return JSON.parse(localStorage.getItem("holdings_buy")||"{}")||{}; }catch(e){ return {}; } }
+function saveBuyPrice(code,val){
+  const m=buyPrices();
+  if(val==null||val===""||isNaN(+val)||+val<=0) delete m[code]; else m[code]=+val;
+  try{ localStorage.setItem("holdings_buy",JSON.stringify(m)); }catch(e){}
+}
+// 點代號 → 個股分析:預生清單內開詳情頁,否則即時報價卡。
+async function openHoldStock(code, used){
+  try{ await loadStockIndex(); }catch(e){}
+  const syms=(STOCK_IDX&&STOCK_IDX.syms)||[];
+  const t=resolveSymByCode(syms, used||code) || resolveSymByCode(syms, code);
+  if(t){ openStock(t); return; }
+  showLiveQuote(used||code);
+}
 const _holdCand = code => /^\d/.test(code) ? [code+".TW", code+".TWO"] : (/\.(TW|TWO)$/.test(code)?[code]:[code]);
 // N 日漲幅:對齊 adr_screen._ret_n → closes[-1]/closes[-(n+1)]-1。
 function _retN(cl,n){ return (cl && cl.length>n) ? (cl[cl.length-1]/cl[cl.length-1-n]-1)*100 : null; }
@@ -2254,39 +2279,106 @@ async function fetchAndRenderHold(){
   ]);
   renderHoldings(rows, FUND, INDPE);
 }
+// 持股表欄位定義(供表頭排序 + 逐格渲染共用)。
+const HOLD_COLS=[
+  {k:"code",lab:"代號",a:"left",sort:true},
+  {k:"name",lab:"名稱",a:"left",sort:true},
+  {k:"price",lab:"現價",a:"right",sort:true},
+  {k:"buy",lab:"購買價",a:"right",sort:false},   // 輸入框,不排序
+  {k:"r1",lab:"1日",a:"right",sort:true},
+  {k:"r5",lab:"5日",a:"right",sort:true},
+  {k:"r20",lab:"20日",a:"right",sort:true},
+  {k:"volr",lab:"量比",a:"right",sort:true},
+  {k:"fwdEps",lab:"fwd EPS",a:"right",sort:true},
+  {k:"fwdPe",lab:"fwd PE",a:"right",sort:true},
+  {k:"indPe",lab:"同業PE",a:"right",sort:true},
+  {k:"peg",lab:"PEG",a:"right",sort:true},
+  {k:"tgt",lab:"分析師目標價",a:"right",sort:true},
+];
+let HOLD_SORT={k:null,dir:-1};   // 預設不排序(維持加入順序);dir:1 升冪、-1 降冪
+// 把 rows+基本面+同業PE 整理成可排序的資料模型,存 window._HOLD,再 drawHoldTable。
 function renderHoldings(rows, FUND, INDPE){
   FUND=FUND||{}; INDPE=INDPE||{};
+  const buys=buyPrices();
+  const data=rows.map(({code,qt,used})=>{
+    if(!qt) return {code,used,name:"",hasQt:false,buy:buys[code]!=null?buys[code]:null};
+    const cl=qt.closes||[], vl=qt.volumes||[];
+    const f=FUND[used]||{};
+    const indPe=(f.industry && INDPE[f.industry])?INDPE[f.industry].pe_med:null;
+    const tgt=f.target, price=qt.price;
+    return {code,used,hasQt:true,name:f.name||qt.name||"",
+      price, r1:_retN(cl,1), r5:_retN(cl,5), r20:_retN(cl,20), volr:_volr(cl,vl),
+      fwdEps:f.fwdEps, fwdPe:f.fwdPe, indPe, peg:f.peg, tgt,
+      tgtUp:(tgt!=null&&price)?(tgt/price-1)*100:null,
+      buy:buys[code]!=null?buys[code]:null};
+  });
+  window._HOLD={data};
+  drawHoldTable();
+}
+function drawHoldTable(){
+  const box=$("#holdResult"); if(!box||!window._HOLD) return;
   const fmt=v=>v==null?"–":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const sg=v=>v==null?"":(v>=0?"+":""), c=v=>v==null?"dim":(v>=0?"pos":"neg");
   const pctTd=v=>'<td class="'+c(v)+'">'+(v!=null?sg(v)+v.toFixed(1)+"%":"–")+'</td>';
   const n1=v=>v==null?"–":Number(v).toFixed(1), n2=v=>v==null?"–":Number(v).toFixed(2);
-  const trs=rows.map(({code,qt,used})=>{
-    const del='<td><button class="hold-del" data-code="'+esc(code)+'" title="刪除">✕</button></td>';
-    if(!qt) return '<tr><td class="sym">'+esc(code)+'</td><td colspan="11" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td>'+del+'</tr>';
-    const cl=qt.closes||[], vl=qt.volumes||[];
-    const r1=_retN(cl,1), r5=_retN(cl,5), r20=_retN(cl,20), volr=_volr(cl,vl);
-    const f=FUND[used]||{};
-    const indPe=(f.industry && INDPE[f.industry])?INDPE[f.industry].pe_med:null;
-    const tgt=f.target, tgtUp=(tgt!=null&&qt.price)?(tgt/qt.price-1)*100:null;     // 目標價較現價空間
-    const pegCls=f.peg==null?"dim":(f.peg<1?"pos":(f.peg>2?"neg":""));
-    return '<tr>'+
-      '<td class="sym">'+esc(used||code)+'</td>'+
-      '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(f.name||qt.name||"")+'</td>'+
-      '<td>'+fmt(qt.price)+'</td>'+
-      pctTd(r1)+pctTd(r5)+pctTd(r20)+
-      '<td>'+(volr!=null?volr.toFixed(2)+"×":"–")+'</td>'+
-      '<td>'+n2(f.fwdEps)+'</td>'+
-      '<td>'+n1(f.fwdPe)+'</td>'+
-      '<td class="dim">'+n1(indPe)+'</td>'+
-      '<td class="'+pegCls+'">'+n2(f.peg)+'</td>'+
-      '<td>'+(tgt!=null?fmt(tgt)+(tgtUp!=null?' <span class="'+c(tgtUp)+'" style="font-size:11px">('+sg(tgtUp)+tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
-      del+
-    '</tr>';
+  // 排序(null 永遠墊底;字串用 localeCompare)。
+  let data=window._HOLD.data.slice();
+  if(HOLD_SORT.k){
+    const k=HOLD_SORT.k, dir=HOLD_SORT.dir, txt=(k==="code"||k==="name");
+    data.sort((a,b)=>{
+      let x=a[k], y=b[k];
+      if(x==null&&y==null) return 0;
+      if(x==null) return 1; if(y==null) return -1;
+      if(txt) return dir*String(x).localeCompare(String(y));
+      return dir*(x-y);
+    });
+  }
+  const buyCell=r=>'<td style="text-align:right"><input class="buy-in" type="number" inputmode="decimal" step="any" '+
+    'data-code="'+esc(r.code)+'" value="'+(r.buy!=null?r.buy:"")+'" placeholder="–"></td>';
+  const trs=data.map(r=>{
+    const symTd='<td class="sym clk" data-code="'+esc(r.code)+'" data-used="'+esc(r.used||"")+'" title="點擊看個股分析">'+esc(r.used||r.code)+'</td>';
+    const del='<td><button class="hold-del" data-code="'+esc(r.code)+'" title="刪除">✕</button></td>';
+    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="2" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r)+'<td colspan="9" class="dim"></td>'+del+'</tr>';
+    const below=(r.buy!=null && r.price!=null && r.price<r.buy);   // 現價低於購買價 → 閃爍燈
+    const priceTd='<td class="'+(below?"below-buy":"")+'">'+fmt(r.price)+(below?'<span class="blink-dot" title="現價已跌破購買價 '+fmt(r.buy)+'"></span>':'')+'</td>';
+    const pegCls=r.peg==null?"dim":(r.peg<1?"pos":(r.peg>2?"neg":""));
+    return '<tr>'+symTd+
+      '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</td>'+
+      priceTd+buyCell(r)+
+      pctTd(r.r1)+pctTd(r.r5)+pctTd(r.r20)+
+      '<td>'+(r.volr!=null?r.volr.toFixed(2)+"×":"–")+'</td>'+
+      '<td>'+n2(r.fwdEps)+'</td>'+
+      '<td>'+n1(r.fwdPe)+'</td>'+
+      '<td class="dim">'+n1(r.indPe)+'</td>'+
+      '<td class="'+pegCls+'">'+n2(r.peg)+'</td>'+
+      '<td>'+(r.tgt!=null?fmt(r.tgt)+(r.tgtUp!=null?' <span class="'+c(r.tgtUp)+'" style="font-size:11px">('+sg(r.tgtUp)+r.tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
+      del+'</tr>';
   }).join("");
-  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th><th>fwd EPS</th><th>fwd PE</th><th>同業PE</th><th>PEG</th><th>分析師目標價</th><th></th></tr>';
-  $("#holdResult").innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
-    '<div class="legend">fwd EPS/PE=分析師預估;同業PE=同產業中位數(站上股票池);PEG=預估(<span class="pos">&lt;1 偏低估</span>、<span class="neg">&gt;2 偏高估</span>);分析師目標價括號=較現價空間。1/5/20日=多日漲幅、量比=成交金額相對近20日均。基本面來源 Yahoo(部分小型股/池外可能無)。即時報價可能延遲約15分。</div>';
-  $("#holdResult").querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code));
+  const head='<tr>'+HOLD_COLS.map(col=>{
+    const al=col.a==="left"?' style="text-align:left"':'';
+    if(!col.sort) return '<th'+al+'>'+col.lab+'</th>';
+    const ar=HOLD_SORT.k===col.k?(HOLD_SORT.dir===1?'▲':'▼'):'⇅';
+    return '<th class="sortable" data-k="'+col.k+'"'+al+'>'+col.lab+'<span class="sar">'+ar+'</span></th>';
+  }).join("")+'<th></th></tr>';
+  box.innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
+    '<div class="legend">點<b>欄位標題</b>排序、點<b>代號</b>看個股分析、在<b>購買價</b>填入成本價:現價跌破成本價會亮<span class="blink-dot" style="position:relative;top:1px"></span>紅色閃爍燈。fwd EPS/PE=分析師預估;同業PE=同產業中位數;PEG(<span class="pos">&lt;1 偏低估</span>、<span class="neg">&gt;2 偏高估</span>);目標價括號=較現價空間。基本面來源 Yahoo,即時報價可能延遲約15分。</div>';
+  // 事件:刪除、表頭排序、購買價輸入、點代號進個股。
+  box.querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code));
+  box.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k;
+    if(HOLD_SORT.k===k) HOLD_SORT.dir=-HOLD_SORT.dir; else { HOLD_SORT.k=k; HOLD_SORT.dir=(k==="code"||k==="name")?1:-1; }
+    drawHoldTable();
+  });
+  box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
+  box.querySelectorAll(".buy-in").forEach(inp=>{
+    const commit=()=>{ saveBuyPrice(inp.dataset.code, inp.value);
+      const row=(window._HOLD.data||[]).find(x=>x.code===inp.dataset.code);
+      if(row) row.buy=(inp.value===""||isNaN(+inp.value)||+inp.value<=0)?null:+inp.value;
+      drawHoldTable(); };
+    inp.addEventListener("change",commit);
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); inp.blur(); } });
+    inp.addEventListener("click",e=>e.stopPropagation());
+  });
 }
 
 // ── 財報/數據:未來30天重要總經數據 + 企業財報/法說(台北時間,data/calendar.json)──

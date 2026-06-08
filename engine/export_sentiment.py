@@ -424,7 +424,7 @@ def _factset_week(dd, _io):
                 continue
             import pypdf
             r = pypdf.PdfReader(_io.BytesIO(raw))
-            txt = "\n".join((p.extract_text() or "") for p in r.pages)
+            txt = "\n".join((p.extract_text() or "") for p in r.pages[:16])   # PE句約p5、收盤價約p11,解前16頁省時又夠用
             mp = re.search(r"forward 12-month P/E ratio is ([0-9]{1,2}\.[0-9])", txt)
             mx = re.search(r"closing price of ([0-9]{3,5}\.[0-9]{2})", txt)
             if mp and mx:
@@ -454,8 +454,9 @@ def fetch_sp500_fwd_pe():
     eps_hist = dict(prev.get("eps_hist") or {})    # {報告週五 ISO: forward EPS}
     a5, a10 = prev.get("avg5"), prev.get("avg10")
     et = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)
-    fetched, newest_av = 0, None
-    for back in range(0, 2900):                    # 回溯 ~8 年的週五(FactSet PDF 約存到 2017)
+    prev_latest = max(eps_hist) if eps_hist else ""
+    got_cnt, tries, newest_av, newest_iso = 0, 0, None, ""
+    for back in range(0, 3300):                    # 回溯 ~9 年的週五(FactSet PDF 約存到 2017)
         dd = et.date() - datetime.timedelta(days=back)
         if dd.weekday() != 4:
             continue
@@ -463,14 +464,17 @@ def fetch_sp500_fwd_pe():
         ym = iso[:7]
         if iso in eps_hist or any(k[:7] == ym for k in eps_hist):
             continue                               # 每月只抓一份(forward EPS 月變化小,月粒度夠準)
-        if fetched >= 60:                          # 單跑上限 60 份(首跑 ~5 年,之後續補到 ~7 年)
+        if got_cnt >= 70:                          # 單跑「成功」上限 70 份(一次回補約 ~7 年)
             break
-        fetched += 1
+        if tries >= 360:                           # 探測上限(404 那週只是沒發報,不佔成功額度;但總探測有限)
+            break
+        tries += 1
         got = _factset_week(dd, _io)
         if got:
             eps_hist[iso] = got[0]
-            if newest_av is None:                  # 第一個成功的=最新一期 → 用它的 5/10 年均
-                newest_av = (got[1], got[2])
+            got_cnt += 1
+            if iso >= prev_latest and iso > newest_iso:   # 只用「最新一期」的 5/10 年均,避免被舊月份覆蓋
+                newest_av, newest_iso = (got[1], got[2]), iso
     if newest_av:
         a5 = newest_av[0] or a5; a10 = newest_av[1] or a10
     eps_hist = dict(sorted(eps_hist.items())[-96:])    # 保留近 ~96 期(~8 年)

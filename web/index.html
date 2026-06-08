@@ -103,6 +103,7 @@
   .cal-dot.hi{background:var(--red)} .cal-dot.mid{background:var(--amber)}
   .cal-title{font-size:13.5px;color:var(--ink);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cal-sub{font-size:11px;color:var(--ink3);white-space:nowrap}
+  .cal-val{font-size:12px;color:var(--ink2);white-space:nowrap;font-weight:500}   /* 前值/實際:深色、手機也顯示 */
   .idx-card .src-link{display:inline-block;margin-top:5px;font-size:10.5px;color:var(--blue);text-decoration:none;font-weight:600}
   .idx-card .src-link:hover{text-decoration:underline}
   /* 持股分析 */
@@ -421,9 +422,10 @@
     .m1m2-chart{height:210px}
     .hold-add{gap:6px}
     #holdInput{flex:1 1 100%;min-width:0}
-    .cal-ev{gap:7px;padding:6px 4px}
+    .cal-ev{gap:7px;padding:6px 4px;flex-wrap:wrap}
     .cal-time{min-width:42px}
     .cal-sub{display:none}                 /* 行事曆列在窄螢幕省略副標,留時間+類別+標題 */
+    .cal-val{flex-basis:100%;margin-left:49px;white-space:normal}   /* 前值/實際換到第二行,手機仍可見 */
     .m1m2-chart{margin:0 -4px}
   }
 </style>
@@ -1495,6 +1497,23 @@ function etfChangeTable(rows){
     '</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
+// 目前持股(snapshot)表:還沒有逐日異動時顯示,避免分頁空白。依權重高→低。
+function etfSnapshotTables(d, fE){
+  const order=(d.order||[]).filter(e=>fE==="all"||e===fE);
+  const snap=d.snapshot||{};
+  let h="";
+  for(const etf of order){
+    const rows=(snap[etf]||[]).slice().sort((a,b)=>(parseFloat(b.weight)||0)-(parseFloat(a.weight)||0));
+    if(!rows.length) continue;
+    h+='<div class="tg-gname" style="margin:12px 0 6px">▎'+esc(etf)+' '+esc((d.etfs[etf]||{}).name||etf)+
+       '　<span class="dim" style="font-weight:400">目前 '+rows.length+' 檔</span></div>'+
+       '<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">代碼/名稱</th><th>權重%</th><th>張數</th></tr></thead><tbody>'+
+       rows.map(r=>'<tr'+(r.code?' data-sym="'+esc(r.code)+'"':'')+'>'+symCell(r.code,r.name)+
+         '<td>'+esc(r.weight)+'%</td><td class="dim">'+fmtNum(parseFloat(r.qty)||0)+'</td></tr>').join("")+
+       '</tbody></table></div>';
+  }
+  return h||'<div class="note">目前無持股快照資料。</div>';
+}
 function renderEtf(){
   const d=ETF_DATA;
   if(!d || !d.history){ $("#content").innerHTML='<section><div class="sec-head"><h2>ETF 持股異動</h2></div><div class="note">ETF 資料尚未產生，請待下次更新。</div></section>'; return; }
@@ -1513,7 +1532,8 @@ function renderEtf(){
     '</div>'+ etfFilterBar(d);
 
   if(!days.length){
-    html+='<div class="note">'+(d.history.length?'目前篩選條件下無變動紀錄。':'尚無變動紀錄（週末/假日或剛部署）。')+'</div>';
+    html+='<div class="note">'+(d.history.length?'目前篩選條件下無變動紀錄。':'尚無逐日異動紀錄（異動需累積≥2天比對,剛啟用時先顯示目前持股）。')+'</div>';
+    html+=etfSnapshotTables(d, fE);   // 還沒有異動 → 顯示最新成分(目前持股)
   }else{
     for(const day of days){
       html+='<div class="tg-gname" style="margin-top:16px;font-size:14px">📅 '+esc(day.date)+(day===days[0]?'（最新）':'')+'</div>';
@@ -1689,7 +1709,7 @@ function renderStock(d){
       eventsBlock(d.events)+
       newsBlock(d.news);
 
-  $("#backBtn").onclick = ()=> switchView(["cross","macro","chain"].includes(VIEW)?VIEW:"trend");
+  enterDetail(); $("#backBtn").onclick = ()=> history.back();
   // 均線交叉訊號展開/收合
   const sigBtn=document.getElementById("sigToggle");
   if(sigBtn) sigBtn.onclick=()=>{
@@ -1934,14 +1954,20 @@ async function openStock(sym){
       '<div class="loading-screen">⚠️「'+esc(sym)+'」目前沒有詳情資料。<br>'+
       '個股詳情僅涵蓋已產生的清單('+has.length+' 檔)，未涵蓋全市場。<br>'+
       '可在上方搜尋有詳情的代號，或回榜單頁。</div>';
-    const b=document.getElementById("backBtn"); if(b) b.onclick=()=>switchView("trend");
+    enterDetail(); const b=document.getElementById("backBtn"); if(b) b.onclick=()=>history.back();
   }
 }
 
 // ── 主分頁切換 ──
 let TREND_SUB = "trend";  // 趨勢分頁群內目前子頁："trend" 或 "cross"，共用同一份 pool JSON
 let VIEW = "trend";
+// ── 詳情頁返回:除了「← 返回」鈕,也支援瀏覽器上一頁 / 手機左滑(popstate)──
+let _detailReturn=null;
+function enterDetail(){ if(_detailReturn==null) _detailReturn=VIEW; try{ history.pushState({detail:1},""); }catch(e){} }
+function exitDetail(){ const t=_detailReturn; _detailReturn=null; switchView(NAV.some(n=>n.view===t)?t:"trend"); }
+window.addEventListener("popstate",function(){ if(document.getElementById("backBtn")) exitDetail(); });
 function switchView(v){
+  _detailReturn=null;          // 進入任一主分頁即清除詳情返回點
   VIEW = v;
   if(window._newsTimer){ clearInterval(window._newsTimer); window._newsTimer=null; }  // 離開新聞→停止輪詢
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
@@ -2453,11 +2479,13 @@ function renderCalList(d){
       "Q1 GDP 初值":"GDP 年化季增","Q2 GDP 初值":"GDP 年化季增","Q3 GDP 初值":"GDP 年化季增","Q4 GDP 初值":"GDP 年化季增"};
     const vmap={}; (d.us_data||[]).forEach(r=>{ vmap[r.label]=r; });
     (d.econ||[]).forEach(e=>{
-      const row=vmap[E2D[e.name]]; let sub;
-      if(row){ const mm=(row.period||"").slice(5,7);
-        sub='前值 '+(row.actual||row.prev||"–")+(mm?'（'+parseInt(mm,10)+'月）':'')+' · 實際 待公布'; }
+      const row=vmap[E2D[e.name]]; let sub="", subHtml="";
+      if(row){ const mm=(row.period||"").slice(5,7), av=row.actual||row.prev||"–";
+        const avc=/^\+/.test(av)?"pos":(/^-/.test(av)?"neg":"");
+        subHtml='前值 <b class="'+avc+'">'+esc(av)+'</b>'+(mm?'（'+parseInt(mm,10)+'月）':'')+
+          ' · 實際 <span style="color:var(--ink3)">待公布</span>'; }
       else sub=e.et||"";   // 如 FOMC 利率決議,無對應數據
-      ev.push({date:e.date,time:e.time,type:"econ",region:"US",imp:e.importance,title:e.name,sub:sub});
+      ev.push({date:e.date,time:e.time,type:"econ",region:"US",imp:e.importance,title:e.name,sub:sub,subHtml:subHtml});
     });
   }else if(CAL_REGION==="usearn"){
     (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),sub:"財報(預估)"}));
@@ -2490,10 +2518,11 @@ function renderCalList(d){
     byDate[ds].sort((a,b)=>((a.time||"99:99")>(b.time||"99:99")?1:-1)).forEach(e=>{
       const badge=e.type==="econ"?'<span class="cal-badge econ">📊 數據</span>'
         :'<span class="cal-badge earn">📈 '+(e.region==="TW"?"法說":"財報")+'</span>';
+      const valPart=e.subHtml?'<span class="cal-val">'+e.subHtml+'</span>':'<span class="cal-sub">'+esc(e.sub||"")+'</span>';
       html+='<div class="cal-ev">'+
         '<span class="cal-time">'+(e.time||"–")+'</span>'+badge+dot(e.imp)+
         '<span class="cal-title">'+flag(e.region)+' '+esc(e.title)+'</span>'+
-        '<span class="cal-sub">'+esc(e.sub||"")+'</span></div>';
+        valPart+'</div>';
     });
     html+='</div>';
   });
@@ -2537,7 +2566,7 @@ function renderLiveQuote(q){
     '<div class="legend">即時報價(Yahoo,可能延遲約 15 分)。任意代號即時查詢;財報/評分/翻譯新聞等深度詳情僅 1700 檔預生清單內提供。</div>';
   $("#meta").innerHTML='<div><b>即時查詢</b> '+esc(q.sym)+'</div><div>'+esc(q.name||"")+'</div>';
   $("#poolNote").innerHTML="";
-  const b=document.getElementById("backBtn"); if(b) b.onclick=()=>switchView(["cross","macro","chain","etf"].includes(VIEW)?VIEW:"trend");
+  enterDetail(); const b=document.getElementById("backBtn"); if(b) b.onclick=()=>history.back();
 }
 
 async function doSearch(){

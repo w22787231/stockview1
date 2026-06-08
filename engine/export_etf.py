@@ -103,6 +103,16 @@ def main():
     if os.path.exists(OUT):
         with open(OUT, encoding="utf-8") as f:
             old = json.load(f)
+    if old is None:                              # CI 乾淨 checkout 無本機檔 → 從線上回讀,才能跨日累積異動 history
+        try:
+            import urllib.request
+            old = json.loads(urllib.request.urlopen(urllib.request.Request(
+                "https://stockview1.pages.dev/data/etf.json",
+                headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+            print("[etf] 本機無檔,改用線上 etf.json 當基準(history %d 日)" % len((old or {}).get("history") or []))
+        except Exception as e:
+            print("[etf] 線上回讀失敗,視為首次基準:", e)
+            old = None
     old_snap = (old or {}).get("snapshot") or {}
     merged = merge_fetched(fetched, old_snap)
     if merged is None:

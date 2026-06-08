@@ -2,6 +2,7 @@
 /data/*.json
 /data/stock/
 /web/data/*.json
+!/web/data/supply_chain.json
 /web/data/stock/
 # Python
 __pycache__/

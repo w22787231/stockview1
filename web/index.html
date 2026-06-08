@@ -1189,7 +1189,7 @@ function renderSentiment(d){
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
 function sp500FwdPeBox(v){
   if(!v || !v.pe || !v.pe.length) return '';
-  const cur=v.cur, t=v.thr||{high:21.5,low:16,oversold:14};
+  const cur=v.cur, t=v.thr||{high:21.5,low:20,oversold:15};
   const vd = cur>=t.high?{t:"偏高",c:"neg"}:(cur<t.oversold?{t:"超賣",c:"pos"}:(cur<t.low?{t:"偏低",c:"pos"}:{t:"中性",c:"dim"}));
   const _rb=(k,lab)=>'<button class="ntab'+(FWDPE_RANGE===k?" on":"")+'" data-fr="'+k+'">'+lab+'</button>';
   return '<div class="guide" style="margin-top:12px">'+
@@ -1198,7 +1198,9 @@ function sp500FwdPeBox(v){
     '<div id="fwdpeRange" class="news-tabs" style="margin:4px 0 2px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+'</div>'+
     '<div class="ex">FactSet 各期 forward EPS(目前 <b>$'+v.fwd_eps+'</b>，報告 '+esc(v.report_date||"")+')÷ S&P500 即時價，用「當期實際 EPS」逐日算(非現值近似)。可拖曳/滾輪縮放時間軸。'+
       '<b class="neg">&gt;'+t.high+' 偏高</b> · <b class="pos">&lt;'+t.low+' 偏低</b> · <b class="pos">&lt;'+t.oversold+' 超賣</b>'+
-      (v.avg5?(' · FactSet 5年均 '+v.avg5+'／10年均 '+v.avg10):'')+'。forward＝用未來12個月預估EPS,故低於 trailing。</div>'+
+      (v.avg5?(' · FactSet 5年均 '+v.avg5+'／10年均 '+v.avg10):'')+
+      ((Array.isArray(v.spy)&&v.spy.length)?' · <b style="color:#9333ea">紫線=SPY 收盤(右軸)</b>,對照估值 vs 價格走勢':'')+
+      '。forward＝用未來12個月預估EPS,故低於 trailing。</div>'+
     '</div>';
 }
 function drawSp500FwdPe(v){
@@ -1214,18 +1216,12 @@ function drawSp500FwdPe(v){
 function _renderFwdPe(){
   const v=window._fwdpe, el=document.getElementById("fwdpeChart");
   if(!el || !window.echarts || !v || !v.pe || !v.pe.length) return;
-  const t=v.thr||{high:21.5,low:16,oversold:14};
+  const t=v.thr||{high:21.5,low:20,oversold:15};
   const n={"1y":52,"3y":156,"5y":260,"all":v.pe.length}[FWDPE_RANGE]||v.pe.length;
   const dates=v.dates.slice(-n), pe=v.pe.slice(-n);
+  const spy=(Array.isArray(v.spy)&&v.spy.length)?v.spy.slice(-n):null;   // SPY 收盤價(右軸比較)
   const lo=Math.min(t.oversold,Math.min.apply(null,pe)), hi=Math.max(t.high,Math.max.apply(null,pe));
-  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
-  ch.setOption({
-    grid:{left:38,right:14,top:14,bottom:30},
-    tooltip:{trigger:"axis",valueFormatter:x=>(x==null?"-":x+"x")},
-    dataZoom:[{type:"inside"}],
-    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
-    yAxis:{type:"value",min:Math.floor(lo-0.5),max:Math.ceil(hi+0.5),axisLabel:{fontSize:10,formatter:"{value}x"},splitLine:{lineStyle:{opacity:.3}}},
-    series:[{name:"Forward P/E",type:"line",data:pe,smooth:true,symbol:"none",
+  const series=[{name:"Forward P/E",type:"line",data:pe,smooth:true,symbol:"none",yAxisIndex:0,
       lineStyle:{width:2,color:"#1f6feb"},itemStyle:{color:"#1f6feb"},areaStyle:{color:"#1f6feb12"},
       markLine:{silent:true,symbol:"none",data:[
         {yAxis:t.high,lineStyle:{color:"#e11d48",type:"dashed"},label:{formatter:"偏高 "+t.high,fontSize:10,color:"#e11d48",position:"insideEndTop"}},
@@ -1234,7 +1230,28 @@ function _renderFwdPe(){
       markArea:{silent:true,data:[
         [{yAxis:t.high,itemStyle:{color:"#e11d480e"}},{yAxis:1000}],
         [{yAxis:0,itemStyle:{color:"#16a34a0e"}},{yAxis:t.low}]]},
-    }],
+  }];
+  const yAxes=[{type:"value",min:Math.floor(lo-0.5),max:Math.ceil(hi+0.5),axisLabel:{fontSize:10,formatter:"{value}x"},splitLine:{lineStyle:{opacity:.3}}}];
+  if(spy){
+    yAxes.push({type:"value",scale:true,position:"right",name:"SPY",nameTextStyle:{fontSize:10,color:"#9333ea"},
+      axisLabel:{fontSize:10,color:"#9333ea",formatter:"{value}"},splitLine:{show:false}});
+    series.push({name:"SPY 價",type:"line",data:spy,smooth:true,symbol:"none",yAxisIndex:1,
+      lineStyle:{width:1.4,color:"#9333ea",opacity:.85}});
+  }
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:38,right:spy?44:14,top:14,bottom:30},
+    legend:spy?{data:["Forward P/E","SPY 價"],top:-2,right:0,itemWidth:14,itemHeight:8,textStyle:{fontSize:10}}:undefined,
+    tooltip:{trigger:"axis",formatter:function(ps){
+      if(!ps||!ps.length) return "";
+      let s=ps[0].axisValueLabel||ps[0].axisValue;
+      ps.forEach(p=>{ s+="<br>"+p.marker+p.seriesName+": "+(p.value==null?"-":(p.seriesName==="Forward P/E"?p.value+"x":p.value)); });
+      return s;
+    }},
+    dataZoom:[{type:"inside"}],
+    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
+    yAxis:yAxes,
+    series:series,
   }, true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }

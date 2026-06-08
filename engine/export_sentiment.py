@@ -515,10 +515,34 @@ def fetch_sp500_fwd_pe():
     dates = [d for d, _ in samp]
     pe = [round(c / eps_at(d), 1) for d, c in samp]
     cur = round(live / latest_eps, 1)
+    spy = None                                     # SPY 收盤價(右軸比較):對齊 forward PE 取樣日期
+    try:
+        ch2 = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=10y",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+        r2 = ch2["chart"]["result"][0]
+        ts2, cl2 = r2["timestamp"], r2["indicators"]["quote"][0]["close"]
+        smap = {}
+        for t, c in zip(ts2, cl2):
+            if c is not None:
+                smap[datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d")] = c
+        skeys = sorted(smap)
+
+        def spy_at(day):                           # 不晚於該日的最近一筆 SPY 收盤
+            val = None
+            for k in skeys:
+                if k <= day:
+                    val = smap[k]
+                else:
+                    break
+            return val
+        spy = [round(spy_at(d), 2) if spy_at(d) is not None else None for d in dates]
+    except Exception:
+        spy = None
     return {"label": "S&P500 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
             "report_date": sorted_eps[-1][0], "avg5": a5, "avg10": a10,
-            "eps_hist": eps_hist, "dates": dates, "pe": pe,
-            "thr": {"high": 21.5, "low": 16, "oversold": 14}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC"}
+            "eps_hist": eps_hist, "dates": dates, "pe": pe, "spy": spy,
+            "thr": {"high": 21.5, "low": 20, "oversold": 15}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC + SPY 價"}
 
 
 def fetch_0dte():

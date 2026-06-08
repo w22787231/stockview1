@@ -88,6 +88,7 @@
   .news-title{font-size:14px;line-height:1.5;color:var(--ink)}
   .news-orig{font-size:12px;line-height:1.4;color:var(--ink3);margin-top:2px}
   /* 財報/數據 行事曆 */
+  .cal-datahead{font-weight:800;font-size:13px;color:var(--ink2);margin:4px 0 6px}
   .cal-day{margin:0 0 14px}
   .cal-date{font-weight:800;font-size:13.5px;color:var(--ink);padding:6px 0 4px;border-bottom:1px solid var(--line);margin-bottom:3px}
   .cal-wd{color:var(--ink3);font-weight:600;font-size:12px}
@@ -2312,8 +2313,9 @@ function renderCalList(d){
   const today=new Date(); today.setHours(0,0,0,0);
   const end=new Date(today); end.setDate(end.getDate()+30);
   const inRange=ev.filter(e=>{ const dt=new Date(e.date+"T00:00:00"); return dt>=today && dt<=end; });
+  const pre=(CAL_REGION==="usdata")?usMacroTable(d.us_data):"";   // 美股數據:最前面放最新數據表
   const _emptyTxt={usdata:"美股重要數據",usearn:"美股大型股財報(財報季約季中起,屆時自動帶出)",tw:"台股正式法說會"}[CAL_REGION];
-  if(!inRange.length){ box.innerHTML='<div class="legend">未來30天暫無'+_emptyTxt+'。</div>'; return; }
+  if(!inRange.length){ box.innerHTML=pre+'<div class="legend">未來30天暫無'+_emptyTxt+'時程。</div>'; return; }
   const wd=["日","一","二","三","四","五","六"];
   const dot=imp=>imp==="high"?'<span class="cal-dot hi" title="高重要度"></span>':(imp==="mid"?'<span class="cal-dot mid" title="中重要度"></span>':'');
   const flag=r=>r==="TW"?"🇹🇼":"🇺🇸";
@@ -2336,7 +2338,25 @@ function renderCalList(d){
     });
     html+='</div>';
   });
-  box.innerHTML=html;
+  box.innerHTML=pre+html;
+}
+// 美股最新經濟數據表(FRED:實際/前期/MoM·YoY;預期無免費源→「—」)。
+function usMacroTable(rows){
+  if(!rows || !rows.length) return '<div class="legend">美股實際數據尚未產生(data/calendar.json us_data)。</div>';
+  const head='<tr><th style="text-align:left">指標</th><th>實際</th><th>預期</th><th>前期</th><th>YoY</th><th>期間</th></tr>';
+  const body=rows.map(r=>'<tr>'+
+    '<td class="sym" style="text-align:left;cursor:default">'+esc(r.label)+'</td>'+
+    '<td><b>'+esc(r.actual||"–")+'</b></td>'+
+    '<td class="dim">—</td>'+
+    '<td class="dim">'+esc(r.prev||"–")+'</td>'+
+    '<td>'+esc(r.yoy||"–")+'</td>'+
+    '<td class="dim">'+esc((r.period||"").slice(0,7))+'</td>'+
+  '</tr>').join("");
+  return '<div class="cal-datahead">📊 最新美股經濟數據</div>'+
+    '<div class="tbl-wrap" style="margin-bottom:6px"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+
+    '<div class="legend" style="margin:0 0 14px">實際=最近一期:物價類為 MoM%、非農為月增、失業率為水準、GDP 為年化季增。'+
+      '<b>預期(consensus)無免費資料源,故「—」</b>。來源 FRED。</div>'+
+    '<div class="cal-datahead">🗓️ 未來釋出時程(台北時間)</div>';
 }
 
 // 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes

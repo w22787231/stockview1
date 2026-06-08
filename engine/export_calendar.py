@@ -6,7 +6,7 @@
 - earnings_tw: 台股法人說明會(公開資訊觀測站 MOPS)。
 總經排程需「每年手動更新一次」(可靠、不爬蟲的取捨)。
 """
-import sys, os, io, json, re, ssl, datetime
+import sys, os, io, json, re, ssl, csv, datetime
 import urllib.request, urllib.parse
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -194,12 +194,75 @@ def build_earnings_tw(now_tpe, end_tpe):
     return out
 
 
+# ── 美股實際經濟數據(FRED 免費):實際/前期/MoM/YoY。預期(consensus)無免費源,前端標「—」。──
+def _fred(sid):
+    u = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=" + sid
+    for _ in range(3):
+        try:
+            d = urllib.request.urlopen(urllib.request.Request(
+                u, headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv"}), timeout=30
+            ).read().decode("utf-8", "ignore")
+            rows = [r for r in csv.reader(io.StringIO(d)) if r and r[-1] not in ("", ".")]
+            return rows[1:]                       # [(date, value), ...]
+        except Exception:
+            continue
+    return None
+
+
+# (中文標籤, FRED 代號, 類型)。idx=指數→MoM/YoY%;jobs=月增K;claims=水準K;rate=%水準;gdp=年化%
+US_MACRO = [
+    ("CPI 消費者物價", "CPIAUCSL", "idx"),
+    ("核心 CPI", "CPILFESL", "idx"),
+    ("核心 PCE 物價", "PCEPILFE", "idx"),
+    ("PPI 生產者物價", "PPIFIS", "idx"),
+    ("零售銷售", "RSAFS", "idx"),
+    ("非農就業", "PAYEMS", "jobs"),
+    ("失業率", "UNRATE", "rate"),
+    ("初領失業金", "ICSA", "claims"),
+    ("GDP 年化季增", "A191RL1Q225SBEA", "gdp"),
+]
+
+
+def fetch_us_macro_data():
+    out = []
+    for label, sid, kind in US_MACRO:
+        r = _fred(sid)
+        if not r or len(r) < 2:
+            continue
+        try:
+            period = r[-1][0]
+            lv, pv = float(r[-1][1]), float(r[-2][1])
+            yoy = actual = prev = None
+            if kind == "idx":
+                actual = "%+.2f%%" % ((lv / pv - 1) * 100)
+                if len(r) >= 3:
+                    prev = "%+.2f%%" % ((pv / float(r[-3][1]) - 1) * 100)
+                if len(r) >= 13:
+                    yoy = "%+.2f%%" % ((lv / float(r[-13][1]) - 1) * 100)
+            elif kind == "jobs":
+                actual = "%+,.0fK" % (lv - pv)
+                if len(r) >= 3:
+                    prev = "%+,.0fK" % (pv - float(r[-3][1]))
+            elif kind == "claims":
+                actual = "%,.0fK" % (lv / 1000.0); prev = "%,.0fK" % (pv / 1000.0)
+            elif kind == "rate":
+                actual = "%.2f%%" % lv; prev = "%.2f%%" % pv
+            elif kind == "gdp":
+                actual = "%+.1f%%" % lv; prev = "%+.1f%%" % pv
+            out.append({"label": label, "period": period, "actual": actual,
+                        "prev": prev, "yoy": yoy, "kind": kind})
+        except Exception:
+            continue
+    return out or None
+
+
 def build():
     now = _now_tpe()
     end = now + datetime.timedelta(days=HORIZON_DAYS)
     econ = build_econ(now, end)
     eus = build_earnings_us(now, end)
     etw = build_earnings_tw(now, end)
+    us_data = fetch_us_macro_data()
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -208,13 +271,14 @@ def build():
         "econ": econ,
         "earnings_us": eus,
         "earnings_tw": etw,
-        "note": "時間為台北時間。美股總經為內建官方排程(以官方公布為準);財報日多為預估、可能變動。",
+        "us_data": us_data,
+        "note": "時間為台北時間。美股總經為內建官方排程(以官方公布為準);財報日多為預估、可能變動。美股實際數據來源 FRED。",
     }
     os.makedirs(DATA_DIR, exist_ok=True)
     with io.open(os.path.join(DATA_DIR, "calendar.json"), "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
-    print("[calendar] -> data/calendar.json  econ %d, US財報 %d, 台股法說 %d"
-          % (len(econ), len(eus), len(etw)))
+    print("[calendar] -> data/calendar.json  econ %d, US財報 %d, 台股法說 %d, 美股數據 %d"
+          % (len(econ), len(eus), len(etw), len(us_data or [])))
 
 
 if __name__ == "__main__":

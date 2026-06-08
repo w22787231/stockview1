@@ -88,7 +88,7 @@
   .news-orig{font-size:12px;line-height:1.4;color:var(--ink3);margin-top:2px}
   .idx-card .src-link{display:inline-block;margin-top:5px;font-size:10.5px;color:var(--blue);text-decoration:none;font-weight:600}
   .idx-card .src-link:hover{text-decoration:underline}
-  /* 持股檢查 */
+  /* 持股分析 */
   .hold-input textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;
     font-family:var(--mono);font-size:13px;line-height:1.7;resize:vertical;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
   .hold-input textarea:focus{outline:none;border-color:var(--blue)}
@@ -2007,7 +2007,7 @@ function gotoSym(sym, syms){
   else banner("🔍「"+esc(sym)+"」尚無個股詳情，且不在目前榜單池中（榜單搜尋請先切到對應池）。");
 }
 
-// ── 持股檢查:自行輸入持股 → 即時報價 + 損益 + 健康檢查(存 localStorage) ──
+// ── 持股分析:逐檔加股票 → 即時報價 + 多日漲幅動能 + 健康檢查(存 localStorage) ──
 function loadHoldings(){
   $("#meta").innerHTML='<div><b>持股分析</b></div><div>即時報價+動能 · 存於本機瀏覽器</div>';
   $("#poolNote").innerHTML="";

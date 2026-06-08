@@ -50,7 +50,7 @@
   .mtab.active{color:var(--blue)}
   .mtab.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2.5px;
     border-radius:2px;background:var(--blue)}
-  .mtab{touch-action:pan-y;user-select:none;-webkit-user-select:none}
+  .mtab{touch-action:manipulation;user-select:none;-webkit-user-select:none}
   .mtab.press{background:var(--panel2);border-radius:8px}
   .mtab.dragging{opacity:.55;background:var(--panel2);border-radius:8px;box-shadow:var(--shadow);cursor:grabbing}
 
@@ -406,6 +406,14 @@
     .stk-head .ssym{font-size:22px}
     .stk-price{font-size:25px}
     #chart{height:280px}
+    /* 新分頁/圖表的手機微調(桌面不受影響)*/
+    .m1m2-chart{height:210px}
+    .hold-add{gap:6px}
+    #holdInput{flex:1 1 100%;min-width:0}
+    .cal-ev{gap:7px;padding:6px 4px}
+    .cal-time{min-width:42px}
+    .cal-sub{display:none}                 /* 行事曆列在窄螢幕省略副標,留時間+類別+標題 */
+    .m1m2-chart{margin:0 -4px}
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
@@ -1925,19 +1933,19 @@ function bindTab(btn){
       else if(after!==btn && after!==btn.nextSibling){ nav.insertBefore(btn, after); }
     }
   });
-  const end=e=>{
+  const end=(e,canClick)=>{
     if(!btn._on) return;
     btn._on=false; clearLP(); btn.classList.remove("press");
     if(dragging){
       dragging=false; btn.classList.remove("dragging");
       try{ btn.releasePointerCapture(e.pointerId); }catch(_){}
       saveNavOrder(Array.from($("#mainnav").querySelectorAll(".mtab")).map(t=>t.dataset.view));
-    } else if(!moved){
-      switchView(btn.dataset.view);                          // 未達門檻=點擊
+    } else if(canClick && !moved){
+      switchView(btn.dataset.view);                          // 點擊(放開)=切頁;捲動取消(pointercancel)不切
     }
   };
-  btn.addEventListener("pointerup",end);
-  btn.addEventListener("pointercancel",end);
+  btn.addEventListener("pointerup",e=>end(e,true));
+  btn.addEventListener("pointercancel",e=>end(e,false));
 }
 renderNav();
 

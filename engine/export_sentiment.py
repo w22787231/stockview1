@@ -409,6 +409,69 @@ def fetch_micro_retail():
         return None
 
 
+def fetch_0dte():
+    """SPY/QQQ 0DTE(當日到期)選擇權 Put/Call Ratio(成交量)。Yahoo 選擇權鏈(需 crumb)。
+    歷史回讀已發布 sentiment.json 逐日累積 spark(Yahoo 無歷史選擇權量,只能往後累積)。"""
+    import http.cookiejar
+    import urllib.parse
+    try:
+        cj = http.cookiejar.CookieJar()
+        op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+        op.addheaders = [("User-Agent", "Mozilla/5.0")]
+        try:
+            op.open("https://fc.yahoo.com/", timeout=10)
+        except Exception:
+            pass
+        crumb = op.open("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=10).read().decode("utf-8", "ignore").strip()
+        if not crumb or len(crumb) > 30:
+            return None
+        res = {}
+        for sym in ("SPY", "QQQ"):
+            try:
+                u = "https://query1.finance.yahoo.com/v7/finance/options/" + sym + "?crumb=" + urllib.parse.quote(crumb)
+                d = json.loads(op.open(u, timeout=12).read().decode("utf-8", "ignore"))
+                oc = (d["optionChain"]["result"][0].get("options") or [{}])[0]
+                cv = sum((c.get("volume") or 0) for c in oc.get("calls", []))
+                pv = sum((p.get("volume") or 0) for p in oc.get("puts", []))
+                res[sym] = {"pcr": round(pv / cv, 2) if cv > 0 else None, "vol": cv + pv}
+            except Exception:
+                pass
+        spy = res.get("SPY") or {}
+        if spy.get("pcr") is None:
+            return None
+        pcr = spy["pcr"]
+        qqq = res.get("QQQ") or {}
+        tpe = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=8)
+        ymd = tpe.strftime("%Y%m%d")
+        dates, series = [], []
+        try:
+            prev = json.loads(urllib.request.urlopen(urllib.request.Request(
+                "https://stockview1.pages.dev/data/sentiment.json",
+                headers={"User-Agent": "Mozilla/5.0"}), timeout=10).read().decode("utf-8", "ignore"))
+            for lv in prev.get("levels", []):
+                if lv.get("sym") == "ODTE_PCR":
+                    dates = list(lv.get("dates") or [])
+                    series = list(lv.get("spark") or [])
+        except Exception:
+            pass
+        if dates and dates[-1] == ymd:
+            series[-1] = pcr
+        else:
+            dates.append(ymd); series.append(pcr)
+        dates, series = dates[-60:], series[-60:]
+        diff = round(series[-1] - series[-2], 2) if len(series) >= 2 else None
+        qtxt = ("目前 QQQ %.2f。" % qqq["pcr"]) if qqq.get("pcr") is not None else ""
+        return {
+            "sym": "ODTE_PCR", "label": "0DTE Put/Call", "note": "SPY 當日到期選擇權·情緒", "unit": "ratio",
+            "read": "0DTE(當日到期)選擇權 Put/Call 量比。>1=put 多(避險/偏空)、<1=call 多(偏多/投機);"
+                    "≥1.3 避險濃(常見反彈)、≤0.7 過度樂觀(留意回檔)。" + qtxt + "Yahoo 延遲/盤後量。",
+            "level": pcr, "diff": diff, "spark": series, "dates": dates,
+            "qqq_pcr": qqq.get("pcr"), "spy_vol": spy.get("vol"), "src": "Yahoo 選擇權",
+        }
+    except Exception:
+        return None
+
+
 def build():
     levels, failed = fetch_levels()
     cor = fetch_cor1m()
@@ -421,6 +484,11 @@ def build():
         levels.append(micro)
     else:
         failed.append("TWMICRORETAIL")
+    dte = fetch_0dte()                   # 0DTE 選擇權 Put/Call(Yahoo)
+    if dte:
+        levels.append(dte)
+    else:
+        failed.append("ODTE_PCR")
     breadth = market_breadth()
     fng = fetch_fear_greed()
     leverage = fetch_leverage()

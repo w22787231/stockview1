@@ -1018,6 +1018,10 @@ function sentAlert(sym, level, diffPct){
       if(level>=50)  return {cls:"alert-red",   tag:"🔴 散戶極度偏多·過熱"};
       if(level<=-20) return {cls:"alert-green", tag:"🟢 散戶極度偏空·可能底部"};
       return null;
+    case "ODTE_PCR": // 0DTE 量比:>1.3 避險濃(偏空,紅)、<0.7 偏多(call多,綠)
+      if(level>=1.3) return {cls:"alert-red",   tag:"🔴 0DTE 避險濃·偏空"};
+      if(level<=0.7) return {cls:"alert-green", tag:"🟢 0DTE 偏多·call多"};
+      return null;
     default: return null;
   }
 }
@@ -1029,6 +1033,7 @@ const SENT_THR = {
   "^SKEW": {v:150, dir:"hi", lab:"警戒150"},
   "COR1M": {v:8,   dir:"lo", lab:"危險8"},
   "TWMICRORETAIL": {v:50, dir:"hi", lab:"過熱50"},
+  "ODTE_PCR": {v:1.0, dir:"hi", lab:"PCR 1.0"},
 };
 
 function sparkline(data, col, thr){
@@ -1066,10 +1071,11 @@ function sentCard(r){
   const diff = r.diff!=null ? r.diff : r.diff_pct;
   const isPx = r.unit==="px";
   const isPct = r.unit==="pct";              // 比率型(如散戶多空比):值本身就是%,可正可負
+  const isRatio = r.unit==="ratio";          // 純比值(如 0DTE PCR):顯示數字、不加單位
   const up = diff>0;
   const c = diff==null?"dim":(!isPx ? (up?"neg":"pos") : (up?"pos":"neg"));
   const sign = diff>0?"+":"";
-  const diffTxt = (diff!=null?sign+diff:"–")+(isPx?"%":(isPct?" pt":" 點"));
+  const diffTxt = (diff!=null?sign+diff:"–")+(isPx?"%":(isPct?" pt":(isRatio?"":" 點")));
   const al = sentAlert(r.sym, r.level, isPx?diff:null);
   const cls = al?(" "+al.cls):"";
   const tag = al?('<div><span class="alert-tag">'+al.tag+'</span></div>'):"";

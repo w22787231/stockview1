@@ -455,7 +455,7 @@ def fetch_sp500_fwd_pe():
     a5, a10 = prev.get("avg5"), prev.get("avg10")
     et = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)
     fetched, newest_av = 0, None
-    for back in range(0, 800):                     # 回溯 ~2 年的週五
+    for back in range(0, 2900):                    # 回溯 ~8 年的週五(FactSet PDF 約存到 2017)
         dd = et.date() - datetime.timedelta(days=back)
         if dd.weekday() != 4:
             continue
@@ -463,7 +463,7 @@ def fetch_sp500_fwd_pe():
         ym = iso[:7]
         if iso in eps_hist or any(k[:7] == ym for k in eps_hist):
             continue                               # 每月只抓一份(forward EPS 月變化小,月粒度夠準)
-        if fetched >= 26:
+        if fetched >= 60:                          # 單跑上限 60 份(首跑 ~5 年,之後續補到 ~7 年)
             break
         fetched += 1
         got = _factset_week(dd, _io)
@@ -473,22 +473,13 @@ def fetch_sp500_fwd_pe():
                 newest_av = (got[1], got[2])
     if newest_av:
         a5 = newest_av[0] or a5; a10 = newest_av[1] or a10
-    eps_hist = dict(sorted(eps_hist.items())[-30:])    # 保留近 ~30 期(~2.5 年)
+    eps_hist = dict(sorted(eps_hist.items())[-96:])    # 保留近 ~96 期(~8 年)
     if not eps_hist:
         return None
     sorted_eps = sorted(eps_hist.items())          # [(報告ISO, eps), ...] 由舊到新
     latest_eps = sorted_eps[-1][1]
-    try:
-        ch = json.loads(urllib.request.urlopen(urllib.request.Request(
-            "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=2y",
-            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
-        res = ch["chart"]["result"][0]
-        ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
-        pairs = [(t, c) for t, c in zip(ts, cl) if c is not None][-520:]
-        live = (res.get("meta") or {}).get("regularMarketPrice") or pairs[-1][1]
-    except Exception:
-        return None
-    def eps_at(day):                               # 該日生效 EPS = 不晚於該日的最近一週
+    earliest = sorted_eps[0][0]
+    def eps_at(day):                               # 該日生效 EPS = 不晚於該日的最近一期
         e = sorted_eps[0][1]
         for dt, val in sorted_eps:
             if dt <= day:
@@ -496,8 +487,29 @@ def fetch_sp500_fwd_pe():
             else:
                 break
         return e
-    dates = [datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d") for t, _ in pairs]
-    pe = [round(c / eps_at(dates[i]), 1) for i, (_, c) in enumerate(pairs)]
+    try:
+        ch = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=10y",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+        res = ch["chart"]["result"][0]
+        ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
+        rows = []
+        for t, c in zip(ts, cl):
+            if c is None:
+                continue
+            ds = datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d")
+            if ds >= earliest:                     # 只取有 forward EPS 的區間
+                rows.append((ds, c))
+        live = (res.get("meta") or {}).get("regularMarketPrice") or (rows[-1][1] if rows else None)
+    except Exception:
+        return None
+    if not rows:
+        return None
+    samp = rows[::5]                               # 週取樣(每5交易日)讓長區間圖輕量
+    if samp[-1] != rows[-1]:
+        samp.append(rows[-1])
+    dates = [d for d, _ in samp]
+    pe = [round(c / eps_at(d), 1) for d, c in samp]
     cur = round(live / latest_eps, 1)
     return {"label": "S&P500 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
             "report_date": sorted_eps[-1][0], "avg5": a5, "avg10": a10,

@@ -1176,30 +1176,46 @@ function renderSentiment(d){
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
 }
+let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
 function sp500FwdPeBox(v){
   if(!v || !v.pe || !v.pe.length) return '';
   const cur=v.cur, t=v.thr||{high:21.5,low:16,oversold:14};
   const vd = cur>=t.high?{t:"偏高",c:"neg"}:(cur<t.oversold?{t:"超賣",c:"pos"}:(cur<t.low?{t:"偏低",c:"pos"}:{t:"中性",c:"dim"}));
+  const _rb=(k,lab)=>'<button class="ntab'+(FWDPE_RANGE===k?" on":"")+'" data-fr="'+k+'">'+lab+'</button>';
   return '<div class="guide" style="margin-top:12px">'+
     '<div class="gtitle">S&P500 Forward P/E · <b class="'+vd.c+'">'+cur+'x（'+vd.t+'）</b></div>'+
     '<div id="fwdpeChart" class="m1m2-chart"></div>'+
-    '<div class="ex">FactSet 各週 forward EPS(目前 <b>$'+v.fwd_eps+'</b>，報告 '+esc(v.report_date||"")+')÷ S&P500 即時價，逐日算(用「當週實際 EPS」非現值近似)。'+
+    '<div id="fwdpeRange" class="news-tabs" style="margin:4px 0 2px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+'</div>'+
+    '<div class="ex">FactSet 各期 forward EPS(目前 <b>$'+v.fwd_eps+'</b>，報告 '+esc(v.report_date||"")+')÷ S&P500 即時價，用「當期實際 EPS」逐日算(非現值近似)。可拖曳/滾輪縮放時間軸。'+
       '<b class="neg">&gt;'+t.high+' 偏高</b> · <b class="pos">&lt;'+t.low+' 偏低</b> · <b class="pos">&lt;'+t.oversold+' 超賣</b>'+
       (v.avg5?(' · FactSet 5年均 '+v.avg5+'／10年均 '+v.avg10):'')+'。forward＝用未來12個月預估EPS,故低於 trailing。</div>'+
     '</div>';
 }
 function drawSp500FwdPe(v){
-  const el=document.getElementById("fwdpeChart");
-  if(!el || !window.echarts || !v.pe || !v.pe.length) return;
+  window._fwdpe=v;
+  const rb=document.getElementById("fwdpeRange");
+  if(rb) rb.querySelectorAll(".ntab").forEach(b=>b.onclick=()=>{
+    FWDPE_RANGE=b.dataset.fr;
+    rb.querySelectorAll(".ntab").forEach(x=>x.classList.toggle("on",x.dataset.fr===FWDPE_RANGE));
+    _renderFwdPe();
+  });
+  _renderFwdPe();
+}
+function _renderFwdPe(){
+  const v=window._fwdpe, el=document.getElementById("fwdpeChart");
+  if(!el || !window.echarts || !v || !v.pe || !v.pe.length) return;
   const t=v.thr||{high:21.5,low:16,oversold:14};
-  const lo=Math.min(t.oversold,Math.min.apply(null,v.pe)), hi=Math.max(t.high,Math.max.apply(null,v.pe));
-  const ch=echarts.init(el,null,{renderer:"canvas"});
+  const n={"1y":52,"3y":156,"5y":260,"all":v.pe.length}[FWDPE_RANGE]||v.pe.length;
+  const dates=v.dates.slice(-n), pe=v.pe.slice(-n);
+  const lo=Math.min(t.oversold,Math.min.apply(null,pe)), hi=Math.max(t.high,Math.max.apply(null,pe));
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
-    grid:{left:38,right:14,top:14,bottom:24},
+    grid:{left:38,right:14,top:14,bottom:30},
     tooltip:{trigger:"axis",valueFormatter:x=>(x==null?"-":x+"x")},
-    xAxis:{type:"category",data:v.dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(v.dates.length/8))}},
+    dataZoom:[{type:"inside"}],
+    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
     yAxis:{type:"value",min:Math.floor(lo-0.5),max:Math.ceil(hi+0.5),axisLabel:{fontSize:10,formatter:"{value}x"},splitLine:{lineStyle:{opacity:.3}}},
-    series:[{name:"Forward P/E",type:"line",data:v.pe,smooth:true,symbol:"none",
+    series:[{name:"Forward P/E",type:"line",data:pe,smooth:true,symbol:"none",
       lineStyle:{width:2,color:"#1f6feb"},itemStyle:{color:"#1f6feb"},areaStyle:{color:"#1f6feb12"},
       markLine:{silent:true,symbol:"none",data:[
         {yAxis:t.high,lineStyle:{color:"#e11d48",type:"dashed"},label:{formatter:"偏高 "+t.high,fontSize:10,color:"#e11d48",position:"insideEndTop"}},
@@ -1209,7 +1225,7 @@ function drawSp500FwdPe(v){
         [{yAxis:t.high,itemStyle:{color:"#e11d480e"}},{yAxis:1000}],
         [{yAxis:0,itemStyle:{color:"#16a34a0e"}},{yAxis:t.low}]]},
     }],
-  });
+  }, true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 

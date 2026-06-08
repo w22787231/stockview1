@@ -1167,41 +1167,9 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+leverageBox(d.leverage)+valuationBox(d.valuation_pe)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
-  if(d.valuation_pe) drawValuationPE(d.valuation_pe);
-}
-function valuationBox(v){
-  if(!v) return '';
-  const cur=x=>(x&&x.cur!=null)?Number(x.cur).toFixed(1)+'x':'–';
-  return '<div class="guide" style="margin-top:12px">'+
-    '<div class="gtitle">估值 · 本益比(trailing PE)</div>'+
-    (v.sp500?'<div id="valChart" class="m1m2-chart"></div>':'')+
-    '<div class="ex">S&P500 近25年本益比 <b>'+cur(v.sp500)+'</b>(multpl 月資料，橘線=區間均值)。'+
-      '那斯達克100(QQQ) <b>'+cur(v.ndx)+'</b> · 半導體(SOXX) <b>'+cur(v.semi)+'</b>(當前;ETF 無免費歷史 PE,走勢逐日累積)。'+
-      '<br>本益比越高＝估值越貴,與自身歷史區間比相對貴賤。trailing＝用過去12個月已實現盈餘(forward PE 無免費歷史源)。</div>'+
-    '</div>';
-}
-function drawValuationPE(v){
-  const el=document.getElementById("valChart");
-  if(!el || !window.echarts || !v.sp500) return;
-  const s=v.sp500, dates=s.dates||[], pe=s.pe||[];
-  if(!pe.length) return;
-  const avg=Math.round(pe.reduce((a,b)=>a+b,0)/pe.length*10)/10;
-  const ch=echarts.init(el,null,{renderer:"canvas"});
-  ch.setOption({
-    grid:{left:40,right:14,top:24,bottom:24},
-    legend:{data:["S&P500 本益比"],top:0,textStyle:{fontSize:11},itemWidth:16,itemHeight:9},
-    tooltip:{trigger:"axis",valueFormatter:x=>(x==null?"-":x+"x")},
-    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
-    yAxis:{type:"value",axisLabel:{fontSize:10,formatter:"{value}x"},splitLine:{lineStyle:{opacity:.35}}},
-    series:[{name:"S&P500 本益比",type:"line",data:pe,smooth:true,symbol:"none",
-      lineStyle:{width:1.8,color:"#1f6feb"},itemStyle:{color:"#1f6feb"},areaStyle:{color:"#1f6feb14"},
-      markLine:{silent:true,symbol:"none",data:[{yAxis:avg}],
-        label:{formatter:"均值 "+avg+"x",fontSize:10,color:"#e8923a"},lineStyle:{color:"#e8923a",type:"dashed"}}}],
-  });
-  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
 async function loadSentiment(){

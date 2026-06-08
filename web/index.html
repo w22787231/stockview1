@@ -2117,7 +2117,7 @@ function importEbk(file){
   const r=new FileReader();
   r.onload=()=>{
     let codes=[];
-    for(const enc of ["big5","utf-8"]){                        // 台股軟體多為 Big5,讀不到再試 UTF-8
+    for(const enc of ["utf-8","big5","utf-16le","utf-16be"]){   // 多種編碼都試,取解出代號最多的
       try{ const c=parseEbk(new TextDecoder(enc).decode(r.result)); if(c.length>codes.length) codes=c; }catch(_){}
     }
     if(!codes.length){ msg("⚠️ 沒從這個 EBK 讀到代號。可把檔案內容貼給我看格式,我來調解析。"); return; }
@@ -2232,24 +2232,42 @@ function loadCalendar(){
     .then(renderCalendar)
     .catch(e=>{ $("#content").innerHTML='<section><div class="sec-head"><h2>財報/數據</h2></div><div class="note">⚠️ 找不到行事曆資料(data/calendar.json)。請在 GitHub Actions 跑一次 export。</div></section>'; });
 }
+let CAL_REGION="tw";        // 財報/數據 子分頁:tw=台股法說、us=美股數據/財報
 function renderCalendar(d){
+  const tabs='<div id="calTabs" class="news-tabs">'+
+      '<button class="ntab'+(CAL_REGION==="tw"?" on":"")+'" data-r="tw">🇹🇼 台股法說</button>'+
+      '<button class="ntab'+(CAL_REGION==="us"?" on":"")+'" data-r="us">🇺🇸 美股 數據/財報</button>'+
+    '</div>';
+  $("#content").innerHTML='<section><div class="sec-head"><h2>財報/數據</h2><span class="tag">未來30天 · 台北時間</span>'+
+      '<span class="hint">台股＝公司正式法人說明會;美股＝重要總經數據＋大型股財報。時間皆台北時間。</span></div>'+
+      tabs+'<div id="calList"></div>'+
+      '<div class="legend">'+esc(d.note||"")+' · 資料更新 '+esc(fmtTime(d.generated_at))+'。</div></section>';
+  document.querySelectorAll("#calTabs .ntab").forEach(b=>b.onclick=()=>{
+    CAL_REGION=b.dataset.r;
+    document.querySelectorAll("#calTabs .ntab").forEach(x=>x.classList.toggle("on",x.dataset.r===CAL_REGION));
+    renderCalList(d);
+  });
+  renderCalList(d);
+}
+function renderCalList(d){
+  const box=$("#calList"); if(!box) return;
   const ev=[];
-  (d.econ||[]).forEach(e=>ev.push({date:e.date,time:e.time,type:"econ",region:e.region||"US",imp:e.importance,title:e.name,sub:e.et||""}));
-  (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),sub:"財報(預估)"}));
-  (d.earnings_tw||[]).forEach(e=>ev.push({date:e.date,time:e.time||"",type:"earn",region:"TW",title:e.sym+(e.name?" "+e.name:""),sub:e.kind||"法說會"}));
+  if(CAL_REGION==="us"){
+    (d.econ||[]).forEach(e=>ev.push({date:e.date,time:e.time,type:"econ",region:"US",imp:e.importance,title:e.name,sub:e.et||""}));
+    (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),sub:"財報(預估)"}));
+  }else{
+    (d.earnings_tw||[]).forEach(e=>ev.push({date:e.date,time:e.time||"",type:"earn",region:"TW",title:e.sym+(e.name?" "+e.name:""),sub:e.kind||"法說會"}));
+  }
   const today=new Date(); today.setHours(0,0,0,0);
   const end=new Date(today); end.setDate(end.getDate()+30);
   const inRange=ev.filter(e=>{ const dt=new Date(e.date+"T00:00:00"); return dt>=today && dt<=end; });
+  if(!inRange.length){ box.innerHTML='<div class="legend">未來30天暫無'+(CAL_REGION==="tw"?"台股正式法說會":"美股數據/財報")+'。</div>'; return; }
   const wd=["日","一","二","三","四","五","六"];
   const dot=imp=>imp==="high"?'<span class="cal-dot hi" title="高重要度"></span>':(imp==="mid"?'<span class="cal-dot mid" title="中重要度"></span>':'');
   const flag=r=>r==="TW"?"🇹🇼":"🇺🇸";
-  let html='<section><div class="sec-head"><h2>財報/數據</h2><span class="tag">未來30天 · 台北時間</span>'+
-    '<span class="hint">📊 重要總經數據(美股)· 📈 企業財報/法說(美/台)。時間皆換算台北時間。</span></div>';
-  if(!inRange.length){
-    $("#content").innerHTML=html+'<div class="legend">未來30天暫無資料(或尚未產生 data/calendar.json)。</div></section>'; return;
-  }
   const byDate={};
   inRange.forEach(e=>{ (byDate[e.date]=byDate[e.date]||[]).push(e); });
+  let html="";
   Object.keys(byDate).sort().forEach(ds=>{
     const dt=new Date(ds+"T00:00:00");
     const diff=Math.round((dt-today)/86400000);
@@ -2257,7 +2275,8 @@ function renderCalendar(d){
     html+='<div class="cal-day"><div class="cal-date">'+ds.slice(5).replace("-","/")+
       ' <span class="cal-wd">(週'+wd[dt.getDay()]+')</span> <span class="cal-cd">'+cd+'</span></div>';
     byDate[ds].sort((a,b)=>((a.time||"99:99")>(b.time||"99:99")?1:-1)).forEach(e=>{
-      const badge=e.type==="econ"?'<span class="cal-badge econ">📊 數據</span>':'<span class="cal-badge earn">📈 財報</span>';
+      const badge=e.type==="econ"?'<span class="cal-badge econ">📊 數據</span>'
+        :'<span class="cal-badge earn">📈 '+(e.region==="TW"?"法說":"財報")+'</span>';
       html+='<div class="cal-ev">'+
         '<span class="cal-time">'+(e.time||"–")+'</span>'+badge+dot(e.imp)+
         '<span class="cal-title">'+flag(e.region)+' '+esc(e.title)+'</span>'+
@@ -2265,8 +2284,7 @@ function renderCalendar(d){
     });
     html+='</div>';
   });
-  html+='<div class="legend">'+esc(d.note||"")+' · 資料更新 '+esc(fmtTime(d.generated_at))+'。</div></section>';
-  $("#content").innerHTML=html;
+  box.innerHTML=html;
 }
 
 // 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes

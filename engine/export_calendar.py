@@ -181,6 +181,9 @@ def build_earnings_tw(now_tpe, end_tpe):
                     continue
                 if not (nd <= d <= ed) or code in seen:
                     continue
+                full = " ".join(cells)
+                if "受邀" in full or re.search(r"受.{0,10}邀請", full):
+                    continue        # 濾掉「受邀參加外資券商會議/NDR」,只留公司自辦正式法說會
                 ci = cells.index(code)
                 name = cells[ci + 1] if ci + 1 < len(cells) and not re.fullmatch(r"\d{4}", cells[ci + 1]) else ""
                 tm = next((c for c in cells if re.fullmatch(r"\d{2}:\d{2}", c)), "")

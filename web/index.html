@@ -2430,21 +2430,25 @@ async function fetchAndRenderHold(pid){
   const rows=codes.map(code=>{ let qt=null,used=null; for(const c of _holdCand(code)){ if(Q[c]){qt=Q[c];used=c;break;} } return {code,qt,used}; });
   // 基本面(Yahoo quoteSummary)+ 同業PE 中位數,平行抓;失敗則相關欄顯「–」。
   const usedSyms=[...new Set(rows.map(r=>r.used).filter(Boolean))];
-  const [FUND, INDPE, NI]=await Promise.all([
+  const [FUND, INDPE, NI, INTRA]=await Promise.all([
     usedSyms.length
       ? fetch("/api/fundamentals?syms="+encodeURIComponent(usedSyms.join(","))+"&t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>d.fundamentals||{}).catch(()=>({}))
       : Promise.resolve({}),
     window._indPe ? Promise.resolve(window._indPe)
       : fetch("data/industry_pe.json?t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>(window._indPe=d.industries||{})).catch(()=>({})),
-    loadNames().catch(()=>null)            // 台股代號→繁中名
+    loadNames().catch(()=>null),           // 台股代號→繁中名
+    usedSyms.length                        // 今日盤中分時(小走勢圖)
+      ? fetch("/api/intraday?syms="+encodeURIComponent(usedSyms.join(","))+"&t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>d.intraday||{}).catch(()=>({}))
+      : Promise.resolve({})
   ]);
-  renderHoldings(rows, FUND, INDPE, (NI&&NI.bySym)||{}, pid);
+  renderHoldings(rows, FUND, INDPE, (NI&&NI.bySym)||{}, pid, INTRA||{});
 }
 // 持股表欄位定義(供表頭排序 + 逐格渲染共用)。
 const HOLD_COLS=[
   {k:"code",lab:"代號",a:"left",sort:true},
   {k:"name",lab:"名稱",a:"left",sort:true},
   {k:"price",lab:"現價",a:"right",sort:true},
+  {k:"today",lab:"今日",a:"center",sort:false},   // 今日盤中分時小圖
   {k:"below",lab:"🔴",a:"center",sort:true},      // 跌破成本閃燈;點此把跌破列排到最上
   {k:"buy",lab:"購買價①",a:"right",sort:false},   // 輸入框,不排序
   {k:"buy2",lab:"購買價②",a:"right",sort:false},
@@ -2460,13 +2464,26 @@ const HOLD_COLS=[
 ];
 const HOLD_SORT={};   // {pid:{k,dir}} 每池各自排序狀態
 window._HOLD={};      // {pid:{data}} 每池資料模型
+// 今日盤中分時迷你圖:綠/紅依「最後價 vs 昨收」,虛線=昨收基準。
+function _miniSpark(pts, prev){
+  if(!pts || pts.length<2) return '<span class="dim" style="font-size:10px">–</span>';
+  const w=66,h=22,pad=2,n=pts.length, base=(prev!=null)?prev:pts[0], last=pts[n-1];
+  const col=last>=base?"#16a34a":"#e11d48";
+  let min=Math.min.apply(null,pts), max=Math.max.apply(null,pts);
+  if(prev!=null){ min=Math.min(min,prev); max=Math.max(max,prev); }
+  const rng=(max-min)||1, X=i=>pad+i/(n-1)*(w-2*pad), Y=v=>pad+(1-(v-min)/rng)*(h-2*pad);
+  let dline=""; for(let i=0;i<n;i++) dline+=(i?"L":"M")+X(i).toFixed(1)+" "+Y(pts[i]).toFixed(1)+" ";
+  const baseLine=(prev!=null)?'<line x1="'+pad+'" y1="'+Y(prev).toFixed(1)+'" x2="'+(w-pad)+'" y2="'+Y(prev).toFixed(1)+'" stroke="#9aa6b6" stroke-width="0.6" stroke-dasharray="2 2"/>':"";
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="vertical-align:middle" title="今日盤中分時(虛線=昨收)">'+
+    baseLine+'<path d="'+dline+'" fill="none" stroke="'+col+'" stroke-width="1.3"/></svg>';
+}
 // 把 rows+基本面+同業PE 整理成可排序的資料模型,存 window._HOLD[pid],再 drawHoldTable(pid)。
-function renderHoldings(rows, FUND, INDPE, TWNAMES, pid){
-  FUND=FUND||{}; INDPE=INDPE||{}; TWNAMES=TWNAMES||{};
+function renderHoldings(rows, FUND, INDPE, TWNAMES, pid, INTRA){
+  FUND=FUND||{}; INDPE=INDPE||{}; TWNAMES=TWNAMES||{}; INTRA=INTRA||{};
   const buys=buyPrices(1,pid), buys2=buyPrices(2,pid);
   const twName=u=>(u&&/\.(TW|TWO)$/i.test(u))?(TWNAMES[u.toUpperCase()]||null):null;   // 台股優先繁中名
   const data=rows.map(({code,qt,used})=>{
-    if(!qt) return {code,used,name:"",hasQt:false,below:0,buy:buys[code]!=null?buys[code]:null,buy2:buys2[code]!=null?buys2[code]:null};
+    if(!qt) return {code,used,name:"",hasQt:false,below:0,intra:null,buy:buys[code]!=null?buys[code]:null,buy2:buys2[code]!=null?buys2[code]:null};
     const cl=qt.closes||[], vl=qt.volumes||[];
     const f=FUND[used]||{};
     const indPe=(f.industry && INDPE[f.industry])?INDPE[f.industry].pe_med:null;
@@ -2475,7 +2492,7 @@ function renderHoldings(rows, FUND, INDPE, TWNAMES, pid){
     const bs=[buy,buy2].filter(v=>v!=null);
     const below=(price!=null && bs.length && price<Math.max.apply(null,bs))?1:0;   // 跌破任一成本 → 1
     return {code,used,hasQt:true,name:twName(used)||f.name||qt.name||"",
-      price, below, r1:_retN(cl,1), r5:_retN(cl,5), r20:_retN(cl,20), volr:_volr(cl,vl),
+      price, below, intra:INTRA[used]||null, r1:_retN(cl,1), r5:_retN(cl,5), r20:_retN(cl,20), volr:_volr(cl,vl),
       fwdEps:f.fwdEps, fwdPe:f.fwdPe, indPe, peg:f.peg, tgt,
       tgtUp:(tgt!=null&&price)?(tgt/price-1)*100:null,
       buy:buy, buy2:buy2};
@@ -2508,14 +2525,15 @@ function drawHoldTable(pid){
   const trs=data.map(r=>{
     const symTd='<td class="sym clk" data-code="'+esc(r.code)+'" data-used="'+esc(r.used||"")+'" title="點擊看個股分析">'+esc(r.used||r.code)+'</td>';
     const del='<td><button class="hold-del" data-code="'+esc(r.code)+'" title="刪除">✕</button></td>';
-    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="3" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+buyCell(r,2)+'<td colspan="9" class="dim"></td>'+del+'</tr>';
+    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="4" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+buyCell(r,2)+'<td colspan="9" class="dim"></td>'+del+'</tr>';
     const below=!!r.below;                                      // 跌破任一成本價 → 閃爍燈
     const priceTd='<td class="'+(below?"below-buy":"")+'">'+fmt(r.price)+'</td>';
+    const todayTd='<td style="text-align:center">'+_miniSpark((r.intra||{}).closes,(r.intra||{}).prev)+'</td>';
     const dotTd='<td style="text-align:center">'+(below?'<span class="blink-dot" title="現價已跌破購買價"></span>':'')+'</td>';
     const pegCls=r.peg==null?"dim":(r.peg<1?"pos":(r.peg>2?"neg":""));
     return '<tr>'+symTd+
       '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</td>'+
-      priceTd+dotTd+buyCell(r,1)+buyCell(r,2)+
+      priceTd+todayTd+dotTd+buyCell(r,1)+buyCell(r,2)+
       '<td>'+(r.tgt!=null?fmt(r.tgt)+(r.tgtUp!=null?' <span class="'+c(r.tgtUp)+'" style="font-size:11px">('+sg(r.tgtUp)+r.tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
       pctTd(r.r1)+pctTd(r.r5)+pctTd(r.r20)+
       '<td>'+(r.volr!=null?r.volr.toFixed(2)+"×":"–")+'</td>'+

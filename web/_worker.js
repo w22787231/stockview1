@@ -290,6 +290,34 @@ async function handleOptions(request) {
   });
 }
 
+// ── 今日盤中分時:Yahoo chart interval=5m range=1d → 今日收盤序列 + 昨收(持股表小走勢圖)──
+async function fetchIntraday(sym) {
+  try {
+    const u = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) + "?interval=5m&range=1d";
+    const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0" }, cf: { cacheTtl: 120 } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const res = j.chart && j.chart.result && j.chart.result[0];
+    if (!res) return null;
+    const closes = (((res.indicators || {}).quote || [])[0] || {}).close || [];
+    const pts = closes.filter(v => v != null);
+    const meta = res.meta || {};
+    const prev = meta.chartPreviousClose != null ? meta.chartPreviousClose : (meta.previousClose != null ? meta.previousClose : null);
+    if (!pts.length) return null;
+    return { prev: prev, closes: pts };
+  } catch (e) { return null; }
+}
+async function handleIntraday(request) {
+  const url = new URL(request.url);
+  const syms = (url.searchParams.get("syms") || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 40);
+  const out = {};
+  const arr = await Promise.all(syms.map(fetchIntraday));
+  syms.forEach((s, i) => { if (arr[i]) out[s] = arr[i]; });
+  return new Response(JSON.stringify({ intraday: out, ts: new Date().toISOString() }), {
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=120", "Access-Control-Allow-Origin": "*" },
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -297,6 +325,7 @@ export default {
     if (url.pathname === "/api/quotes") return handleQuotes(request);
     if (url.pathname === "/api/fundamentals") return handleFundamentals(request);
     if (url.pathname === "/api/options") return handleOptions(request);
+    if (url.pathname === "/api/intraday") return handleIntraday(request);
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },
 };

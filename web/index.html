@@ -2443,6 +2443,7 @@ const HOLD_COLS=[
   {k:"code",lab:"代號",a:"left",sort:true},
   {k:"name",lab:"名稱",a:"left",sort:true},
   {k:"price",lab:"現價",a:"right",sort:true},
+  {k:"below",lab:"🔴",a:"center",sort:true},      // 跌破成本閃燈;點此把跌破列排到最上
   {k:"buy",lab:"購買價①",a:"right",sort:false},   // 輸入框,不排序
   {k:"buy2",lab:"購買價②",a:"right",sort:false},
   {k:"tgt",lab:"分析師目標價",a:"right",sort:true},
@@ -2463,16 +2464,19 @@ function renderHoldings(rows, FUND, INDPE, TWNAMES, pid){
   const buys=buyPrices(1,pid), buys2=buyPrices(2,pid);
   const twName=u=>(u&&/\.(TW|TWO)$/i.test(u))?(TWNAMES[u.toUpperCase()]||null):null;   // 台股優先繁中名
   const data=rows.map(({code,qt,used})=>{
-    if(!qt) return {code,used,name:"",hasQt:false,buy:buys[code]!=null?buys[code]:null,buy2:buys2[code]!=null?buys2[code]:null};
+    if(!qt) return {code,used,name:"",hasQt:false,below:0,buy:buys[code]!=null?buys[code]:null,buy2:buys2[code]!=null?buys2[code]:null};
     const cl=qt.closes||[], vl=qt.volumes||[];
     const f=FUND[used]||{};
     const indPe=(f.industry && INDPE[f.industry])?INDPE[f.industry].pe_med:null;
     const tgt=f.target, price=qt.price;
+    const buy=buys[code]!=null?buys[code]:null, buy2=buys2[code]!=null?buys2[code]:null;
+    const bs=[buy,buy2].filter(v=>v!=null);
+    const below=(price!=null && bs.length && price<Math.max.apply(null,bs))?1:0;   // 跌破任一成本 → 1
     return {code,used,hasQt:true,name:twName(used)||f.name||qt.name||"",
-      price, r1:_retN(cl,1), r5:_retN(cl,5), r20:_retN(cl,20), volr:_volr(cl,vl),
+      price, below, r1:_retN(cl,1), r5:_retN(cl,5), r20:_retN(cl,20), volr:_volr(cl,vl),
       fwdEps:f.fwdEps, fwdPe:f.fwdPe, indPe, peg:f.peg, tgt,
       tgtUp:(tgt!=null&&price)?(tgt/price-1)*100:null,
-      buy:buys[code]!=null?buys[code]:null, buy2:buys2[code]!=null?buys2[code]:null};
+      buy:buy, buy2:buy2};
   });
   window._HOLD[pid]={data};
   drawHoldTable(pid);
@@ -2502,14 +2506,14 @@ function drawHoldTable(pid){
   const trs=data.map(r=>{
     const symTd='<td class="sym clk" data-code="'+esc(r.code)+'" data-used="'+esc(r.used||"")+'" title="點擊看個股分析">'+esc(r.used||r.code)+'</td>';
     const del='<td><button class="hold-del" data-code="'+esc(r.code)+'" title="刪除">✕</button></td>';
-    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="2" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+buyCell(r,2)+'<td colspan="9" class="dim"></td>'+del+'</tr>';
-    const buysSet=[r.buy,r.buy2].filter(v=>v!=null);            // 兩個購買價,任一被現價跌破 → 閃爍燈
-    const below=(r.price!=null && buysSet.length && r.price<Math.max.apply(null,buysSet));
-    const priceTd='<td class="'+(below?"below-buy":"")+'">'+fmt(r.price)+(below?'<span class="blink-dot" title="現價已跌破購買價"></span>':'')+'</td>';
+    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="3" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+buyCell(r,2)+'<td colspan="9" class="dim"></td>'+del+'</tr>';
+    const below=!!r.below;                                      // 跌破任一成本價 → 閃爍燈
+    const priceTd='<td class="'+(below?"below-buy":"")+'">'+fmt(r.price)+'</td>';
+    const dotTd='<td style="text-align:center">'+(below?'<span class="blink-dot" title="現價已跌破購買價"></span>':'')+'</td>';
     const pegCls=r.peg==null?"dim":(r.peg<1?"pos":(r.peg>2?"neg":""));
     return '<tr>'+symTd+
       '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</td>'+
-      priceTd+buyCell(r,1)+buyCell(r,2)+
+      priceTd+dotTd+buyCell(r,1)+buyCell(r,2)+
       '<td>'+(r.tgt!=null?fmt(r.tgt)+(r.tgtUp!=null?' <span class="'+c(r.tgtUp)+'" style="font-size:11px">('+sg(r.tgtUp)+r.tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
       pctTd(r.r1)+pctTd(r.r5)+pctTd(r.r20)+
       '<td>'+(r.volr!=null?r.volr.toFixed(2)+"×":"–")+'</td>'+
@@ -2526,7 +2530,7 @@ function drawHoldTable(pid){
     return '<th class="sortable" data-k="'+col.k+'"'+al+'>'+col.lab+'<span class="sar">'+ar+'</span></th>';
   }).join("")+'<th></th></tr>';
   box.innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
-    '<div class="legend">點<b>欄位標題</b>排序、點<b>代號</b>看個股分析、在<b>購買價①/②</b>填成本價(可填兩個,支援算式如 50*2):現價跌破任一成本價會亮<span class="blink-dot" style="position:relative;top:1px"></span>紅色閃爍燈。fwd EPS/PE=分析師預估;同業PE=同產業中位數;PEG(<span class="pos">&lt;1 偏低估</span>、<span class="neg">&gt;2 偏高估</span>);目標價括號=較現價空間。基本面來源 Yahoo,即時報價可能延遲約15分。</div>';
+    '<div class="legend">點<b>欄位標題</b>排序、點<b>代號</b>看個股分析、在<b>購買價①/②</b>填成本價(可填兩個,支援算式如 50*2):現價跌破任一成本價會亮<span class="blink-dot" style="position:relative;top:1px"></span>紅色閃爍燈(點<b>🔴</b>欄標題可把跌破列排到最上)。fwd EPS/PE=分析師預估;同業PE=同產業中位數;PEG(<span class="pos">&lt;1 偏低估</span>、<span class="neg">&gt;2 偏高估</span>);目標價括號=較現價空間。基本面來源 Yahoo,即時報價可能延遲約15分。</div>';
   // 事件:刪除、表頭排序、購買價輸入、點代號進個股(皆限本池 box 內)。
   box.querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code, pid));
   box.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{

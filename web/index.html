@@ -1985,6 +1985,7 @@ function switchView(v){
   if(v==="macro") loadMacro();
   else if(v==="news") loadNewsFeed();
   else if(v==="chain") loadChain();
+  else if(v==="supply") loadSupply();
   else if(v==="etf") loadEtf();
   else if(v==="holdings") loadHoldings();
   else if(v==="calendar") loadCalendar();
@@ -1998,6 +1999,7 @@ const NAV=[
   {view:"trend",   label:"趨勢動能榜"},
   {view:"cross",   label:"交叉訊號"},
   {view:"chain",   label:"產業鏈"},
+  {view:"supply",  label:"供應鏈選股"},
   {view:"etf",     label:"ETF持股異動"},
   {view:"calendar",label:"財報/數據"},
   {view:"options", label:"選擇權"},
@@ -2657,6 +2659,64 @@ function renderCalList(d){
     html+='</div>';
   });
   box.innerHTML=pre+html;
+}
+// ── 供應鏈選股:AI 瓶頸卡位精選(data/supply_chain.json)+ 即時報價(/api/quotes)──
+let SUPPLY_DATA=null, SUPPLY_CUR=0;
+async function loadSupply(){
+  $("#meta").innerHTML='<div><b>供應鏈選股</b></div><div>AI 瓶頸卡位精選 · 即時報價</div>';
+  $("#poolNote").innerHTML="";
+  if(!SUPPLY_DATA){
+    $("#content").innerHTML='<div class="loading-screen">載入 供應鏈選股 …</div>';
+    try{ SUPPLY_DATA=await (await fetch("data/supply_chain.json?t="+Date.now(),{cache:"no-store"})).json(); }
+    catch(e){ $("#content").innerHTML='<section><div class="sec-head"><h2>供應鏈選股</h2></div><div class="note">⚠️ 找不到資料(data/supply_chain.json)。</div></section>'; return; }
+  }
+  renderSupply();
+}
+function renderSupply(){
+  const d=SUPPLY_DATA; if(!d||!d.themes||!d.themes.length) return;
+  if(SUPPLY_CUR>=d.themes.length) SUPPLY_CUR=0;
+  const t=d.themes[SUPPLY_CUR];
+  const nav=d.themes.map((x,i)=>'<button class="chain-pill'+(i===SUPPLY_CUR?" active":"")+'" data-si="'+i+'">'+esc(x.name)+'</button>').join("");
+  $("#content").innerHTML=
+    '<section><div class="sec-head"><h2>供應鏈選股</h2><span class="tag">AI 瓶頸卡位</span>'+
+      '<span class="hint">逆向拆鏈找卡脖子瓶頸→精選卡位股(可含美股);代號可點進個股。研究由 AI 維護、報價即時</span></div>'+
+    '<div class="chain-nav">'+nav+'</div>'+
+    '<div class="chain-intro"><b>🔑 瓶頸:</b>'+esc(t.bottleneck||"")+'<div style="margin-top:6px"><b>🎯 選股邏輯:</b>'+esc(t.note||"")+'</div></div>'+
+    '<div id="supplyResult"><div class="loading-screen">查詢 '+(t.stocks||[]).length+' 檔即時報價 …</div></div>'+
+    '<div class="legend">'+esc(d.method||"")+' · 更新 '+esc(d.generated_at||"–")+'。瓶頸/選股由 AI 研究維護(非自動發掘),「定位」=該股卡位角色。</div>'+
+    '</section>';
+  document.querySelectorAll(".chain-pill").forEach(b=>b.onclick=()=>{ SUPPLY_CUR=parseInt(b.dataset.si,10)||0; renderSupply(); window.scrollTo({top:0,behavior:"smooth"}); });
+  fetchSupplyQuotes(t);
+}
+async function fetchSupplyQuotes(theme){
+  const box=$("#supplyResult"); if(!box) return;
+  const stocks=theme.stocks||[];
+  const cands=[...new Set(stocks.flatMap(s=>_holdCand((s.code||"").toUpperCase())))];
+  const batches=[]; for(let i=0;i<cands.length;i+=5) batches.push(cands.slice(i,i+5));
+  const Q={};
+  const fb=async b=>{ for(let i=0;i<3;i++){ try{ const d=await (await fetch("/api/quotes?kline=1&syms="+encodeURIComponent(b.join(","))+"&t="+Date.now()+"_"+i,{cache:"no-store"})).json(); if(d&&d.quotes&&Object.keys(d.quotes).length) return d.quotes; }catch(e){} } return {}; };
+  try{ (await Promise.all(batches.map(fb))).forEach(q=>Object.assign(Q,q||{})); }catch(e){}
+  const sg=v=>v==null?"":(v>=0?"+":""), c=v=>v==null?"dim":(v>=0?"pos":"neg");
+  const pctTd=v=>'<td class="'+c(v)+'">'+(v!=null?sg(v)+v.toFixed(1)+"%":"–")+'</td>';
+  const fmt=v=>v==null?"–":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+  const rows=stocks.map(s=>{
+    const code=(s.code||"").toUpperCase(); let qt=null,used=null;
+    for(const cd of _holdCand(code)){ if(Q[cd]){qt=Q[cd];used=cd;break;} }
+    const cl=(qt&&qt.closes)||[], vl=(qt&&qt.volumes)||[];
+    const r1=qt?_retN(cl,1):null, r5=qt?_retN(cl,5):null, r20=qt?_retN(cl,20):null, volr=qt?_volr(cl,vl):null;
+    return '<tr>'+
+      '<td class="sym clk" data-code="'+esc(code)+'" data-used="'+esc(used||"")+'" title="點擊看個股">'+esc(used||code)+'</td>'+
+      '<td style="text-align:left">'+esc(s.name||"")+'</td>'+
+      '<td style="text-align:left;font-size:12px;color:var(--ink2)">'+esc(s.role||"")+'</td>'+
+      '<td><span class="hl-tag mid">'+esc(s.tag||"")+'</span></td>'+
+      '<td>'+(qt?fmt(qt.price):'<span class="dim">查無</span>')+'</td>'+
+      pctTd(r1)+pctTd(r5)+pctTd(r20)+
+      '<td>'+(volr!=null?volr.toFixed(2)+"×":"–")+'</td></tr>';
+  }).join("");
+  box.innerHTML='<div class="tbl-wrap"><table><thead><tr>'+
+    '<th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th style="text-align:left">供應鏈角色</th><th>定位</th><th>現價</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
 }
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──
 let OPT_SYM="SPY", OPT_EXP=null;

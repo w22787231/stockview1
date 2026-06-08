@@ -1579,7 +1579,7 @@ async function loadNames(){
   const names = Object.keys(map).map(sym=>({sym, name:String(map[sym]||"")}));
   const byName = {};
   names.forEach(x=>{ if(x.name) byName[x.name]=x.sym; });
-  NAME_IDX = {names, byName};
+  NAME_IDX = {names, byName, bySym:map};      // bySym:{ "2330.TW":"台積電" } 供持股顯示繁中名
   return NAME_IDX;
 }
 // 由中文名查代號。回傳 {exact:sym|null, matches:[{sym,name}]}。
@@ -1959,11 +1959,11 @@ function switchView(v){
 // ── 主分頁:動態渲染 + 可拖曳重排(順序存 localStorage navOrder)──
 const NAV=[
   {view:"macro",   label:"總體市場"},
+  {view:"holdings",label:"持股分析"},
   {view:"trend",   label:"趨勢動能榜"},
   {view:"cross",   label:"交叉訊號"},
   {view:"chain",   label:"產業鏈"},
   {view:"etf",     label:"ETF持股異動"},
-  {view:"holdings",label:"持股分析"},
   {view:"calendar",label:"財報/數據"},
   {view:"news",    label:"新聞"},
 ];
@@ -1971,8 +1971,16 @@ function navOrder(){
   let saved=[];
   try{ saved=JSON.parse(localStorage.getItem("navOrder")||"[]")||[]; }catch(e){}
   const known=new Set(NAV.map(n=>n.view));
-  const ordered=saved.filter(v=>known.has(v));               // 丟掉已不存在的 view
+  let ordered=saved.filter(v=>known.has(v));                 // 丟掉已不存在的 view
   NAV.forEach(n=>{ if(!ordered.includes(n.view)) ordered.push(n.view); });  // 新 view 補到尾端
+  // 一次性遷移:把「持股分析」移到第2位(已拖曳過的舊使用者也套用一次,之後仍可自行拖曳)
+  try{
+    if(ordered.length && !localStorage.getItem("navMigHold2")){
+      ordered=ordered.filter(v=>v!=="holdings");
+      ordered.splice(Math.min(1,ordered.length),0,"holdings");
+      saveNavOrder(ordered); localStorage.setItem("navMigHold2","1");
+    }
+  }catch(e){}
   return ordered;
 }
 function saveNavOrder(order){ try{ localStorage.setItem("navOrder",JSON.stringify(order)); }catch(e){} }
@@ -2287,14 +2295,15 @@ async function fetchAndRenderHold(){
   const rows=codes.map(code=>{ let qt=null,used=null; for(const c of _holdCand(code)){ if(Q[c]){qt=Q[c];used=c;break;} } return {code,qt,used}; });
   // 基本面(Yahoo quoteSummary)+ 同業PE 中位數,平行抓;失敗則相關欄顯「–」。
   const usedSyms=[...new Set(rows.map(r=>r.used).filter(Boolean))];
-  const [FUND, INDPE]=await Promise.all([
+  const [FUND, INDPE, NI]=await Promise.all([
     usedSyms.length
       ? fetch("/api/fundamentals?syms="+encodeURIComponent(usedSyms.join(","))+"&t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>d.fundamentals||{}).catch(()=>({}))
       : Promise.resolve({}),
     window._indPe ? Promise.resolve(window._indPe)
-      : fetch("data/industry_pe.json?t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>(window._indPe=d.industries||{})).catch(()=>({}))
+      : fetch("data/industry_pe.json?t="+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(d=>(window._indPe=d.industries||{})).catch(()=>({})),
+    loadNames().catch(()=>null)            // 台股代號→繁中名
   ]);
-  renderHoldings(rows, FUND, INDPE);
+  renderHoldings(rows, FUND, INDPE, (NI&&NI.bySym)||{});
 }
 // 持股表欄位定義(供表頭排序 + 逐格渲染共用)。
 const HOLD_COLS=[
@@ -2314,16 +2323,17 @@ const HOLD_COLS=[
 ];
 let HOLD_SORT={k:null,dir:-1};   // 預設不排序(維持加入順序);dir:1 升冪、-1 降冪
 // 把 rows+基本面+同業PE 整理成可排序的資料模型,存 window._HOLD,再 drawHoldTable。
-function renderHoldings(rows, FUND, INDPE){
-  FUND=FUND||{}; INDPE=INDPE||{};
+function renderHoldings(rows, FUND, INDPE, TWNAMES){
+  FUND=FUND||{}; INDPE=INDPE||{}; TWNAMES=TWNAMES||{};
   const buys=buyPrices();
+  const twName=u=>(u&&/\.(TW|TWO)$/i.test(u))?(TWNAMES[u.toUpperCase()]||null):null;   // 台股優先繁中名
   const data=rows.map(({code,qt,used})=>{
     if(!qt) return {code,used,name:"",hasQt:false,buy:buys[code]!=null?buys[code]:null};
     const cl=qt.closes||[], vl=qt.volumes||[];
     const f=FUND[used]||{};
     const indPe=(f.industry && INDPE[f.industry])?INDPE[f.industry].pe_med:null;
     const tgt=f.target, price=qt.price;
-    return {code,used,hasQt:true,name:f.name||qt.name||"",
+    return {code,used,hasQt:true,name:twName(used)||f.name||qt.name||"",
       price, r1:_retN(cl,1), r5:_retN(cl,5), r20:_retN(cl,20), volr:_volr(cl,vl),
       fwdEps:f.fwdEps, fwdPe:f.fwdPe, indPe, peg:f.peg, tgt,
       tgtUp:(tgt!=null&&price)?(tgt/price-1)*100:null,

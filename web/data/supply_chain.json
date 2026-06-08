@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-08",
+  "generated_at": "2026-06-09",
   "method": "AI 供應鏈瓶頸選股(bottleneck-hunter):逆向拆鏈找『卡脖子』環節 → 依『技術壁壘 / 商轉純度 / 防禦緩衝』三維度挑卡位股。每主題分 台股 / 美股 / 其他股。內容由 AI 研究維護,報價即時(Yahoo)。",
   "themes": [
     {
@@ -39,7 +39,7 @@
       "key": "cooling",
       "name": "AI 散熱 / 液冷",
       "bottleneck": "瓶頸=GPU/ASIC 機櫃功耗破 100kW,氣冷不敷,水冷板(cold plate)+ CDU + 快接頭成必需;NVIDIA GB 系列強制液冷。",
-      "note": "選股邏輯:台股卡水冷板/均熱片(奇鋐、雙鴻)、CDU/快接頭壁壘(高力);美股看液冷系統龍頭 Vertiv 與液冷伺服器。優先有 NVIDIA/雲端認證、產能卡位者。",
+      "note": "選股邏輯:台股卡水冷板/均熱片(奇鋐、雙鴻)、CDU/快接頭壁壘(高力);美股看液冷系統龍頭 Vertiv 與液冷伺服器;其他股=日系散熱風扇(Sanyo Denki/Nidec)+歐系熱交換器(Alfa Laval/Munters)。優先有 NVIDIA/雲端認證、產能卡位者。",
       "stocks": [
         {"code": "3017", "market": "tw", "name": "奇鋐", "role": "3D VC/均熱片/水冷板·散熱龍頭", "tag": "核心卡位"},
         {"code": "3324", "market": "tw", "name": "雙鴻", "role": "水冷板/液冷模組·GB 系列供應", "tag": "核心卡位"},
@@ -49,14 +49,18 @@
         {"code": "VRT", "market": "us", "name": "Vertiv", "role": "液冷/CDU/電力散熱系統龍頭", "tag": "系統龍頭"},
         {"code": "SMCI", "market": "us", "name": "Supermicro", "role": "液冷 AI 伺服器整機", "tag": "整機拉貨"},
         {"code": "NVT", "market": "us", "name": "nVent", "role": "液冷機櫃/熱管理", "tag": "系統"},
-        {"code": "MOD", "market": "us", "name": "Modine", "role": "資料中心熱管理/CDU", "tag": "系統"}
+        {"code": "MOD", "market": "us", "name": "Modine", "role": "資料中心熱管理/CDU", "tag": "系統"},
+        {"code": "6516.T", "market": "other", "name": "山洋電氣 Sanyo Denki(日)", "role": "San Ace 伺服器/AI 散熱風扇", "tag": "散熱風扇"},
+        {"code": "6594.T", "market": "other", "name": "Nidec 日本電產(日)", "role": "馬達/散熱風扇龍頭(超眾母公司)", "tag": "散熱風扇"},
+        {"code": "ALFA.ST", "market": "other", "name": "Alfa Laval(歐)", "role": "熱交換器(CDU/液冷核心)", "tag": "熱交換器"},
+        {"code": "MTRS.ST", "market": "other", "name": "Munters(歐)", "role": "資料中心冷卻/空調系統", "tag": "系統冷卻"}
       ]
     },
     {
       "key": "advpkg",
       "name": "先進封裝 / CoWoS 測試",
       "bottleneck": "瓶頸=CoWoS 產能與 KGD(已知良品)測試;AI 晶片巨型化(15kW),測試/載板/中介層皆吃緊;ABF 載板由日廠寡占。",
-      "note": "選股邏輯:台股卡 CoWoS 測試(京元電)、探針卡(旺矽)、ABF 載板(南電/欣興);美股看量測/測試設備(KLAC/TER);其他股=日本 ABF 載板雙雄(Ibiden/Shinko)。",
+      "note": "選股邏輯:台股卡 CoWoS 測試(京元電)、探針卡(旺矽)、ABF 載板(南電/欣興);美股看量測/測試設備(KLAC/TER);其他股=日本 ABF 載板/絕緣膜(Ibiden/味之素)+封裝設備(DISCO/Towa)+歐系混合鍵合龍頭(Besi)。",
       "stocks": [
         {"code": "2449", "market": "tw", "name": "京元電", "role": "CoWoS/AI 晶片測試代工", "tag": "測試卡位"},
         {"code": "6223", "market": "tw", "name": "旺矽", "role": "MEMS/垂直探針卡(與 CPO 共用)", "tag": "探針卡"},
@@ -68,7 +72,11 @@
         {"code": "ONTO", "market": "us", "name": "Onto Innovation", "role": "先進封裝量測/檢測", "tag": "封裝量測"},
         {"code": "CAMT", "market": "us", "name": "Camtek", "role": "先進封裝光學檢測", "tag": "封裝檢測"},
         {"code": "4062.T", "market": "other", "name": "Ibiden(日)", "role": "ABF 載板全球龍頭", "tag": "載板龍頭"},
-        {"code": "2802.T", "market": "other", "name": "味之素 Ajinomoto(日)", "role": "ABF 絕緣膜(ABF=Ajinomoto Build-up Film)全球獨家", "tag": "上游獨家"}
+        {"code": "2802.T", "market": "other", "name": "味之素 Ajinomoto(日)", "role": "ABF 絕緣膜(ABF=Ajinomoto Build-up Film)全球獨家", "tag": "上游獨家"},
+        {"code": "6146.T", "market": "other", "name": "DISCO(日)", "role": "晶圓切割/研磨設備龍頭(先進封裝必需)", "tag": "封裝設備"},
+        {"code": "6315.T", "market": "other", "name": "Towa(日)", "role": "封裝模封(molding)設備龍頭", "tag": "封裝設備"},
+        {"code": "4004.T", "market": "other", "name": "Resonac 昭和電工(日)", "role": "先進封裝材料/CMP 研磨液/封裝膠", "tag": "上游材料"},
+        {"code": "BESI.AS", "market": "other", "name": "Besi(歐)", "role": "混合鍵合 hybrid bonding 設備龍頭(瓶頸核心)", "tag": "鍵合設備"}
       ]
     }
   ]

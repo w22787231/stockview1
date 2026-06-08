@@ -78,6 +78,45 @@
         {"code": "4004.T", "market": "other", "name": "Resonac 昭和電工(日)", "role": "先進封裝材料/CMP 研磨液/封裝膠", "tag": "上游材料"},
         {"code": "BESI.AS", "market": "other", "name": "Besi(歐)", "role": "混合鍵合 hybrid bonding 設備龍頭(瓶頸核心)", "tag": "鍵合設備"}
       ]
+    },
+    {
+      "key": "physicalai",
+      "name": "Physical AI / 機器人",
+      "bottleneck": "瓶頸=人形機器人的精密傳動(諧波/RV 減速器)、伺服馬達、力矩感測與邊緣 AI 算力;NVIDIA GR00T/Jetson Thor 供大腦,Tesla Optimus 帶量產,減速器由日廠寡占。",
+      "note": "選股邏輯:卡關鍵零組件——減速器(日 Harmonic/Nabtesco 寡占)、線性傳動/螺桿(台上銀、日 THK)、伺服/平台(台達電、Yaskawa、NVDA);台股看傳動+視覺,美股看平台+整機,其他=日歐機器人四大家族。",
+      "stocks": [
+        {"code": "2049", "market": "tw", "name": "上銀", "role": "滾珠螺桿/線性傳動/諧波減速機", "tag": "傳動核心"},
+        {"code": "2308", "market": "tw", "name": "台達電", "role": "伺服系統/機器人/電源", "tag": "伺服平台"},
+        {"code": "1597", "market": "tw", "name": "直得", "role": "微型線性滑軌/傳動元件", "tag": "線性傳動"},
+        {"code": "2359", "market": "tw", "name": "所羅門", "role": "3D 機器視覺/bin-picking 取放", "tag": "機器視覺"},
+        {"code": "1590", "market": "tw", "name": "亞德客-KY", "role": "氣動元件/夾爪(執行末端)", "tag": "末端執行"},
+        {"code": "NVDA", "market": "us", "name": "NVIDIA", "role": "GR00T/Jetson Thor 機器人大腦平台", "tag": "平台核心"},
+        {"code": "TSLA", "market": "us", "name": "Tesla", "role": "Optimus 人形機器人整機", "tag": "整機拉貨"},
+        {"code": "ROK", "market": "us", "name": "Rockwell", "role": "工業自動化/控制系統", "tag": "自動化"},
+        {"code": "6324.T", "market": "other", "name": "Harmonic Drive(日)", "role": "諧波減速器全球龍頭(核心瓶頸)", "tag": "減速器龍頭"},
+        {"code": "6268.T", "market": "other", "name": "Nabtesco(日)", "role": "RV 精密減速器全球龍頭", "tag": "減速器龍頭"},
+        {"code": "6506.T", "market": "other", "name": "安川電機 Yaskawa(日)", "role": "伺服馬達/機器人四大家族", "tag": "伺服+機器人"},
+        {"code": "6954.T", "market": "other", "name": "Fanuc(日)", "role": "工業機器人/CNC 四大家族", "tag": "機器人"},
+        {"code": "6481.T", "market": "other", "name": "THK(日)", "role": "線性導軌/滾珠螺桿", "tag": "線性傳動"},
+        {"code": "ABBN.SW", "market": "other", "name": "ABB(歐)", "role": "工業機器人四大家族", "tag": "機器人"}
+      ]
+    },
+    {
+      "key": "passive",
+      "name": "被動元件 / MLCC",
+      "bottleneck": "瓶頸=高容量/高頻 MLCC 與車用/AI 伺服器規格;高階由日廠村田/TDK/太陽誘電寡占,台廠卡中低階+利基,景氣循環與庫存敏感。",
+      "note": "選股邏輯:高階 MLCC 寡占在日(Murata/TDK/Taiyo Yuden),台股龍頭吃中低階+併購擴規模(國巨);美股以 Vishay/CTS 為主。看 AI 伺服器/車用拉貨+庫存週期落底。",
+      "stocks": [
+        {"code": "2327", "market": "tw", "name": "國巨", "role": "MLCC/被動元件龍頭(併 KEMET/普思)", "tag": "龍頭"},
+        {"code": "2492", "market": "tw", "name": "華新科", "role": "MLCC/晶片電阻", "tag": "MLCC"},
+        {"code": "3026", "market": "tw", "name": "禾伸堂", "role": "高階/利基型 MLCC", "tag": "利基"},
+        {"code": "VSH", "market": "us", "name": "Vishay", "role": "被動元件(電阻/電容/二極體)", "tag": "美系龍頭"},
+        {"code": "CTS", "market": "us", "name": "CTS Corp", "role": "石英晶振/壓電/感測元件", "tag": "利基"},
+        {"code": "6981.T", "market": "other", "name": "村田 Murata(日)", "role": "MLCC 全球龍頭(~40%)", "tag": "全球龍頭"},
+        {"code": "6762.T", "market": "other", "name": "TDK(日)", "role": "MLCC/電感/車用", "tag": "高階"},
+        {"code": "6976.T", "market": "other", "name": "太陽誘電 Taiyo Yuden(日)", "role": "高頻/車用 MLCC", "tag": "高階"},
+        {"code": "6971.T", "market": "other", "name": "京瓷 Kyocera(日)", "role": "MLCC/含 AVX", "tag": "高階"}
+      ]
     }
   ]
 }

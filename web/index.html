@@ -2099,14 +2099,16 @@ function parseEbk(text){
   const out=[], seen=new Set();
   const add=c=>{ c=(c||"").toUpperCase(); if(c && !seen.has(c)){ seen.add(c); out.push(c); } };
   (text||"").split(/[\s,;、，\r\n]+/).forEach(raw=>{
-    const tok=raw.trim(); if(!tok) return;
+    let tok=(raw||"").trim().replace(/^﻿/,"");                                            // 去 BOM
+    if(tok.indexOf("#")>=0) tok=tok.split("#").pop().trim();   // 去市場別前綴,如 31#BRUN→BRUN、1#2330→2330
+    if(!tok) return;
     let m;
     if(m=tok.match(/^(\d{4,6})\.(TWO?)$/i)) return add(m[1]+"."+m[2].toUpperCase());          // 2330.TW / 6488.TWO
     if(m=tok.match(/^(?:TSE|TWSE)[.:](\d{4,6})$/i)) return add(m[1]+".TW");                    // 上市
     if(m=tok.match(/^(?:OTC|TPEX|ROTC|EMG)[.:](\d{4,6})$/i)) return add(m[1]+".TWO");          // 上櫃/興櫃
     if(m=tok.match(/^[A-Z]{1,6}\.(TWO?)$/i)) return add(tok);                                  // 已含後綴
-    if(m=tok.match(/^(\d{4,6})$/)) return add(m[1]);                                           // 裸代號→自動試上市/櫃
-    if(m=tok.match(/^[A-Z]{1,5}$/i)) return add(tok);                                          // 美股代號
+    if(m=tok.match(/^(\d{4,6})$/)) return add(m[1]);                                           // 裸數字代號→自動試上市/櫃
+    if(m=tok.match(/^[A-Z][A-Z0-9.]{0,6}$/i)) return add(tok);                                 // 美股代號(含 BRK.B 類)
     if(m=tok.match(/(\d{4,6})/)) return add(m[1]);                                             // 夾在雜訊裡的數字代號
   });
   return out;

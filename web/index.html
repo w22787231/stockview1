@@ -2042,16 +2042,55 @@ function loadHoldings(){
         '<input id="holdInput" type="text" placeholder="輸入代號,例 NVDA / 2330.TW / 6488" autocomplete="off">'+
         '<button class="btn" id="holdAdd">+ 新增</button>'+
         '<button class="btn" id="holdRefresh">🔄 重新整理</button>'+
+        '<label class="btn" style="cursor:pointer">📂 載入EBK<input id="holdEbk" type="file" accept=".ebk,.txt" style="display:none"></label>'+
         '<button class="btn" id="holdClear">清空</button>'+
-        '<span class="hint">美股直接打(NVDA);台股加 .TW(上市)/.TWO(上櫃),或純數字自動試上市/櫃。</span>'+
+        '<span class="hint">美股直接打(NVDA);台股加 .TW(上市)/.TWO(上櫃),或純數字自動試上市/櫃。EBK=看盤軟體匯出的自選股檔。</span>'+
       '</div>'+
+      '<div id="holdMsg"></div>'+
       '<div id="holdResult"></div>'+
     '</section>';
   $("#holdAdd").onclick=()=>addHoldCode($("#holdInput").value);
   $("#holdInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addHoldCode($("#holdInput").value); } });
   $("#holdRefresh").onclick=fetchAndRenderHold;
-  $("#holdClear").onclick=()=>{ if(holdCodes().length && !confirm("清空所有已加入的股票?")) return; saveHoldCodes([]); fetchAndRenderHold(); };
+  $("#holdEbk").onchange=e=>{ importEbk(e.target.files[0]); e.target.value=""; };
+  $("#holdClear").onclick=()=>{ if(holdCodes().length && !confirm("清空所有已加入的股票?")) return; saveHoldCodes([]); $("#holdMsg").innerHTML=""; fetchAndRenderHold(); };
   fetchAndRenderHold();
+}
+// 解析 EBK / 自選股文字 → 代號陣列。容錯:Big5/UTF-8、TSE./OTC. 前綴、.TW/.TWO 後綴、裸代號、美股代號。
+function parseEbk(text){
+  const out=[], seen=new Set();
+  const add=c=>{ c=(c||"").toUpperCase(); if(c && !seen.has(c)){ seen.add(c); out.push(c); } };
+  (text||"").split(/[\s,;、，\r\n]+/).forEach(raw=>{
+    const tok=raw.trim(); if(!tok) return;
+    let m;
+    if(m=tok.match(/^(\d{4,6})\.(TWO?)$/i)) return add(m[1]+"."+m[2].toUpperCase());          // 2330.TW / 6488.TWO
+    if(m=tok.match(/^(?:TSE|TWSE)[.:](\d{4,6})$/i)) return add(m[1]+".TW");                    // 上市
+    if(m=tok.match(/^(?:OTC|TPEX|ROTC|EMG)[.:](\d{4,6})$/i)) return add(m[1]+".TWO");          // 上櫃/興櫃
+    if(m=tok.match(/^[A-Z]{1,6}\.(TWO?)$/i)) return add(tok);                                  // 已含後綴
+    if(m=tok.match(/^(\d{4,6})$/)) return add(m[1]);                                           // 裸代號→自動試上市/櫃
+    if(m=tok.match(/^[A-Z]{1,5}$/i)) return add(tok);                                          // 美股代號
+    if(m=tok.match(/(\d{4,6})/)) return add(m[1]);                                             // 夾在雜訊裡的數字代號
+  });
+  return out;
+}
+function importEbk(file){
+  if(!file) return;
+  const msg=h=>{ const el=$("#holdMsg"); if(el) el.innerHTML='<div class="legend">'+h+'</div>'; };
+  const r=new FileReader();
+  r.onload=()=>{
+    let codes=[];
+    for(const enc of ["big5","utf-8"]){                        // 台股軟體多為 Big5,讀不到再試 UTF-8
+      try{ const c=parseEbk(new TextDecoder(enc).decode(r.result)); if(c.length>codes.length) codes=c; }catch(_){}
+    }
+    if(!codes.length){ msg("⚠️ 沒從這個 EBK 讀到代號。可把檔案內容貼給我看格式,我來調解析。"); return; }
+    const cur=holdCodes(); let added=0;
+    codes.forEach(c=>{ if(!cur.includes(c)){ cur.push(c); added++; } });
+    saveHoldCodes(cur);
+    msg("📂 已從 EBK 載入 "+codes.length+" 檔(新增 "+added+" 檔、重複略過 "+(codes.length-added)+" 檔)。");
+    fetchAndRenderHold();
+  };
+  r.onerror=()=>msg("⚠️ 讀檔失敗。");
+  r.readAsArrayBuffer(file);
 }
 // 代號清單存 localStorage("holdings_codes" 為 JSON 陣列);偵測舊 "holdings" 多行文字→自動遷移一次。
 function holdCodes(){

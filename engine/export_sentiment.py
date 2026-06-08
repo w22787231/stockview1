@@ -316,7 +316,7 @@ def fetch_micro_retail():
     散戶淨 = -(三大法人微型臺指未平倉多空淨額合計),反向指標。
     來源:期交所「三大法人-區分各契約」(取微型臺指三法人,各列未平倉淨額=倒數第2個數)
          + 「期貨每日交易行情(commodity_id=TMF)」首個小計列末欄=總未平倉 OI。
-    歷史:回讀已發布 sentiment.json 逐日累積 spark(免額外儲存)。"""
+    歷史:回讀已發布 sentiment.json + 用單一 queryDate 向期交所逐日回補,首次即建 ~50 點走勢。"""
     def _g(url, data=None, ref=None, t=25):
         hd = {"User-Agent": "Mozilla/5.0"}
         if ref:
@@ -324,54 +324,79 @@ def fetch_micro_retail():
         return urllib.request.urlopen(urllib.request.Request(
             url, data=(data.encode() if data else None), headers=hd), timeout=t
         ).read().decode("utf-8", "ignore")
-    try:
-        tpe = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=8)
-        d = tpe.strftime("%Y/%m/%d")
-        # 註:這兩個期交所端點會忽略查詢日期、一律回「最新一筆」;真實資料日期改由每日行情報表 echo 取得。
-        html = _g("https://www.taifex.com.tw/cht/3/futContractsDateExcel",
-                  f"queryStartDate={d}&queryEndDate={d}&commodityId=",
-                  "https://www.taifex.com.tw/cht/3/futContractsDate")
-        trs = re.split(r"<tr", html, flags=re.I)
-        start = next((k for k, t in enumerate(trs)
-                      if "微型臺指期貨" in t and len(re.findall(r">\s*-?[\d,]+\s*<", t)) >= 11), None)
-        if start is None:
-            return None
-        net3 = 0
-        for j in range(3):                             # 自營商 / 投信 / 外資 三列
-            row = trs[start + j] if start + j < len(trs) else ""
-            ints = [int(x.replace(",", "")) for x in re.findall(r">\s*(-?[\d,]+)\s*<", row)]
-            if len(ints) < 11:
+    def _one_day(ds):
+        # ds="YYYY/MM/DD";用單一 queryDate 查該日,回 (ymd, ratio, retail_net, oi) 或 None。
+        # 以「每日行情報表 echo 日期 == 查詢日」確認確為該日資料(非交易日端點會回最新→剔除)。
+        try:
+            html = _g("https://www.taifex.com.tw/cht/3/futContractsDateExcel",
+                      f"queryType=1&queryDate={ds}&commodityId=",
+                      "https://www.taifex.com.tw/cht/3/futContractsDate")
+            trs = re.split(r"<tr", html, flags=re.I)
+            start = next((k for k, t in enumerate(trs)
+                          if "微型臺指期貨" in t and len(re.findall(r">\s*-?[\d,]+\s*<", t)) >= 11), None)
+            if start is None:
                 return None
-            net3 += ints[-2]                           # 未平倉多空淨額口數(末欄=金額,故取倒數第2)
-        rep = _g("https://www.taifex.com.tw/cht/3/futDailyMarketExcel",
-                 f"queryStartDate={d}&queryEndDate={d}&commodity_id=TMF",
-                 "https://www.taifex.com.tw/cht/3/futDailyMarketReport")
-        oi = None
-        for line in re.split(r"</tr>", rep, flags=re.I):
-            if "小計" in line:                          # 首個小計列(單式契約)末欄=總未平倉
-                ii = re.findall(r"-?[\d,]+", re.sub(r"<[^>]*>", " ", line))
-                if ii:
-                    oi = int(ii[-1].replace(",", "")); break
-        if not oi or oi <= 0:
+            net3 = 0
+            for j in range(3):                         # 自營商 / 投信 / 外資 三列
+                row = trs[start + j] if start + j < len(trs) else ""
+                ints = [int(x.replace(",", "")) for x in re.findall(r">\s*(-?[\d,]+)\s*<", row)]
+                if len(ints) < 11:
+                    return None
+                net3 += ints[-2]                       # 未平倉多空淨額口數(末欄=金額,取倒數第2)
+            rep = _g("https://www.taifex.com.tw/cht/3/futDailyMarketExcel",
+                     f"queryDate={ds}&commodity_id=TMF",
+                     "https://www.taifex.com.tw/cht/3/futDailyMarketReport")
+            oi = None
+            for line in re.split(r"</tr>", rep, flags=re.I):
+                if "小計" in line:                      # 首個小計列(單式契約)末欄=總未平倉
+                    ii = re.findall(r"-?[\d,]+", re.sub(r"<[^>]*>", " ", line))
+                    if ii:
+                        oi = int(ii[-1].replace(",", "")); break
+            if not oi or oi <= 0:
+                return None
+            m = re.search(r"日期[：:]\s*(\d{4}/\d{2}/\d{2})", rep)
+            if not m or m.group(1) != ds:              # 報表日期須等於查詢日,否則為非交易日回最新→剔除
+                return None
+            retail_net = -net3
+            return ds.replace("/", ""), round(retail_net / oi * 100, 2), retail_net, oi
+        except Exception:
             return None
-        m = re.search(r"日期[：:]\s*(\d{4}/\d{2}/\d{2})", rep)   # 權威資料日期(報表 echo)
-        used_ymd = (m.group(1) if m else d).replace("/", "")
-        retail_net = -net3
-        ratio = round(retail_net / oi * 100, 2)
-        dates, series = [], []
+    try:
+        hist = {}                                      # ymd -> ratio(既有歷史 + 本次回補)
         try:
             prev = json.loads(_g("https://stockview1.pages.dev/data/sentiment.json", t=10))
             for lv in prev.get("levels", []):
                 if lv.get("sym") == "TWMICRORETAIL":
-                    dates = list(lv.get("dates") or [])
-                    series = list(lv.get("spark") or [])
+                    for dd, vv in zip(lv.get("dates") or [], lv.get("spark") or []):
+                        hist[dd] = vv
         except Exception:
             pass
-        if dates and dates[-1] == used_ymd:
-            series[-1] = ratio
-        else:
-            dates.append(used_ymd); series.append(ratio)
-        dates, series = dates[-60:], series[-60:]
+        # 從台北今天往回逐交易日:先確保拿到最新有效日(retail/oi),並回補缺漏到 ~60 點(單次最多查 55 天)。
+        tpe = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=8)
+        last = None
+        queries = 0
+        for back in range(0, 80):
+            if len(hist) >= 60 or queries >= 55:
+                break
+            dt = tpe - datetime.timedelta(days=back)
+            if dt.weekday() >= 5:                       # 略過週末
+                continue
+            ymd = dt.strftime("%Y%m%d")
+            if last is not None and ymd in hist:        # 已拿到最新日、且該日已有 → 略過
+                continue
+            queries += 1
+            r = _one_day(dt.strftime("%Y/%m/%d"))
+            if r:
+                hist[r[0]] = r[1]
+                if last is None:
+                    last = r                            # 最近一個有效交易日
+        if not hist:
+            return None
+        dates = sorted(hist)[-60:]
+        series = [hist[k] for k in dates]
+        ratio = series[-1]
+        retail_net = last[2] if last else None
+        oi = last[3] if last else None
         diff = round(series[-1] - series[-2], 2) if len(series) >= 2 else None
         return {"sym": "TWMICRORETAIL", "label": "微台散戶多空比",
                 "note": "期交所·散戶部位反推·反向指標", "unit": "pct",

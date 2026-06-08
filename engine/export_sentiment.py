@@ -472,6 +472,83 @@ def fetch_0dte():
         return None
 
 
+def fetch_valuation_pe():
+    """估值·本益比(trailing)。S&P500 用 multpl 完整月歷史;那指(QQQ)/半導體(SOXX)用 Yahoo
+    當前 trailing PE + 回讀已發布 json 逐日累積(免費無 ETF 歷史 PE)。"""
+    import ssl as _ssl
+    out = {}
+    _MON = {"Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05", "Jun": "06",
+            "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"}
+    # ── S&P500 trailing PE:multpl 月歷史 ──
+    try:
+        ctx = _ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = _ssl.CERT_NONE
+        h = urllib.request.urlopen(urllib.request.Request(
+            "https://www.multpl.com/s-p-500-pe-ratio/table/by-month",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=25, context=ctx).read().decode("utf-8", "ignore")
+        tds = [re.sub(r"<[^>]*>", "", x).strip() for x in re.findall(r"<td[^>]*>(.*?)</td>", h, re.S)]
+        seen = {}
+        i = 0
+        while i + 1 < len(tds):
+            dm = re.match(r"^([A-Z][a-z]{2}) (\d{1,2}), (\d{4})$", tds[i])
+            if dm:
+                vm = re.search(r"(\d{1,2}\.\d{1,2})", tds[i + 1])
+                if vm:
+                    seen["%s-%s" % (dm.group(3), _MON[dm.group(1)])] = float(vm.group(1))  # YYYY-MM
+                i += 2
+            else:
+                i += 1
+        keys = sorted(seen)[-300:]              # 取近 ~25 年(300 月)
+        if keys:
+            out["sp500"] = {"label": "S&P 500", "dates": keys, "pe": [seen[k] for k in keys],
+                            "cur": seen[keys[-1]], "src": "multpl.com"}
+    except Exception:
+        pass
+    # ── QQQ / SOXX trailing PE:Yahoo 當前 + 回讀累積 ──
+    try:
+        import http.cookiejar, urllib.parse
+        cj = http.cookiejar.CookieJar()
+        op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+        op.addheaders = [("User-Agent", "Mozilla/5.0")]
+        try:
+            op.open("https://fc.yahoo.com/", timeout=10)
+        except Exception:
+            pass
+        crumb = op.open("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=10).read().decode("utf-8", "ignore").strip()
+        prev = {}
+        try:
+            pj = json.loads(urllib.request.urlopen(urllib.request.Request(
+                "https://stockview1.pages.dev/data/sentiment.json",
+                headers={"User-Agent": "Mozilla/5.0"}), timeout=10).read().decode("utf-8", "ignore"))
+            prev = pj.get("valuation_pe") or {}
+        except Exception:
+            pass
+        ymd = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=8)).strftime("%Y%m%d")
+        for key, sym, lab in (("ndx", "QQQ", "那斯達克100"), ("semi", "SOXX", "半導體")):
+            try:
+                u = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/" + sym +
+                     "?modules=summaryDetail,defaultKeyStatistics&crumb=" + urllib.parse.quote(crumb))
+                d = json.loads(op.open(u, timeout=12).read().decode("utf-8", "ignore"))
+                r = (d.get("quoteSummary", {}).get("result") or [{}])[0]
+                sd, ks = r.get("summaryDetail", {}), r.get("defaultKeyStatistics", {})
+                pe = (sd.get("trailingPE") or {}).get("raw") or (ks.get("trailingPE") or {}).get("raw")
+                if pe is None:
+                    continue
+                pe = round(pe, 2)
+                p = prev.get(key) or {}
+                dates, vals = list(p.get("dates") or []), list(p.get("pe") or [])
+                if dates and dates[-1] == ymd:
+                    vals[-1] = pe
+                else:
+                    dates.append(ymd); vals.append(pe)
+                dates, vals = dates[-120:], vals[-120:]
+                out[key] = {"label": lab, "dates": dates, "pe": vals, "cur": pe, "src": "Yahoo ETF " + sym}
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return out or None
+
+
 def build():
     levels, failed = fetch_levels()
     cor = fetch_cor1m()
@@ -500,6 +577,7 @@ def build():
         "breadth": breadth,
         "fear_greed": fng,
         "leverage": leverage,
+        "valuation_pe": fetch_valuation_pe(),
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

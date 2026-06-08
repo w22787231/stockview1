@@ -409,6 +409,101 @@ def fetch_micro_retail():
         return None
 
 
+def _factset_week(dd, _io):
+    """抓某週五(dd)的 FactSet Earnings Insight PDF,回 (fwd_eps, a5, a10) 或 None。"""
+    import urllib.parse
+    base = ("https://advantage.factset.com/hubfs/Website/Resources Section/"
+            "Research Desk/Earnings Insight/EarningsInsight_")
+    for suf in ("", "A", "B"):
+        url = base + dd.strftime("%m%d%y") + suf + ".pdf"
+        try:
+            raw = urllib.request.urlopen(urllib.request.Request(
+                urllib.parse.quote(url, safe=":/"), headers={"User-Agent": "Mozilla/5.0"}),
+                timeout=30).read()
+            if raw[:4] != b"%PDF" or len(raw) < 200000:
+                continue
+            import pypdf
+            r = pypdf.PdfReader(_io.BytesIO(raw))
+            txt = "\n".join((p.extract_text() or "") for p in r.pages)
+            mp = re.search(r"forward 12-month P/E ratio is ([0-9]{1,2}\.[0-9])", txt)
+            mx = re.search(r"closing price of ([0-9]{3,5}\.[0-9]{2})", txt)
+            if mp and mx:
+                m5 = re.search(r"5-year average \(([0-9]{1,2}\.[0-9])\)", txt)
+                m10 = re.search(r"10-year average \(([0-9]{1,2}\.[0-9])\)", txt)
+                return (round(float(mx.group(1)) / float(mp.group(1)), 2),
+                        float(m5.group(1)) if m5 else None, float(m10.group(1)) if m10 else None)
+        except Exception:
+            continue
+    return None
+
+
+def fetch_sp500_fwd_pe():
+    """S&P500 forward P/E:逐「週」抓 FactSet Earnings Insight 取「當週」forward EPS(反推),
+    配 ^GSPC 日收盤 → 每天用「該日所屬週的實際 EPS」算 forward P/E(歷史準確,非用現值近似)。
+    首跑回補近 ~26 週各週 EPS,之後每跑只補新一週(已發布 json 回讀累積)。
+    標線:>21.5 偏高、<16 偏低、<14 超賣(使用者設定)。"""
+    import io as _io
+    prev = {}
+    try:
+        pj = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://stockview1.pages.dev/data/sentiment.json",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=10).read().decode("utf-8", "ignore"))
+        prev = pj.get("sp500_fwd_pe") or {}
+    except Exception:
+        pass
+    eps_hist = dict(prev.get("eps_hist") or {})    # {報告週五 ISO: forward EPS}
+    a5, a10 = prev.get("avg5"), prev.get("avg10")
+    et = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)
+    fetched = 0
+    for back in range(0, 190):                     # 近 ~26 個週五
+        dd = et.date() - datetime.timedelta(days=back)
+        if dd.weekday() != 4:
+            continue
+        iso = dd.isoformat()
+        if iso in eps_hist:
+            continue
+        if fetched >= 26:
+            break
+        fetched += 1
+        got = _factset_week(dd, _io)
+        if got:
+            eps_hist[iso] = got[0]
+            if got[1]:
+                a5 = got[1]
+            if got[2]:
+                a10 = got[2]
+    eps_hist = dict(sorted(eps_hist.items())[-40:])
+    if not eps_hist:
+        return None
+    sorted_eps = sorted(eps_hist.items())          # [(週五ISO, eps), ...] 由舊到新
+    latest_eps = sorted_eps[-1][1]
+    try:
+        ch = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=6mo",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+        res = ch["chart"]["result"][0]
+        ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
+        pairs = [(t, c) for t, c in zip(ts, cl) if c is not None][-150:]
+        live = (res.get("meta") or {}).get("regularMarketPrice") or pairs[-1][1]
+    except Exception:
+        return None
+    def eps_at(day):                               # 該日生效 EPS = 不晚於該日的最近一週
+        e = sorted_eps[0][1]
+        for dt, val in sorted_eps:
+            if dt <= day:
+                e = val
+            else:
+                break
+        return e
+    dates = [datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d") for t, _ in pairs]
+    pe = [round(c / eps_at(dates[i]), 1) for i, (_, c) in enumerate(pairs)]
+    cur = round(live / latest_eps, 1)
+    return {"label": "S&P500 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
+            "report_date": sorted_eps[-1][0], "avg5": a5, "avg10": a10,
+            "eps_hist": eps_hist, "dates": dates, "pe": pe,
+            "thr": {"high": 21.5, "low": 16, "oversold": 14}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC"}
+
+
 def fetch_0dte():
     """SPY/QQQ 0DTE(當日到期)選擇權 Put/Call Ratio(成交量)。Yahoo 選擇權鏈(需 crumb)。
     歷史回讀已發布 sentiment.json 逐日累積 spark(Yahoo 無歷史選擇權量,只能往後累積)。"""
@@ -500,6 +595,7 @@ def build():
         "breadth": breadth,
         "fear_greed": fng,
         "leverage": leverage,
+        "sp500_fwd_pe": fetch_sp500_fwd_pe(),
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

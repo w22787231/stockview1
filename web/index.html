@@ -1167,9 +1167,46 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+leverageBox(d.leverage)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
+  if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
+}
+function sp500FwdPeBox(v){
+  if(!v || !v.pe || !v.pe.length) return '';
+  const cur=v.cur, t=v.thr||{high:21.5,low:16,oversold:14};
+  const vd = cur>=t.high?{t:"偏高",c:"neg"}:(cur<t.oversold?{t:"超賣",c:"pos"}:(cur<t.low?{t:"偏低",c:"pos"}:{t:"中性",c:"dim"}));
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">S&P500 Forward P/E · <b class="'+vd.c+'">'+cur+'x（'+vd.t+'）</b></div>'+
+    '<div id="fwdpeChart" class="m1m2-chart"></div>'+
+    '<div class="ex">FactSet 各週 forward EPS(目前 <b>$'+v.fwd_eps+'</b>，報告 '+esc(v.report_date||"")+')÷ S&P500 即時價，逐日算(用「當週實際 EPS」非現值近似)。'+
+      '<b class="neg">&gt;'+t.high+' 偏高</b> · <b class="pos">&lt;'+t.low+' 偏低</b> · <b class="pos">&lt;'+t.oversold+' 超賣</b>'+
+      (v.avg5?(' · FactSet 5年均 '+v.avg5+'／10年均 '+v.avg10):'')+'。forward＝用未來12個月預估EPS,故低於 trailing。</div>'+
+    '</div>';
+}
+function drawSp500FwdPe(v){
+  const el=document.getElementById("fwdpeChart");
+  if(!el || !window.echarts || !v.pe || !v.pe.length) return;
+  const t=v.thr||{high:21.5,low:16,oversold:14};
+  const lo=Math.min(t.oversold,Math.min.apply(null,v.pe)), hi=Math.max(t.high,Math.max.apply(null,v.pe));
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:38,right:14,top:14,bottom:24},
+    tooltip:{trigger:"axis",valueFormatter:x=>(x==null?"-":x+"x")},
+    xAxis:{type:"category",data:v.dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(v.dates.length/8))}},
+    yAxis:{type:"value",min:Math.floor(lo-0.5),max:Math.ceil(hi+0.5),axisLabel:{fontSize:10,formatter:"{value}x"},splitLine:{lineStyle:{opacity:.3}}},
+    series:[{name:"Forward P/E",type:"line",data:v.pe,smooth:true,symbol:"none",
+      lineStyle:{width:2,color:"#1f6feb"},itemStyle:{color:"#1f6feb"},areaStyle:{color:"#1f6feb12"},
+      markLine:{silent:true,symbol:"none",data:[
+        {yAxis:t.high,lineStyle:{color:"#e11d48",type:"dashed"},label:{formatter:"偏高 "+t.high,fontSize:10,color:"#e11d48",position:"insideEndTop"}},
+        {yAxis:t.low,lineStyle:{color:"#16a34a",type:"dashed"},label:{formatter:"偏低 "+t.low,fontSize:10,color:"#16a34a",position:"insideEndBottom"}},
+        {yAxis:t.oversold,lineStyle:{color:"#0a7d3a",type:"dashed"},label:{formatter:"超賣 "+t.oversold,fontSize:10,color:"#0a7d3a",position:"insideEndBottom"}}]},
+      markArea:{silent:true,data:[
+        [{yAxis:t.high,itemStyle:{color:"#e11d480e"}},{yAxis:1000}],
+        [{yAxis:0,itemStyle:{color:"#16a34a0e"}},{yAxis:t.low}]]},
+    }],
+  });
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
 async function loadSentiment(){

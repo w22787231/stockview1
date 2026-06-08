@@ -103,6 +103,7 @@ jobs:
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}   # FRED 官方 API(雲端不被擋);未設則退回 fredgraph
         run: |
           cd engine
           python export_calendar.py || true

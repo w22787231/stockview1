@@ -196,6 +196,23 @@ def build_earnings_tw(now_tpe, end_tpe):
 
 # ── 美股實際經濟數據(FRED 免費):實際/前期/MoM/YoY。預期(consensus)無免費源,前端標「—」。──
 def _fred(sid):
+    """回 [(date, value_str), ...](舊→新)。優先用 FRED 官方 API(需 env FRED_API_KEY,雲端 CI 不被擋),
+    無金鑰時退回 fredgraph.csv(本地可用,但雲端 IP 常被 FRED 擋 → 改用金鑰)。"""
+    key = os.environ.get("FRED_API_KEY", "").strip()
+    if key:
+        u = ("https://api.stlouisfed.org/fred/series/observations?series_id=" + sid +
+             "&api_key=" + key + "&file_type=json")
+        for _ in range(3):
+            try:
+                d = json.loads(urllib.request.urlopen(urllib.request.Request(
+                    u, headers={"User-Agent": "Mozilla/5.0"}), timeout=30
+                ).read().decode("utf-8", "ignore"))
+                obs = [[o["date"], o["value"]] for o in d.get("observations", [])
+                       if o.get("value") not in ("", ".", None)]
+                if obs:
+                    return obs                    # 已是舊→新
+            except Exception:
+                continue
     u = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=" + sid
     for _ in range(3):
         try:

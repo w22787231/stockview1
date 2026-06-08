@@ -2203,7 +2203,7 @@ function loadHoldings(){
   $("#content").innerHTML =
     '<section><div class="sec-head"><h2>持股分析</h2><span class="hint">逐檔加股票 → 即時報價+多日漲幅動能+健康檢查(只存你瀏覽器,不上傳)</span></div>'+
       '<div class="hold-add">'+
-        '<input id="holdInput" type="text" placeholder="輸入代號,例 NVDA / 2330.TW / 6488" autocomplete="off">'+
+        '<input id="holdInput" type="text" placeholder="代號或繁中名,例 NVDA / 2330 / 台積電" autocomplete="off">'+
         '<button class="btn" id="holdAdd">+ 新增</button>'+
         '<button class="btn" id="holdRefresh">🔄 重新整理</button>'+
         '<label class="btn" style="cursor:pointer">📂 載入EBK<input id="holdEbk" type="file" accept=".ebk,.txt" style="display:none"></label>'+
@@ -2267,13 +2267,33 @@ function holdCodes(){
   return codes;
 }
 function saveHoldCodes(arr){ try{ localStorage.setItem("holdings_codes",JSON.stringify(arr)); }catch(e){} }
-function addHoldCode(raw){
-  const code=(raw||"").trim().toUpperCase();
-  if(!code) return;
+async function addHoldCode(raw){
+  let s=(raw||"").trim();
+  if(!s) return;
+  const msg=h=>{ const el=$("#holdMsg"); if(el) el.innerHTML=h?'<div class="legend">'+h+'</div>':""; };
+  let code;
+  if(/[一-鿿]/.test(s)){                                   // 含中文 → 用繁中名查台股代號
+    const ni=await loadNames().catch(()=>null);
+    const {exact, matches}=lookupByName(ni, s);
+    if(!exact && matches.length>1){                               // 多檔符合 → 列出讓使用者點選
+      const top=matches.slice(0,12).map(x=>'<a href="#" class="hold-pick" data-sym="'+esc(x.sym)+'">'+
+        esc(x.name)+'（'+esc(x.sym.replace(/\.(TW|TWO)$/,""))+'）</a>').join("　");
+      msg('🔍「'+esc(s)+'」符合多檔,請點選:'+top+(matches.length>12?" …":""));
+      const el=$("#holdMsg");
+      if(el) el.querySelectorAll(".hold-pick").forEach(a=>a.onclick=ev=>{ ev.preventDefault(); msg(""); addHoldCode(a.dataset.sym); });
+      return;
+    }
+    const sym=exact || (matches[0] && matches[0].sym);
+    if(!sym){ msg('🔍 找不到「'+esc(s)+'」的台股代號。可改輸入數字代號(如 2330)或美股代號(如 NVDA)。'); return; }
+    code=sym.toUpperCase();
+  }else{
+    code=s.toUpperCase();
+  }
   const codes=holdCodes();
-  if(codes.includes(code)){ const i=$("#holdInput"); if(i) i.value=""; return; }   // 已存在
+  if(codes.includes(code)){ const i=$("#holdInput"); if(i) i.value=""; msg(""); return; }   // 已存在
   codes.push(code); saveHoldCodes(codes);
   const i=$("#holdInput"); if(i){ i.value=""; i.focus(); }
+  msg("");
   fetchAndRenderHold();
 }
 function removeHoldCode(code){ saveHoldCodes(holdCodes().filter(c=>c!==code)); fetchAndRenderHold(); }

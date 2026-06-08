@@ -2332,8 +2332,20 @@ function _volr(cl,vl){
   return mean>0 ? dv1/mean : null;
 }
 async function fetchAndRenderHold(){
-  const codes=holdCodes(), box=$("#holdResult");
+  let codes=holdCodes(); const box=$("#holdResult");
   if(!box) return;
+  // 保險:把任何「中文名」就地解析成代號(含舊版誤存的中文字串),自動修正 localStorage。
+  if(codes.some(c=>/[一-鿿]/.test(c))){
+    const ni=await loadNames().catch(()=>null);
+    let changed=false;
+    codes=codes.map(c=>{
+      if(/[一-鿿]/.test(c) && ni){ const r=lookupByName(ni,c); const sym=r.exact||(r.matches[0]&&r.matches[0].sym);
+        if(sym){ changed=true; return sym.toUpperCase(); } }
+      return c;
+    });
+    codes=[...new Set(codes)];
+    if(changed) saveHoldCodes(codes);
+  }
   if(!codes.length){ box.innerHTML='<div class="legend">尚未加入任何股票。上方輸入代號按「+ 新增」即可。</div>'; return; }
   const cands=[...new Set(codes.flatMap(_holdCand))], batches=[];
   for(let i=0;i<cands.length;i+=5) batches.push(cands.slice(i,i+5));   // kline 模式上限 5 檔/批

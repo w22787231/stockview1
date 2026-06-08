@@ -271,11 +271,11 @@ def fetch_us_macro_data():
                 y0 = yoy(d0)
                 extra = "年增 %+.2f%%" % y0 if y0 is not None else None
             elif kind == "jobs":
-                actual = "%+,.0fK" % (v0 - v1)
+                actual = "{:+,.0f}K".format(v0 - v1)         # 注意:逗號千分位旗標只 .format 支援,% 格式化會丟例外
                 if len(dates) >= 3:
-                    prev = "%+,.0fK" % (v1 - m[dates[-3]])
+                    prev = "{:+,.0f}K".format(v1 - m[dates[-3]])
             elif kind == "claims":
-                actual = "%,.0fK" % (v0 / 1000.0); prev = "%,.0fK" % (v1 / 1000.0)
+                actual = "{:,.0f}K".format(v0 / 1000.0); prev = "{:,.0f}K".format(v1 / 1000.0)
             elif kind == "rate":
                 actual = "%.2f%%" % v0; prev = "%.2f%%" % v1
             elif kind == "gdp":

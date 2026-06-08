@@ -2344,6 +2344,7 @@ const HOLD_COLS=[
   {k:"name",lab:"名稱",a:"left",sort:true},
   {k:"price",lab:"現價",a:"right",sort:true},
   {k:"buy",lab:"購買價",a:"right",sort:false},   // 輸入框,不排序
+  {k:"tgt",lab:"分析師目標價",a:"right",sort:true},
   {k:"r1",lab:"1日",a:"right",sort:true},
   {k:"r5",lab:"5日",a:"right",sort:true},
   {k:"r20",lab:"20日",a:"right",sort:true},
@@ -2352,7 +2353,6 @@ const HOLD_COLS=[
   {k:"fwdPe",lab:"fwd PE",a:"right",sort:true},
   {k:"indPe",lab:"同業PE",a:"right",sort:true},
   {k:"peg",lab:"PEG",a:"right",sort:true},
-  {k:"tgt",lab:"分析師目標價",a:"right",sort:true},
 ];
 let HOLD_SORT={k:null,dir:-1};   // 預設不排序(維持加入順序);dir:1 升冪、-1 降冪
 // 把 rows+基本面+同業PE 整理成可排序的資料模型,存 window._HOLD,再 drawHoldTable。
@@ -2405,13 +2405,13 @@ function drawHoldTable(){
     return '<tr>'+symTd+
       '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</td>'+
       priceTd+buyCell(r)+
+      '<td>'+(r.tgt!=null?fmt(r.tgt)+(r.tgtUp!=null?' <span class="'+c(r.tgtUp)+'" style="font-size:11px">('+sg(r.tgtUp)+r.tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
       pctTd(r.r1)+pctTd(r.r5)+pctTd(r.r20)+
       '<td>'+(r.volr!=null?r.volr.toFixed(2)+"×":"–")+'</td>'+
       '<td>'+n2(r.fwdEps)+'</td>'+
       '<td>'+n1(r.fwdPe)+'</td>'+
       '<td class="dim">'+n1(r.indPe)+'</td>'+
       '<td class="'+pegCls+'">'+n2(r.peg)+'</td>'+
-      '<td>'+(r.tgt!=null?fmt(r.tgt)+(r.tgtUp!=null?' <span class="'+c(r.tgtUp)+'" style="font-size:11px">('+sg(r.tgtUp)+r.tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
       del+'</tr>';
   }).join("");
   const head='<tr>'+HOLD_COLS.map(col=>{

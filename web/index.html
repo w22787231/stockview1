@@ -2688,10 +2688,13 @@ function renderSupply(){
   document.querySelectorAll(".chain-pill").forEach(b=>b.onclick=()=>{ SUPPLY_CUR=parseInt(b.dataset.si,10)||0; renderSupply(); window.scrollTo({top:0,behavior:"smooth"}); });
   fetchSupplyQuotes(t);
 }
+// 依市場決定查詢候選:台股(數字)試 .TW/.TWO;美股/其他股用完整代號(如 NVDA、4062.T)。
+function _supplyCands(s){ const code=(s.code||"").toUpperCase(); return (s.market==="tw"||(/^\d/.test(code)&&!code.includes(".")))?_holdCand(code):[code]; }
+function _supplyMkt(s){ return s.market || ((/^\d/.test((s.code||""))&&!String(s.code).includes("."))?"tw":"us"); }
 async function fetchSupplyQuotes(theme){
   const box=$("#supplyResult"); if(!box) return;
   const stocks=theme.stocks||[];
-  const cands=[...new Set(stocks.flatMap(s=>_holdCand((s.code||"").toUpperCase())))];
+  const cands=[...new Set(stocks.flatMap(_supplyCands))];
   const batches=[]; for(let i=0;i<cands.length;i+=5) batches.push(cands.slice(i,i+5));
   const Q={};
   const fb=async b=>{ for(let i=0;i<3;i++){ try{ const d=await (await fetch("/api/quotes?kline=1&syms="+encodeURIComponent(b.join(","))+"&t="+Date.now()+"_"+i,{cache:"no-store"})).json(); if(d&&d.quotes&&Object.keys(d.quotes).length) return d.quotes; }catch(e){} } return {}; };
@@ -2699,9 +2702,9 @@ async function fetchSupplyQuotes(theme){
   const sg=v=>v==null?"":(v>=0?"+":""), c=v=>v==null?"dim":(v>=0?"pos":"neg");
   const pctTd=v=>'<td class="'+c(v)+'">'+(v!=null?sg(v)+v.toFixed(1)+"%":"–")+'</td>';
   const fmt=v=>v==null?"–":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
-  const rows=stocks.map(s=>{
+  const rowHtml=s=>{
     const code=(s.code||"").toUpperCase(); let qt=null,used=null;
-    for(const cd of _holdCand(code)){ if(Q[cd]){qt=Q[cd];used=cd;break;} }
+    for(const cd of _supplyCands(s)){ if(Q[cd]){qt=Q[cd];used=cd;break;} }
     const cl=(qt&&qt.closes)||[], vl=(qt&&qt.volumes)||[];
     const r1=qt?_retN(cl,1):null, r5=qt?_retN(cl,5):null, r20=qt?_retN(cl,20):null, volr=qt?_volr(cl,vl):null;
     return '<tr>'+
@@ -2712,10 +2715,16 @@ async function fetchSupplyQuotes(theme){
       '<td>'+(qt?fmt(qt.price):'<span class="dim">查無</span>')+'</td>'+
       pctTd(r1)+pctTd(r5)+pctTd(r20)+
       '<td>'+(volr!=null?volr.toFixed(2)+"×":"–")+'</td></tr>';
-  }).join("");
-  box.innerHTML='<div class="tbl-wrap"><table><thead><tr>'+
-    '<th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th style="text-align:left">供應鏈角色</th><th>定位</th><th>現價</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th>'+
-    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  };
+  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th style="text-align:left">供應鏈角色</th><th>定位</th><th>現價</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th></tr>';
+  let html="";
+  [["tw","🇹🇼 台股"],["us","🇺🇸 美股"],["other","🌐 其他股"]].forEach(([k,lab])=>{
+    const list=stocks.filter(s=>_supplyMkt(s)===k);
+    if(!list.length) return;
+    html+='<div class="tg-gname" style="margin:14px 0 4px;font-size:14px">'+lab+' <span class="dim" style="font-weight:400">'+list.length+' 檔</span></div>'+
+      '<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+list.map(rowHtml).join("")+'</tbody></table></div>';
+  });
+  box.innerHTML=html||'<div class="legend">此主題暫無個股。</div>';
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
 }
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──
@@ -2914,8 +2923,8 @@ function drawOptChart(calls,puts,price,mp){
 async function showLiveQuote(raw){
   const q=(raw||"").trim().toUpperCase();
   let cands;
-  if(/^\d/.test(q)) cands=[q+".TW", q+".TWO"];          // 台股數字 → 試上市/上櫃
-  else if(/\.(TW|TWO)$/.test(q)) cands=[q];
+  if(q.includes(".")) cands=[q];                         // 已含交易所後綴(2330.TW / 4062.T)→ 原樣
+  else if(/^\d/.test(q)) cands=[q+".TW", q+".TWO"];       // 台股純數字 → 試上市/上櫃
   else cands=[q];                                        // 美股等
   $("#content").innerHTML='<div class="loading-screen">即時查詢 '+esc(raw)+' …</div>';
   try{

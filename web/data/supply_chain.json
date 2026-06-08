@@ -1,50 +1,67 @@
 {
   "generated_at": "2026-06-08",
-  "method": "AI 供應鏈瓶頸選股(bottleneck-hunter):逆向拆鏈找『卡脖子』環節 → 依『技術壁壘 / 商轉純度 / 防禦緩衝』三維度挑卡位股。內容由 AI 研究維護,報價即時(Yahoo)。",
+  "method": "AI 供應鏈瓶頸選股(bottleneck-hunter):逆向拆鏈找『卡脖子』環節 → 依『技術壁壘 / 商轉純度 / 防禦緩衝』三維度挑卡位股。每主題分 台股 / 美股 / 其他股。內容由 AI 研究維護,報價即時(Yahoo)。",
   "themes": [
     {
       "key": "cpo",
       "name": "CPO / 矽光子",
-      "bottleneck": "瓶頸=光耦合對準(<1μm 次微米)與『電/光/熱』四合一測試;2026 為商轉元年,台積電 COUPE 平台主導。",
-      "note": "選股邏輯:優先 <1μm 極限對準且卡進 COUPE 生態(上詮);配置電光熱測試 Thermal 全球 >50% 龍頭(旺矽);搭防禦緩衝(眾達/波若威有既有高毛利現金流)。",
+      "bottleneck": "瓶頸=光耦合對準(<1μm 次微米)與『電/光/熱』四合一測試;2026 為商轉元年,台積電 COUPE 平台主導、Broadcom 推 CPO 交換機。",
+      "note": "選股邏輯:台股卡 <1μm 對準+COUPE 生態(上詮)、電光熱測試龍頭(旺矽);美股看交換機/光元件主軸(AVGO/COHR/LITE);搭防禦緩衝(眾達/波若威)。",
       "stocks": [
-        {"code": "3363", "name": "上詮", "role": "FAU 光纖對準·COUPE 深度夥伴(<1μm)", "tag": "核心卡位"},
-        {"code": "6223", "name": "旺矽", "role": "電/光/熱測試·Thermal 全球 >50%", "tag": "測試龍頭"},
-        {"code": "6515", "name": "穎崴", "role": "高階測試座·液冷(15kW 功耗對策)", "tag": "測試+防禦"},
-        {"code": "7856", "name": "漢測", "role": "矽光子薄膜探針卡·EIC/PIC 垂直測試", "tag": "測試"},
-        {"code": "6830", "name": "汎銓", "role": "矽光子材料分析/失效分析/光損定位", "tag": "上游驗證"},
-        {"code": "2360", "name": "致茂", "role": "光引擎 Burn-in/光學量測/AOI", "tag": "量產測試"},
-        {"code": "4908", "name": "眾達-KY", "role": "外部雷射光源 ELSFP(64→128G FC 現金流)", "tag": "光源+防禦"},
-        {"code": "3163", "name": "波若威", "role": "高密度光學互連 Fiber Kit(FTTH/PON 防禦)", "tag": "互連+防禦"},
-        {"code": "6443", "name": "光聖", "role": "光通訊(美系資料中心·毛利 >60%)", "tag": "高彈性"},
-        {"code": "2301", "name": "光寶科", "role": "矽光子收發模組(2027 實質成果)", "tag": "佈局中"},
-        {"code": "2330", "name": "台積電", "role": "COUPE 先進封裝平台主導者", "tag": "平台核心"}
+        {"code": "3363", "market": "tw", "name": "上詮", "role": "FAU 光纖對準·COUPE 深度夥伴(<1μm)", "tag": "核心卡位"},
+        {"code": "6223", "market": "tw", "name": "旺矽", "role": "電/光/熱測試·Thermal 全球 >50%", "tag": "測試龍頭"},
+        {"code": "6515", "market": "tw", "name": "穎崴", "role": "高階測試座·液冷(15kW 對策)", "tag": "測試+防禦"},
+        {"code": "7856", "market": "tw", "name": "漢測", "role": "矽光子薄膜探針卡·EIC/PIC 垂直測試", "tag": "測試"},
+        {"code": "6830", "market": "tw", "name": "汎銓", "role": "矽光子材料/失效分析·光損定位", "tag": "上游驗證"},
+        {"code": "2360", "market": "tw", "name": "致茂", "role": "光引擎 Burn-in/光學量測/AOI", "tag": "量產測試"},
+        {"code": "4908", "market": "tw", "name": "眾達-KY", "role": "外部雷射光源 ELSFP(64→128G FC 現金流)", "tag": "光源+防禦"},
+        {"code": "3163", "market": "tw", "name": "波若威", "role": "高密度光學互連 Fiber Kit(FTTH/PON 防禦)", "tag": "互連+防禦"},
+        {"code": "6443", "market": "tw", "name": "光聖", "role": "光通訊(美系資料中心·毛利 >60%)", "tag": "高彈性"},
+        {"code": "2301", "market": "tw", "name": "光寶科", "role": "矽光子收發模組(2027 實質成果)", "tag": "佈局中"},
+        {"code": "2330", "market": "tw", "name": "台積電", "role": "COUPE 先進封裝平台主導者", "tag": "平台核心"},
+        {"code": "AVGO", "market": "us", "name": "Broadcom", "role": "CPO 交換機商轉(2026)·Tomahawk", "tag": "平台核心"},
+        {"code": "NVDA", "market": "us", "name": "NVIDIA", "role": "導入 COUPE·光路互連(rack-to-board)", "tag": "終端拉貨"},
+        {"code": "COHR", "market": "us", "name": "Coherent", "role": "光元件/雷射/EML 光源", "tag": "光元件"},
+        {"code": "LITE", "market": "us", "name": "Lumentum", "role": "雷射/光晶片(EML/CW 光源)", "tag": "光元件"},
+        {"code": "MRVL", "market": "us", "name": "Marvell", "role": "光 DSP/連接·客製 ASIC", "tag": "連接晶片"},
+        {"code": "CRDO", "market": "us", "name": "Credo", "role": "高速連接/AEC·光連接受惠", "tag": "連接"},
+        {"code": "ANET", "market": "us", "name": "Arista", "role": "資料中心交換機(CPO 終端)", "tag": "交換機"}
       ]
     },
     {
       "key": "cooling",
       "name": "AI 散熱 / 液冷",
-      "bottleneck": "瓶頸=GPU/ASIC 機櫃功耗飆破 100kW,氣冷不敷,水冷板(cold plate)+ CDU + 快接頭成必需;NVIDIA GB 系列強制液冷。",
-      "note": "選股邏輯:卡水冷板/均熱片(奇鋐、雙鴻)、CDU/系統整合與快接頭壁壘;優先有 NVIDIA/雲端大廠認證、產能卡位者。",
+      "bottleneck": "瓶頸=GPU/ASIC 機櫃功耗破 100kW,氣冷不敷,水冷板(cold plate)+ CDU + 快接頭成必需;NVIDIA GB 系列強制液冷。",
+      "note": "選股邏輯:台股卡水冷板/均熱片(奇鋐、雙鴻)、CDU/快接頭壁壘(高力);美股看液冷系統龍頭 Vertiv 與液冷伺服器。優先有 NVIDIA/雲端認證、產能卡位者。",
       "stocks": [
-        {"code": "3017", "name": "奇鋐", "role": "3D VC/均熱片/水冷板·散熱龍頭", "tag": "核心卡位"},
-        {"code": "3324", "name": "雙鴻", "role": "水冷板/液冷模組·GB 系列供應", "tag": "核心卡位"},
-        {"code": "8996", "name": "高力", "role": "CDU 冷卻液分配·熱交換器", "tag": "系統卡位"},
-        {"code": "6230", "name": "尼得科超眾", "role": "熱導管/均熱片", "tag": "散熱"},
-        {"code": "4763", "name": "材料-KY", "role": "導熱介面材料 TIM", "tag": "上游材料"}
+        {"code": "3017", "market": "tw", "name": "奇鋐", "role": "3D VC/均熱片/水冷板·散熱龍頭", "tag": "核心卡位"},
+        {"code": "3324", "market": "tw", "name": "雙鴻", "role": "水冷板/液冷模組·GB 系列供應", "tag": "核心卡位"},
+        {"code": "8996", "market": "tw", "name": "高力", "role": "CDU 冷卻液分配·熱交換器", "tag": "系統卡位"},
+        {"code": "6230", "market": "tw", "name": "尼得科超眾", "role": "熱導管/均熱片", "tag": "散熱"},
+        {"code": "4763", "market": "tw", "name": "材料-KY", "role": "導熱介面材料 TIM", "tag": "上游材料"},
+        {"code": "VRT", "market": "us", "name": "Vertiv", "role": "液冷/CDU/電力散熱系統龍頭", "tag": "系統龍頭"},
+        {"code": "SMCI", "market": "us", "name": "Supermicro", "role": "液冷 AI 伺服器整機", "tag": "整機拉貨"},
+        {"code": "NVT", "market": "us", "name": "nVent", "role": "液冷機櫃/熱管理", "tag": "系統"},
+        {"code": "MOD", "market": "us", "name": "Modine", "role": "資料中心熱管理/CDU", "tag": "系統"}
       ]
     },
     {
       "key": "advpkg",
       "name": "先進封裝 / CoWoS 測試",
-      "bottleneck": "瓶頸=CoWoS 產能與 KGD(已知良品)測試;AI 晶片巨型化(15kW),測試/載板/中介層皆吃緊。",
-      "note": "選股邏輯:卡 CoWoS 測試(京元電)、探針卡(旺矽,與 CPO 重疊)、ABF 載板與中介層;優先剛性測試需求、產能擴張明確者。",
+      "bottleneck": "瓶頸=CoWoS 產能與 KGD(已知良品)測試;AI 晶片巨型化(15kW),測試/載板/中介層皆吃緊;ABF 載板由日廠寡占。",
+      "note": "選股邏輯:台股卡 CoWoS 測試(京元電)、探針卡(旺矽)、ABF 載板(南電/欣興);美股看量測/測試設備(KLAC/TER);其他股=日本 ABF 載板雙雄(Ibiden/Shinko)。",
       "stocks": [
-        {"code": "2449", "name": "京元電", "role": "CoWoS/AI 晶片測試代工", "tag": "測試卡位"},
-        {"code": "6223", "name": "旺矽", "role": "MEMS/垂直探針卡(與 CPO 共用)", "tag": "探針卡"},
-        {"code": "3711", "name": "日月光投控", "role": "先進封裝/CoWoS 委外", "tag": "封裝"},
-        {"code": "8046", "name": "南電", "role": "ABF 載板", "tag": "載板"},
-        {"code": "3037", "name": "欣興", "role": "ABF 載板/類載板", "tag": "載板"}
+        {"code": "2449", "market": "tw", "name": "京元電", "role": "CoWoS/AI 晶片測試代工", "tag": "測試卡位"},
+        {"code": "6223", "market": "tw", "name": "旺矽", "role": "MEMS/垂直探針卡(與 CPO 共用)", "tag": "探針卡"},
+        {"code": "3711", "market": "tw", "name": "日月光投控", "role": "先進封裝/CoWoS 委外", "tag": "封裝"},
+        {"code": "8046", "market": "tw", "name": "南電", "role": "ABF 載板", "tag": "載板"},
+        {"code": "3037", "market": "tw", "name": "欣興", "role": "ABF 載板/類載板", "tag": "載板"},
+        {"code": "KLAC", "market": "us", "name": "KLA", "role": "製程量測/檢測設備龍頭", "tag": "量測設備"},
+        {"code": "TER", "market": "us", "name": "Teradyne", "role": "半導體測試設備", "tag": "測試設備"},
+        {"code": "ONTO", "market": "us", "name": "Onto Innovation", "role": "先進封裝量測/檢測", "tag": "封裝量測"},
+        {"code": "CAMT", "market": "us", "name": "Camtek", "role": "先進封裝光學檢測", "tag": "封裝檢測"},
+        {"code": "4062.T", "market": "other", "name": "Ibiden(日)", "role": "ABF 載板全球龍頭", "tag": "載板龍頭"},
+        {"code": "2802.T", "market": "other", "name": "味之素 Ajinomoto(日)", "role": "ABF 絕緣膜(ABF=Ajinomoto Build-up Film)全球獨家", "tag": "上游獨家"}
       ]
     }
   ]

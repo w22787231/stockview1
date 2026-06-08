@@ -2082,10 +2082,8 @@ function renderHoldings(rows){
   const pctTd=v=>'<td class="'+c(v)+'">'+(v!=null?sg(v)+v.toFixed(1)+"%":"–")+'</td>';
   const trs=rows.map(({code,qt,used})=>{
     const del='<td><button class="hold-del" data-code="'+esc(code)+'" title="刪除">✕</button></td>';
-    if(!qt) return '<tr><td class="sym">'+esc(code)+'</td><td colspan="11" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td>'+del+'</tr>';
+    if(!qt) return '<tr><td class="sym">'+esc(code)+'</td><td colspan="10" class="dim" style="text-align:left">查無即時報價(代號可能不存在)</td>'+del+'</tr>';
     const cl=qt.closes||[], vl=qt.volumes||[];
-    const chg=(qt.price!=null&&qt.prev!=null)?(qt.price-qt.prev):null;
-    const cpct=(chg!=null&&qt.prev)?chg/qt.prev*100:null;
     const r1=_retN(cl,1), r5=_retN(cl,5), r20=_retN(cl,20), volr=_volr(cl,vl);
     const fromHi=(qt.price!=null&&qt.wkHigh)?(qt.price/qt.wkHigh-1)*100:null;
     const fromLo=(qt.price!=null&&qt.wkLow)?(qt.price/qt.wkLow-1)*100:null;
@@ -2096,12 +2094,11 @@ function renderHoldings(rows){
     if(fromHi!=null && fromHi>=-1) tags.push('<span class="hl-tag strong">創新高區</span>');
     else if(fromHi!=null && fromHi<=-25) tags.push('<span class="hl-tag warn">遠離高點 '+fromHi.toFixed(0)+'%</span>');
     if(fromLo!=null && fromLo<=8) tags.push('<span class="hl-tag warn">逼近52週低</span>');
-    if(cpct!=null && cpct<=-3) tags.push('<span class="hl-tag warn">今日重挫</span>');
+    if(r1!=null && r1<=-3) tags.push('<span class="hl-tag warn">今日重挫</span>');
     return '<tr>'+
       '<td class="sym">'+esc(used||code)+'</td>'+
       '<td style="text-align:left;max-width:150px;overflow:hidden;text-overflow:ellipsis">'+esc(qt.name||"")+'</td>'+
       '<td>'+fmt(qt.price)+'</td>'+
-      '<td class="'+c(cpct)+'">'+sg(cpct)+(cpct!=null?cpct.toFixed(2):"–")+'%</td>'+
       pctTd(r1)+pctTd(r5)+pctTd(r20)+
       '<td>'+(volr!=null?volr.toFixed(2)+"×":"–")+'</td>'+
       '<td style="text-align:left">'+flow+'</td>'+
@@ -2111,7 +2108,7 @@ function renderHoldings(rows){
       del+
     '</tr>';
   }).join("");
-  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>日漲跌</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th><th style="text-align:left">資金流向</th><th>距52週高</th><th>距52週低</th><th style="text-align:left">健康檢查</th><th></th></tr>';
+  const head='<tr><th style="text-align:left">代號</th><th style="text-align:left">名稱</th><th>現價</th><th>1日</th><th>5日</th><th>20日</th><th>量比</th><th style="text-align:left">資金流向</th><th>距52週高</th><th>距52週低</th><th style="text-align:left">健康檢查</th><th></th></tr>';
   $("#holdResult").innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
     '<div class="legend">1/5/20日=多日漲幅。量比=最後一日成交金額÷近20日均(≥1.5× 且 5日漲→資金流入🟢;≥1.5× 但 5日跌→爆量下跌🔴)。距52週高/低=現價相對高(負)/低(正)。健康檢查:創新高區 / 遠離高點≥25% / 逼近52週低 / 今日重挫≥3%。即時報價(Yahoo,可能延遲約15分)。</div>';
   $("#holdResult").querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code));

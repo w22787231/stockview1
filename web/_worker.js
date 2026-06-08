@@ -168,6 +168,9 @@ async function fetchQuote(sym, withKline) {
         vl.push(v[i] == null ? 0 : v[i]);
       }
       q.closes = cl; q.volumes = vl;
+      // kline 模式 range=6mo,meta.chartPreviousClose 是「6 個月前的前收」非昨收 →
+      // 日漲跌會變成半年漲幅。改用倒數第二根 close 當真正昨收。
+      if (cl.length >= 2) q.prev = cl[cl.length - 2];
     }
     return q;
   } catch (e) { clearTimeout(tid); return null; }

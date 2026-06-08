@@ -311,6 +311,79 @@ def fetch_tw_margin_ratio():
         return None
 
 
+def fetch_micro_retail():
+    """微台散戶多空比 = 散戶淨未平倉 ÷ 微台總未平倉(%)。
+    散戶淨 = -(三大法人微型臺指未平倉多空淨額合計),反向指標。
+    來源:期交所「三大法人-區分各契約」(取微型臺指三法人,各列未平倉淨額=倒數第2個數)
+         + 「期貨每日交易行情(commodity_id=TMF)」首個小計列末欄=總未平倉 OI。
+    歷史:回讀已發布 sentiment.json 逐日累積 spark(免額外儲存)。"""
+    def _g(url, data=None, ref=None, t=25):
+        hd = {"User-Agent": "Mozilla/5.0"}
+        if ref:
+            hd["Referer"] = ref
+        return urllib.request.urlopen(urllib.request.Request(
+            url, data=(data.encode() if data else None), headers=hd), timeout=t
+        ).read().decode("utf-8", "ignore")
+    try:
+        tpe = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=8)
+        d = tpe.strftime("%Y/%m/%d")
+        # 註:這兩個期交所端點會忽略查詢日期、一律回「最新一筆」;真實資料日期改由每日行情報表 echo 取得。
+        html = _g("https://www.taifex.com.tw/cht/3/futContractsDateExcel",
+                  f"queryStartDate={d}&queryEndDate={d}&commodityId=",
+                  "https://www.taifex.com.tw/cht/3/futContractsDate")
+        trs = re.split(r"<tr", html, flags=re.I)
+        start = next((k for k, t in enumerate(trs)
+                      if "微型臺指期貨" in t and len(re.findall(r">\s*-?[\d,]+\s*<", t)) >= 11), None)
+        if start is None:
+            return None
+        net3 = 0
+        for j in range(3):                             # 自營商 / 投信 / 外資 三列
+            row = trs[start + j] if start + j < len(trs) else ""
+            ints = [int(x.replace(",", "")) for x in re.findall(r">\s*(-?[\d,]+)\s*<", row)]
+            if len(ints) < 11:
+                return None
+            net3 += ints[-2]                           # 未平倉多空淨額口數(末欄=金額,故取倒數第2)
+        rep = _g("https://www.taifex.com.tw/cht/3/futDailyMarketExcel",
+                 f"queryStartDate={d}&queryEndDate={d}&commodity_id=TMF",
+                 "https://www.taifex.com.tw/cht/3/futDailyMarketReport")
+        oi = None
+        for line in re.split(r"</tr>", rep, flags=re.I):
+            if "小計" in line:                          # 首個小計列(單式契約)末欄=總未平倉
+                ii = re.findall(r"-?[\d,]+", re.sub(r"<[^>]*>", " ", line))
+                if ii:
+                    oi = int(ii[-1].replace(",", "")); break
+        if not oi or oi <= 0:
+            return None
+        m = re.search(r"日期[：:]\s*(\d{4}/\d{2}/\d{2})", rep)   # 權威資料日期(報表 echo)
+        used_ymd = (m.group(1) if m else d).replace("/", "")
+        retail_net = -net3
+        ratio = round(retail_net / oi * 100, 2)
+        dates, series = [], []
+        try:
+            prev = json.loads(_g("https://stockview1.pages.dev/data/sentiment.json", t=10))
+            for lv in prev.get("levels", []):
+                if lv.get("sym") == "TWMICRORETAIL":
+                    dates = list(lv.get("dates") or [])
+                    series = list(lv.get("spark") or [])
+        except Exception:
+            pass
+        if dates and dates[-1] == used_ymd:
+            series[-1] = ratio
+        else:
+            dates.append(used_ymd); series.append(ratio)
+        dates, series = dates[-60:], series[-60:]
+        diff = round(series[-1] - series[-2], 2) if len(series) >= 2 else None
+        return {"sym": "TWMICRORETAIL", "label": "微台散戶多空比",
+                "note": "期交所·散戶部位反推·反向指標", "unit": "pct",
+                "read": "散戶淨未平倉÷總未平倉(口數)。正=散戶偏多、負=偏空。"
+                        "反向指標:散戶極度偏多常見過熱、極度偏空常見底部(門檻待歷史校準)。",
+                "level": ratio, "diff": diff, "spark": series, "dates": dates,
+                "retail_lots": retail_net, "oi": oi,
+                "url": "https://www.taifex.com.tw/cht/3/futContractsDate", "src": "期交所"}
+    except Exception:
+        return None
+
+
 def build():
     levels, failed = fetch_levels()
     cor = fetch_cor1m()
@@ -318,6 +391,11 @@ def build():
         levels.append(cor)
     else:
         failed.append("COR1M")
+    micro = fetch_micro_retail()        # 微台散戶多空比(期交所)
+    if micro:
+        levels.append(micro)
+    else:
+        failed.append("TWMICRORETAIL")
     breadth = market_breadth()
     fng = fetch_fear_greed()
     leverage = fetch_leverage()

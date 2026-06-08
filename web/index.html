@@ -967,6 +967,10 @@ function sentAlert(sym, level, diffPct){
     case "HYG":   // 單日跌 >1% = 信用惡化(紅閃)
       if(diffPct!=null && diffPct<=-1) return {cls:"alert-red", tag:"🔴 信用轉弱"};
       return null;
+    case "TWMICRORETAIL": // 反向:散戶極度偏多=過熱(紅)、極度偏空=可能底部(綠)。門檻暫定,待歷史校準
+      if(level>=50)  return {cls:"alert-red",   tag:"🔴 散戶極度偏多·過熱"};
+      if(level<=-20) return {cls:"alert-green", tag:"🟢 散戶極度偏空·可能底部"};
+      return null;
     default: return null;
   }
 }
@@ -977,6 +981,7 @@ const SENT_THR = {
   "^VXN":  {v:32,  dir:"hi", lab:"恐慌32"},
   "^SKEW": {v:150, dir:"hi", lab:"警戒150"},
   "COR1M": {v:8,   dir:"lo", lab:"危險8"},
+  "TWMICRORETAIL": {v:50, dir:"hi", lab:"過熱50"},
 };
 
 function sparkline(data, col, thr){
@@ -1013,17 +1018,20 @@ function sparkline(data, col, thr){
 function sentCard(r){
   const diff = r.diff!=null ? r.diff : r.diff_pct;
   const isPx = r.unit==="px";
+  const isPct = r.unit==="pct";              // 比率型(如散戶多空比):值本身就是%,可正可負
   const up = diff>0;
   const c = diff==null?"dim":(!isPx ? (up?"neg":"pos") : (up?"pos":"neg"));
   const sign = diff>0?"+":"";
-  const diffTxt = (diff!=null?sign+diff:"–")+(isPx?"%":" 點");
+  const diffTxt = (diff!=null?sign+diff:"–")+(isPx?"%":(isPct?" pt":" 點"));
   const al = sentAlert(r.sym, r.level, isPx?diff:null);
   const cls = al?(" "+al.cls):"";
   const tag = al?('<div><span class="alert-tag">'+al.tag+'</span></div>'):"";
   const spk = sparkline(r.spark, al?"#e11d48":"#8b949e", SENT_THR[r.sym]);
+  const valTxt = r.level==null ? "–"
+    : (isPct ? (r.level>0?"+":"")+Number(r.level).toFixed(1)+"%" : Number(r.level).toFixed(2));
   return '<div class="idx-card'+cls+'">'+
     '<div class="ic-label">'+esc(r.label)+'</div><div class="ic-note">'+esc(r.note||"")+'</div>'+
-    '<div class="ic-val">'+(r.level!=null?Number(r.level).toFixed(2):"–")+'</div>'+
+    '<div class="ic-val">'+valTxt+'</div>'+
     '<div class="ic-chg '+c+'">'+diffTxt+'</div>'+spk+tag+
     '<div class="ic-sub">'+esc(r.read||"")+'</div>'+
     (r.url?'<a class="src-link" href="'+esc(r.url)+'" target="_blank" rel="noopener">↗ '+esc(r.src||"來源")+'</a>':'')+

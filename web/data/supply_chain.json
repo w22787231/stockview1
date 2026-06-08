@@ -25,7 +25,14 @@
         {"code": "LITE", "market": "us", "name": "Lumentum", "role": "雷射/光晶片(EML/CW 光源)", "tag": "光元件"},
         {"code": "MRVL", "market": "us", "name": "Marvell", "role": "光 DSP/連接·客製 ASIC", "tag": "連接晶片"},
         {"code": "CRDO", "market": "us", "name": "Credo", "role": "高速連接/AEC·光連接受惠", "tag": "連接"},
-        {"code": "ANET", "market": "us", "name": "Arista", "role": "資料中心交換機(CPO 終端)", "tag": "交換機"}
+        {"code": "ANET", "market": "us", "name": "Arista", "role": "資料中心交換機(CPO 終端)", "tag": "交換機"},
+        {"code": "9432.T", "market": "other", "name": "NTT(日)", "role": "IOWN 光電融合·光電共封先驅", "tag": "光電融合"},
+        {"code": "5802.T", "market": "other", "name": "住友電工(日)", "role": "InP 化合物半導體/光元件/雷射", "tag": "光元件"},
+        {"code": "5801.T", "market": "other", "name": "古河電工(日)", "role": "光纖/雷射二極體/光元件", "tag": "光元件"},
+        {"code": "6702.T", "market": "other", "name": "Fujitsu(日)", "role": "光傳輸/光元件(Fujitsu Optical)", "tag": "光傳輸"},
+        {"code": "STMPA.PA", "market": "other", "name": "STMicro(歐)", "role": "矽光子製程/光引擎(CPO 合作)", "tag": "矽光子IDM"},
+        {"code": "SOI.PA", "market": "other", "name": "Soitec(歐)", "role": "光子 SOI 晶圓基板", "tag": "上游基板"},
+        {"code": "AMS.SW", "market": "other", "name": "AMS-OSRAM(歐)", "role": "雷射/VCSEL 光源", "tag": "光源"}
       ]
     },
     {

@@ -2450,11 +2450,11 @@ const HOLD_COLS=[
   {k:"code",lab:"代號",a:"left",sort:true},
   {k:"name",lab:"名稱",a:"left",sort:true},
   {k:"price",lab:"現價",a:"right",sort:true},
-  {k:"today",lab:"今日",a:"center",sort:false},   // 今日盤中分時小圖
   {k:"below",lab:"🔴",a:"center",sort:true},      // 跌破成本閃燈;點此把跌破列排到最上
   {k:"buy",lab:"購買價①",a:"right",sort:false},   // 輸入框,不排序
   {k:"buy2",lab:"購買價②",a:"right",sort:false},
   {k:"tgt",lab:"分析師目標價",a:"right",sort:true},
+  {k:"today",lab:"今日",a:"center",sort:false},   // 今日盤中分時小圖(置於 1日 左側)
   {k:"r1",lab:"1日",a:"right",sort:true},
   {k:"r5",lab:"5日",a:"right",sort:true},
   {k:"r20",lab:"20日",a:"right",sort:true},
@@ -2527,7 +2527,7 @@ function drawHoldTable(pid){
   const trs=data.map(r=>{
     const symTd='<td class="sym clk" data-code="'+esc(r.code)+'" data-used="'+esc(r.used||"")+'" title="點擊看個股分析">'+esc(r.used||r.code)+'</td>';
     const del='<td><button class="hold-del" data-code="'+esc(r.code)+'" title="刪除">✕</button></td>';
-    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="4" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+buyCell(r,2)+'<td colspan="9" class="dim"></td>'+del+'</tr>';
+    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="3" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+buyCell(r,2)+'<td colspan="10" class="dim"></td>'+del+'</tr>';
     const below=!!r.below;                                      // 跌破任一成本價 → 閃爍燈
     const priceTd='<td class="'+(below?"below-buy":"")+'">'+fmt(r.price)+'</td>';
     const todayTd='<td style="text-align:center">'+_miniSpark((r.intra||{}).closes,(r.intra||{}).prev)+'</td>';
@@ -2535,9 +2535,9 @@ function drawHoldTable(pid){
     const pegCls=r.peg==null?"dim":(r.peg<1?"pos":(r.peg>2?"neg":""));
     return '<tr>'+symTd+
       '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</td>'+
-      priceTd+todayTd+dotTd+buyCell(r,1)+buyCell(r,2)+
+      priceTd+dotTd+buyCell(r,1)+buyCell(r,2)+
       '<td>'+(r.tgt!=null?fmt(r.tgt)+(r.tgtUp!=null?' <span class="'+c(r.tgtUp)+'" style="font-size:11px">('+sg(r.tgtUp)+r.tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
-      pctTd(r.r1)+pctTd(r.r5)+pctTd(r.r20)+
+      todayTd+pctTd(r.r1)+pctTd(r.r5)+pctTd(r.r20)+
       '<td>'+(r.volr!=null?r.volr.toFixed(2)+"×":"–")+'</td>'+
       '<td>'+n2(r.fwdEps)+'</td>'+
       '<td>'+n1(r.fwdPe)+'</td>'+

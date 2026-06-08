@@ -4,11 +4,16 @@
 - 收益率/VIX(yield_like=True)：顯示水準 + 與昨日差(bps；VIX 用點)。
 輸出 ../data/macro.json。
 """
-import sys, os, io, json, datetime
+import sys, os, io, json, datetime, csv, ssl, unicodedata
+import urllib.request, urllib.parse
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import warnings; warnings.filterwarnings("ignore")
 import yfinance as yf
+
+_CBC_SSL = ssl.create_default_context()
+_CBC_SSL.check_hostname = False
+_CBC_SSL.verify_mode = ssl.CERT_NONE        # 央行 OpenData 憑證鏈在部分環境驗不過 → 容錯
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 
@@ -76,6 +81,46 @@ def fetch_all(symbols):
     return out
 
 
+def fetch_m1b_m2(months=72):
+    """央行貨幣總計數(OpenData EF15M01.csv):取 M1B/M2 年增率,算 M1B−M2 差。
+    M1B>M2(差為正)=黃金交叉、資金動能轉強;反之死亡交叉。NFKC 正規化全形 Ｍ１Ｂ→M1B 比對欄位。"""
+    url = "https://www.cbc.gov.tw/public/data/OpenData/經研處/EF15M01.csv"
+    try:
+        raw = urllib.request.urlopen(urllib.request.Request(
+            urllib.parse.quote(url, safe=":/"), headers={"User-Agent": "Mozilla/5.0"}),
+            timeout=25, context=_CBC_SSL).read()
+        txt = None
+        for enc in ("utf-8-sig", "utf-8", "big5"):
+            try:
+                txt = raw.decode(enc); break
+            except Exception:
+                continue
+        if not txt:
+            return None
+        rows = list(csv.reader(io.StringIO(txt)))
+        hdr = [unicodedata.normalize("NFKC", h).replace(" ", "") for h in rows[0]]
+        def col(key):
+            return next((i for i, h in enumerate(hdr) if key in h), None)
+        i_m1b, i_m2 = col("M1B-年增率"), col("M2-年增率")
+        if i_m1b is None or i_m2 is None:
+            return None
+        dates, m1b, m2, spread = [], [], [], []
+        for r in rows[1:]:
+            if len(r) <= max(i_m1b, i_m2):
+                continue
+            a, b = _round(r[i_m1b], 2), _round(r[i_m2], 2)
+            if a is None or b is None:
+                continue
+            dates.append(r[0].strip()); m1b.append(a); m2.append(b); spread.append(round(a - b, 2))
+        if not dates:
+            return None
+        return {"dates": dates[-months:], "m1b": m1b[-months:], "m2": m2[-months:],
+                "spread": spread[-months:], "src": "中央銀行 貨幣總計數",
+                "url": "https://www.cbc.gov.tw/tw/np-643-1.html"}
+    except Exception:
+        return None
+
+
 def build():
     all_syms = [x["sym"] for x in INDICES] + [x["sym"] for x in ETFS]
     px = fetch_all(all_syms)
@@ -122,6 +167,7 @@ def build():
         "source": "yfinance (daily)",
         "indices": indices,
         "etfs": etfs,
+        "m1b_m2": fetch_m1b_m2(),
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

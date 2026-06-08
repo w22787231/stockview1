@@ -56,6 +56,7 @@
 
   /* 指數總覽卡 */
   .idx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:4px}
+  .m1m2-chart{width:100%;height:260px}
   .idx-card{border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:var(--panel);
     box-shadow:var(--shadow)}
   .idx-card .ic-label{font-size:12.5px;color:var(--ink2);font-weight:650;margin-bottom:2px}
@@ -941,6 +942,12 @@ function renderMacro(d){
       '<div class="sec-head"><h2>指數總覽</h2><span class="tag">今日漲跌</span>'+
         '<span class="hint">收益率/VIX 顯示水準 + 與昨日差(bps／點)</span></div>'+
       '<div class="idx-grid">'+(d.indices||[]).map(idxCard).join("")+'</div>'+
+      (d.m1b_m2 ? '<div style="margin-top:18px">'+
+        '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">台灣 M1B / M2 年增率</h2>'+
+          '<span class="tag">資金黃金交叉 · 央行月資料</span></div>'+
+        '<div id="m1m2Chart" class="m1m2-chart"></div>'+
+        '<div class="ex">M1B 含活存(資金活水)、M2 含定存。<b class="pos">M1B 年增 &gt; M2(差為正)＝黃金交叉</b>,資金動能轉強、偏多股市;<b class="neg">M1B &lt; M2 ＝死亡交叉</b>。月資料,來源中央銀行貨幣總計數。</div>'+
+      '</div>' : '')+
     '</section>'+
     '<section id="sentSec"><div class="sec-head"><h2>情緒指標</h2><span class="tag">波動 / 廣度 / 貪婪恐懼</span>'+
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
@@ -957,8 +964,33 @@ function renderMacro(d){
         '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
+  if(d.m1b_m2) drawM1M2(d.m1b_m2);
   loadSentiment();
   loadThemes();
+}
+// 台灣 M1B/M2 年增率 + M1B−M2 差(資金黃金/死亡交叉)線圖。
+function drawM1M2(m){
+  const el=document.getElementById("m1m2Chart");
+  if(!el || !window.echarts){ if(el) el.innerHTML='<div class="legend">圖表庫載入中…</div>'; return; }
+  const N=Math.min(48, (m.dates||[]).length);
+  if(!N){ el.innerHTML='<div class="legend">暫無資料</div>'; return; }
+  const dates=m.dates.slice(-N).map(s=>String(s).replace("M","/"));
+  const m1b=m.m1b.slice(-N), m2=m.m2.slice(-N), sp=m.spread.slice(-N);
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:44,right:14,top:30,bottom:24},
+    legend:{data:["M1B−M2","M1B年增","M2年增"],top:0,textStyle:{fontSize:11},itemWidth:16,itemHeight:9},
+    tooltip:{trigger:"axis",valueFormatter:v=>(v==null?"-":v+"%")},
+    xAxis:{type:"category",data:dates,boundaryGap:true,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(N/8))}},
+    yAxis:{type:"value",axisLabel:{fontSize:10,formatter:"{value}%"},splitLine:{lineStyle:{opacity:.35}}},
+    series:[
+      {name:"M1B−M2",type:"bar",barWidth:"55%",
+        data:sp.map(v=>({value:v,itemStyle:{color:(v>=0?"#16a34a":"#e11d48"),opacity:.4}}))},
+      {name:"M1B年增",type:"line",data:m1b,smooth:true,symbol:"none",lineStyle:{width:2,color:"#1f6feb"},itemStyle:{color:"#1f6feb"}},
+      {name:"M2年增",type:"line",data:m2,smooth:true,symbol:"none",lineStyle:{width:2,color:"#8b949e"},itemStyle:{color:"#8b949e"}},
+    ],
+  });
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
 // 各情緒指標的極端值警示閾值。回傳 {cls, tag} 或 null。

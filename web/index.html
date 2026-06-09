@@ -1735,7 +1735,7 @@ function renderStock(d){
       '<span class="lg"><span class="sw" style="background:rgba(225,29,72,.5)"></span>籌碼(右側)</span>'+
       '<span class="lg">綠漲紅跌</span></div>'+
       '<div class="tw-toggle" style="margin-top:6px"><span class="tw-tg-lab">籌碼期間</span>'+
-        ["60","120","250"].map(n=>'<button class="tw-tg chip-lb'+(CHIP_LB==+n?" on":"")+'" data-n="'+n+'">'+n+'日</button>').join("")+
+        ["5","20","60","120","250"].map(n=>'<button class="tw-tg chip-lb'+(CHIP_LB==+n?" on":"")+'" data-n="'+n+'">'+n+'日</button>').join("")+
         '<span id="chipSummary" class="cap-sub2" style="margin:0 0 0 8px"></span></div></section>';
     })()+
     signalsBlock(d.signals,(d.ma&&d.ma.short_n)||10,(d.ma&&d.ma.long_n)||50)+

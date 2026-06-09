@@ -2023,13 +2023,13 @@ function switchView(v){
 const NAV=[
   {view:"macro",   label:"總體市場"},
   {view:"holdings",label:"持股分析"},
+  {view:"capital", label:"資金"},
   {view:"trend",   label:"趨勢動能榜"},
   {view:"cross",   label:"交叉訊號"},
   {view:"chain",   label:"產業鏈"},
   {view:"supply",  label:"供應鏈選股"},
   {view:"etf",     label:"ETF持股異動"},
   {view:"calendar",label:"財報/數據"},
-  {view:"capital", label:"資金"},
   {view:"options", label:"選擇權"},
   {view:"news",    label:"新聞"},
 ];
@@ -2045,6 +2045,14 @@ function navOrder(){
       ordered=ordered.filter(v=>v!=="holdings");
       ordered.splice(Math.min(1,ordered.length),0,"holdings");
       saveNavOrder(ordered); localStorage.setItem("navMigHold2","1");
+    }
+  }catch(e){}
+  // 一次性遷移:把「資金」移到第3位
+  try{
+    if(ordered.includes("capital") && !localStorage.getItem("navMigCap3")){
+      ordered=ordered.filter(v=>v!=="capital");
+      ordered.splice(Math.min(2,ordered.length),0,"capital");
+      saveNavOrder(ordered); localStorage.setItem("navMigCap3","1");
     }
   }catch(e){}
   return ordered;
@@ -2782,7 +2790,7 @@ function loadCapital(){
 }
 function renderCapital(){
   const d=CAP_DATA; if(!d) return;
-  const subs=[["inst","🇹🇼 法人動向"],["margin","🇹🇼 融資融券"],["txoi","🇹🇼 外資期貨OI"],["large","🇹🇼 千張大戶"],["liq","🇺🇸 流動性"],["sector","🇺🇸 類股輪動"],["cot","🇺🇸 COT"]];
+  const subs=[["inst","🇹🇼 法人動向"],["margin","🇹🇼 融資融券"],["txoi","🇹🇼 期貨籌碼"],["large","🇹🇼 千張大戶"],["liq","🇺🇸 流動性"],["sector","🇺🇸 類股輪動"],["cot","🇺🇸 COT"]];
   const tabs='<div id="capTabs" class="news-tabs">'+subs.map(s=>'<button class="ntab'+(CAP_SUB===s[0]?" on":"")+'" data-r="'+s[0]+'">'+s[1]+'</button>').join("")+'</div>';
   $("#content").innerHTML='<section><div class="sec-head"><h2>資金流向</h2><span class="tag">籌碼面 + 流動性</span>'+
       '<span class="hint">台股=三大法人/融資券(TWSE,盤後);美股=Fed流動性/類股輪動(FRED+Yahoo)。</span></div>'+
@@ -2889,11 +2897,23 @@ function renderCapTxoi(d,box){
     const v=last.oi;
     cards='<div class="cap-cards"><div class="cap-card"><div class="cap-lab">外資台指期淨未平倉</div><div class="cap-big '+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v.toLocaleString()+'<span class="cap-u">口</span></div><div class="cap-chg">'+esc(last.date)+'</div></div></div>';
   }
+  // 微台散戶多空比
+  const rt=d.tw.retail||[]; const rl=rt.length?rt[rt.length-1]:null;
+  let rcard="";
+  if(rl){
+    const v=rl.ratio;
+    rcard='<div class="cap-cards"><div class="cap-card"><div class="cap-lab">微台散戶多空比</div><div class="cap-big '+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v+'<span class="cap-u">%</span></div><div class="cap-chg">散戶淨 '+(rl.net>0?"+":"")+rl.net.toLocaleString()+' 口 · '+esc(rl.date)+'</div></div></div>';
+  }
   box.innerHTML=cards+'<div class="cap-sub2">外資在台指期(大台 TX)的多空未平倉淨額:正=偏多布局、負=偏空避險。與現貨外資買賣超合看,判斷外資對大盤方向。</div>'+
-    '<div id="capTxChart" class="cap-chart"></div>';
+    '<div id="capTxChart" class="cap-chart"></div>'+
+    '<div class="cap-sub2" style="margin-top:16px">微台散戶多空比(散戶 = 全市場 − 三大法人)</div>'+rcard+
+    '<div class="cap-sub2">散戶在微型臺指的淨多空 ÷ 總未平倉量。<b>常為反向指標</b>:散戶大幅偏多(高正值)→ 過熱偏空;大幅偏空(負值)→ 觸底偏多。</div>'+
+    '<div id="capRetailChart" class="cap-chart"></div>';
   const series=[["外資",f,"#1f6feb"],["投信",t.trust||[],"#16a34a"],["自營",t.dealer||[],"#f59e0b"]].filter(s=>s[1].length);
   if(f.length>=2) drawCapLines("capTxChart",f.map(x=>x.date),series.map(s=>[s[0],s[1].map(x=>x.oi),s[2],"oi"]),"口");
   else $("#capTxChart").innerHTML='<div class="legend">暫無期貨資料。</div>';
+  if(rt.length>=2) drawCapLines("capRetailChart",rt.map(x=>x.date),[["散戶多空比",rt.map(x=>x.ratio),"#7c4dff","val"]],"%");
+  else $("#capRetailChart").innerHTML='<div class="legend">暫無散戶多空比資料。</div>';
 }
 // 千張大戶(集保分級15 ≥1000張持股比 %)
 function renderCapLarge(d,box){

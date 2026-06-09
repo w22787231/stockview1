@@ -179,41 +179,73 @@ def fetch_margin_hist(now, n=60):
     return out
 
 
-# ── 外資台指期未平倉(TAIFEX CSV,Big5;支援日期區間)──
-def fetch_tx_oi(now, days=90):
+# ── 期貨籌碼(TAIFEX,Big5,日期區間):大台外資/投信/自營未平倉 + 微台散戶多空比 ──
+def _taifex_post(path, params):
+    return urllib.request.urlopen(urllib.request.Request(
+        "https://www.taifex.com.tw/cht/3/" + path,
+        data=urllib.parse.urlencode(params).encode(), headers=UA),
+        timeout=45, context=_SSL).read().decode("big5", "ignore")
+
+
+def fetch_futures(now, days=95):
     end = now.date(); start = end - datetime.timedelta(days=days)
+    rng = {"queryStartDate": start.strftime("%Y/%m/%d"), "queryEndDate": end.strftime("%Y/%m/%d")}
+    tx = {"foreign": [], "trust": [], "dealer": []}
+    micro_inst = {}     # date -> 微型臺指 三大法人未平倉淨額合計(口)
     try:
-        raw = urllib.request.urlopen(urllib.request.Request(
-            "https://www.taifex.com.tw/cht/3/futContractsDateDown",
-            data=urllib.parse.urlencode({
-                "down_type": "1", "commodity_id": "TX",
-                "queryStartDate": start.strftime("%Y/%m/%d"),
-                "queryEndDate": end.strftime("%Y/%m/%d")}).encode(),
-            headers=UA), timeout=45, context=_SSL).read().decode("big5", "ignore")
+        rows = list(csv.reader(io.StringIO(_taifex_post(
+            "futContractsDateDown", dict(rng, down_type="1", commodity_id="TX")))))
+        for r in rows:
+            if len(r) < 14:
+                continue
+            dt = r[0].replace("/", "-").strip()
+            if not re.match(r"\d{4}-\d{2}-\d{2}", dt):
+                continue
+            prod = r[1].strip(); who = r[2]; net = _num(r[13])
+            if prod == "臺股期貨":              # 大台 TX 三大法人未平倉淨額
+                if "外資" in who or "陸資" in who:
+                    tx["foreign"].append({"date": dt, "oi": round(net)})
+                elif "投信" in who:
+                    tx["trust"].append({"date": dt, "oi": round(net)})
+                elif "自營" in who:
+                    tx["dealer"].append({"date": dt, "oi": round(net)})
+            elif prod == "微型臺指期貨":         # 微台 三大法人未平倉淨額(加總)
+                micro_inst[dt] = micro_inst.get(dt, 0) + net
     except Exception:
-        return {"foreign": [], "trust": [], "dealer": []}
-    rows = list(csv.reader(io.StringIO(raw)))
-    # 欄位:日期,商品,身份別,...,[13]多空未平倉口數淨額
-    series = {"foreign": [], "trust": [], "dealer": []}
-    for r in rows:
-        if len(r) < 14:
-            continue
-        dt = r[0].replace("/", "-").strip()
-        if not re.match(r"\d{4}-\d{2}-\d{2}", dt):
-            continue
-        if r[1].strip() != "臺股期貨":          # 區間下載含全商品 → 只留大台 TX
-            continue
-        who = r[2]
-        net = _num(r[13])
-        if "外資" in who or "陸資" in who:
-            series["foreign"].append({"date": dt, "oi": round(net)})
-        elif "投信" in who:
-            series["trust"].append({"date": dt, "oi": round(net)})
-        elif "自營" in who:
-            series["dealer"].append({"date": dt, "oi": round(net)})
-    for k in series:
-        series[k] = sorted(series[k], key=lambda x: x["date"])[-60:]
-    return series
+        pass
+    for k in tx:
+        tx[k] = sorted(tx[k], key=lambda x: x["date"])[-60:]
+    # 微台總未平倉量(futDataDown 區間上限 ~1 月 → 分 25 天段抓再合併;一般時段各月加總)
+    micro_oi = {}
+    cs = start
+    while cs <= end:
+        ce = min(cs + datetime.timedelta(days=24), end)
+        try:
+            rows = list(csv.reader(io.StringIO(_taifex_post("futDataDown", {
+                "down_type": "1", "commodity_id": "TMF",
+                "queryStartDate": cs.strftime("%Y/%m/%d"),
+                "queryEndDate": ce.strftime("%Y/%m/%d")}))))
+            for r in rows:
+                if len(r) < 18:
+                    continue
+                dt = r[0].replace("/", "-").strip()
+                if not re.match(r"\d{4}-\d{2}-\d{2}", dt) or "盤後" in r[17]:
+                    continue
+                try:
+                    micro_oi[dt] = micro_oi.get(dt, 0) + float(r[11].replace(",", ""))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        cs = ce + datetime.timedelta(days=1)
+    # 散戶多空比% = 散戶淨 / 總OI;散戶淨 = −三大法人淨
+    retail = []
+    for dt in sorted(set(micro_inst) & set(micro_oi)):
+        oi = micro_oi[dt]
+        if oi > 0:
+            retail.append({"date": dt, "ratio": round(-micro_inst[dt] / oi * 100, 2),
+                           "net": round(-micro_inst[dt])})
+    return {"tx": tx, "retail": retail[-60:]}
 
 
 # ── 千張大戶(TDCC 集保股權分散;分級15=1,000張以上;週頻,prev 週累積算變化)──
@@ -401,7 +433,8 @@ def main():
     time.sleep(3)   # 兩段 TWSE 歷史掃描間暫停,避免限流
     margin_hist = merge_hist(pv.get("margin_hist"), fetch_margin_hist(now, 60))
     margin_today = margin_hist[-1] if margin_hist else None
-    tx_oi = fetch_tx_oi(now, 95)
+    fut = fetch_futures(now, 95)
+    tx_oi = fut["tx"]; retail = fut["retail"]
     large = fetch_large_holders(prev)
 
     # 融資今日增減(由歷史末兩筆)
@@ -414,7 +447,7 @@ def main():
     tw = {
         "inst_today": inst_today, "inst_hist": inst_hist, "ranks": ranks,
         "margin_today": margin_today, "margin_hist": margin_hist,
-        "tx_oi": tx_oi, "large": large,
+        "tx_oi": tx_oi, "retail": retail, "large": large,
     }
     us = {
         "fed_liq": fetch_fed_liquidity(),
@@ -428,9 +461,9 @@ def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
-    print("[capital] 法人hist%d 融資hist%d 法人榜%d 台指外資OI%d 大戶%s 板塊%d FedLiq%d COT%d" % (
+    print("[capital] 法人hist%d 融資hist%d 法人榜%d 台指外資OI%d 微台散戶%d 大戶%s 板塊%d FedLiq%d COT%d" % (
         len(inst_hist), len(margin_hist), len(ranks.get("foreign_buy", [])),
-        len(tx_oi.get("foreign", [])), (large["date"] if large else "—"),
+        len(tx_oi.get("foreign", [])), len(retail), (large["date"] if large else "—"),
         len(us["sectors"].get("list", [])), len(us["fed_liq"]), len(us["cot"])))
 
 

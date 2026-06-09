@@ -125,29 +125,57 @@ def _us_session(ts):
     return "盤前" if h < 12 else "盤後"
 
 
-def build_earnings_us(now_tpe, end_tpe):
+def _nasdaq_earn(day):
+    """Nasdaq 財報行事曆(單日);回 [{symbol,time,...}]。time=time-pre-market/after-hours/not-supplied。"""
     try:
-        import yfinance as yf
+        req = urllib.request.Request(
+            "https://api.nasdaq.com/api/calendar/earnings?date=" + day,
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json",
+                     "Accept-Language": "en-US,en;q=0.9"})
+        j = json.loads(urllib.request.urlopen(req, timeout=20, context=_SSL).read().decode("utf-8", "ignore"))
+        return ((j.get("data") or {}).get("rows")) or []
     except Exception:
-        return []
+        return None
+
+
+def build_earnings_us(now_tpe, end_tpe):
     nd = now_tpe.date(); ed = end_tpe.date()
-    out = []
-    for sym, zh in US_BIG:
+    universe = {s for s, _ in US_BIG}; zhmap = dict(US_BIG)
+    found = {}            # sym -> (date, 時段)
+    nasdaq_ok = False
+    d = nd
+    while d <= ed:
+        rows = _nasdaq_earn(d.strftime("%Y-%m-%d"))
+        if rows is not None:
+            nasdaq_ok = True
+            for r in rows:
+                s = (r.get("symbol") or "").strip().upper()
+                if s in universe and s not in found:
+                    t = r.get("time") or ""
+                    sess = "盤前" if "pre-market" in t else ("盤後" if "after-hours" in t else "")
+                    found[s] = (d, sess)
+        d += datetime.timedelta(days=1)
+    # 備援:Nasdaq 全擋時用 yfinance .calendar 補日期(無時段)
+    if not nasdaq_ok:
         try:
-            df = yf.Ticker(sym).get_earnings_dates(limit=12)
-            cand = []   # (date, 時段)
-            for ts in (df.index if df is not None else []):
-                dx = ts.date() if hasattr(ts, "date") else ts
-                if isinstance(dx, datetime.date) and nd <= dx <= ed:
-                    cand.append((dx, _us_session(ts)))
-            if not cand:
-                continue
-            cand.sort(key=lambda x: x[0])
-            d, sess = cand[0]
-            out.append({"sym": sym, "name": zh, "date": d.strftime("%Y-%m-%d"),
-                        "region": "US", "estimated": True, "session": sess})
+            import yfinance as yf
+            for sym in universe:
+                if sym in found:
+                    continue
+                try:
+                    cal = yf.Ticker(sym).calendar
+                    eds = cal.get("Earnings Date") if isinstance(cal, dict) else None
+                    cand = [x.date() if hasattr(x, "date") else x for x in (eds or [])]
+                    cand = [x for x in cand if isinstance(x, datetime.date) and nd <= x <= ed]
+                    if cand:
+                        found[sym] = (min(cand), "")
+                except Exception:
+                    continue
         except Exception:
-            continue
+            pass
+    out = [{"sym": s, "name": zhmap.get(s, s), "date": dt.strftime("%Y-%m-%d"),
+            "region": "US", "estimated": True, "session": sess}
+           for s, (dt, sess) in found.items()]
     out.sort(key=lambda e: (e["date"], e.get("session") or "z"))
     return out
 

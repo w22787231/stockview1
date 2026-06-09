@@ -118,8 +118,11 @@
   .cap-rank-h.buy{background:#d13a4a} .cap-rank-h.sell{background:#1f9d57}
   .cap-tbl{width:100%;border-collapse:collapse;font-size:13px}
   .cap-tbl td{padding:5px 10px;border-top:1px solid var(--line);white-space:nowrap}
-  .cap-tbl td:last-child{text-align:right;font-weight:600}
-  .cap-nm{color:var(--ink2);width:99%;overflow:hidden;text-overflow:ellipsis;max-width:0}
+  .cap-tbl td:last-child{font-weight:600}
+  .cap-tbl td.r,.cap-tbl th.r{text-align:right}
+  .cap-tbl thead th{font-size:11px;color:var(--ink3);font-weight:600;padding:5px 10px;border-bottom:1px solid var(--line)}
+  .cap-tbl th.hl{color:var(--blue)}
+  .cap-nm{color:var(--ink2);max-width:0;width:60%;overflow:hidden;text-overflow:ellipsis}
   .cap-tbl.wide th{font-size:12px;color:var(--ink3);text-align:right;padding:6px 10px;border-bottom:1px solid var(--line)}
   .cap-tbl.wide th:first-child{text-align:left}
   .cap-tbl.wide td{text-align:right}
@@ -2777,7 +2780,7 @@ async function fetchSupplyQuotes(theme){
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
 }
 // ── 資金流向:台股法人/融資券(TWSE)+ 美股流動性/類股輪動(FRED+Yahoo)(data/capital.json)──
-let CAP_DATA=null, CAP_SUB="inst";
+let CAP_DATA=null, CAP_SUB="inst", INST_SORT="net";
 function loadCapital(){
   $("#meta").innerHTML='<div><b>資金流向</b></div><div>台股籌碼 · 美股流動性</div>';
   $("#poolNote").innerHTML="";
@@ -2826,17 +2829,24 @@ function renderCapInst(d,box){
       '<div class="cap-sub2">大盤三大法人買賣超 · '+esc(it.date)+'(單位:億元;正=買超)</div>';
   }
   const rk=d.tw.ranks||{};
+  const key=INST_SORT, amt=(key==="amt");
   const tbl=(title,arr,buy)=>{
     if(!arr||!arr.length) return "";
-    let h='<div class="cap-rank"><div class="cap-rank-h '+(buy?"buy":"sell")+'">'+title+'</div><table class="cap-tbl"><tbody>';
-    arr.forEach(x=>{ h+='<tr><td class="sym clk" data-code="'+x.code+'">'+x.code+'</td><td class="cap-nm">'+esc(x.name||"")+'</td><td class="'+(buy?"pos":"neg")+'">'+(x.net>0?"+":"")+x.net.toLocaleString()+'</td></tr>'; });
+    const s=arr.slice().sort((a,b)=>buy?(b[key]-a[key]):(a[key]-b[key]));
+    let h='<div class="cap-rank"><div class="cap-rank-h '+(buy?"buy":"sell")+'">'+title+'</div>'+
+      '<table class="cap-tbl"><thead><tr><th>代號</th><th>名稱</th><th class="r '+(!amt?"hl":"")+'">張</th><th class="r '+(amt?"hl":"")+'">億元</th></tr></thead><tbody>';
+    s.forEach(x=>{ const cls=buy?"pos":"neg"; h+='<tr><td class="sym clk" data-code="'+x.code+'">'+x.code+'</td><td class="cap-nm">'+esc(x.name||"")+'</td><td class="r '+(!amt?cls:"")+'">'+(x.net>0?"+":"")+x.net.toLocaleString()+'</td><td class="r '+(amt?cls:"")+'">'+(x.amt>0?"+":"")+x.amt+'</td></tr>'; });
     return h+'</tbody></table></div>';
   };
+  const sortBtns='<div class="tw-toggle"><span class="tw-tg-lab">排序</span>'+
+    '<button class="tw-tg'+(!amt?" on":"")+'" data-k="net">張數</button>'+
+    '<button class="tw-tg'+(amt?" on":"")+'" data-k="amt">金額(億)</button></div>';
   const ranks='<div class="cap-ranks">'+
     tbl("外資買超 Top",rk.foreign_buy,true)+tbl("外資賣超 Top",rk.foreign_sell,false)+
     tbl("投信買超 Top",rk.trust_buy,true)+tbl("投信賣超 Top",rk.trust_sell,false)+'</div>';
   box.innerHTML=cards+'<div id="capInstChart" class="cap-chart"></div>'+
-    '<div class="cap-sub2" style="margin-top:14px">外資/投信 個股買賣超榜(上市,單位:張)</div>'+ranks;
+    '<div class="cap-sub2" style="margin-top:14px">外資/投信 個股買賣超榜(上市;張=買賣超張數、億元=張×收盤價)</div>'+sortBtns+ranks;
+  box.querySelectorAll(".tw-tg").forEach(b=>b.onclick=()=>{ INST_SORT=b.dataset.k; renderCapInst(d,box); });
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code,td.dataset.code));
   if(hist.length>=2) drawCapBars("capInstChart",hist.map(h=>h.date),
     [["外資",hist.map(h=>h.foreign),"#1f6feb"],["投信",hist.map(h=>h.trust),"#16a34a"],["自營",hist.map(h=>h.dealer),"#f59e0b"]],"億元");

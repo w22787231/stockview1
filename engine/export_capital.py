@@ -115,25 +115,38 @@ def merge_hist(prev_list, new_list, cap=60):
     return [m[k] for k in sorted(m)][-cap:]
 
 
-# ── 個股外資/投信買賣超 Top(T86,股→張)──
-def fetch_t86_ranks(t86, names, topn=15):
+# ── 全上市收盤價(TWSE OpenAPI,算買賣超金額用)──
+def fetch_closes():
+    try:
+        d = json.loads(_get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=30))
+        return {r["Code"]: (_num(r.get("ClosingPrice")), r.get("Name", "")) for r in d if r.get("Code")}
+    except Exception:
+        return {}
+
+
+# ── 個股外資/投信買賣超 Top(T86,股→張;金額=張×收盤÷1e5 億元)──
+def fetch_t86_ranks(t86, names, topn=20):
+    closes = fetch_closes()
     rows = []
     for r in t86.get("data", []):
         code = r[0].strip()
         if not re.fullmatch(r"\d{4,6}[A-Z]?", code):
             continue
-        foreign = _num(r[4]) / 1000.0    # 外陸資買賣超(不含外資自營)
-        trust = _num(r[10]) / 1000.0     # 投信買賣超
-        rows.append({"code": code, "name": name_of(code, names), "f": round(foreign), "t": round(trust)})
+        foreign = round(_num(r[4]) / 1000.0)    # 外陸資買賣超張(不含外資自營)
+        trust = round(_num(r[10]) / 1000.0)     # 投信買賣超張
+        close, nm0 = closes.get(code, (0.0, ""))
+        nm = name_of(code, names) or nm0
+        rows.append({"code": code, "name": nm, "f": foreign, "t": trust,
+                     "fa": round(foreign * close / 1e5, 2), "ta": round(trust * close / 1e5, 2)})
 
-    def top(key, rev):
+    def top(key, akey, rev):
         s = sorted(rows, key=lambda x: x[key], reverse=rev)
         out = [x for x in s if (x[key] > 0 if rev else x[key] < 0)][:topn]
-        return [{"code": x["code"], "name": x["name"], "net": x[key]} for x in out]
+        return [{"code": x["code"], "name": x["name"], "net": x[key], "amt": x[akey]} for x in out]
 
     return {
-        "foreign_buy": top("f", True), "foreign_sell": top("f", False),
-        "trust_buy": top("t", True), "trust_sell": top("t", False),
+        "foreign_buy": top("f", "fa", True), "foreign_sell": top("f", "fa", False),
+        "trust_buy": top("t", "ta", True), "trust_sell": top("t", "ta", False),
     }
 
 

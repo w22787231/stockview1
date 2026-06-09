@@ -1929,7 +1929,8 @@ function drawChart(d){
   if(prof){
     const maxC=Math.max.apply(null,prof.chips)||1;
     const halfBin=(prof.prices.length>1?(prof.prices[1]-prof.prices[0])/2:0);
-    const pdata=prof.prices.map((p,i)=>[i,p,prof.chips[i]/maxC,(curPrice!=null&&p>curPrice)?1:0]);
+    const _xi=dates.length-1;   // 固定錨在最後一根(永遠在 dataZoom 可視窗內,否則會被略過不畫)
+    const pdata=prof.prices.map((p,i)=>[_xi,p,prof.chips[i]/maxC,(curPrice!=null&&p>curPrice)?1:0]);
     profSeries={type:"custom",z:1,silent:true,clip:true,data:pdata,
       renderItem:(params,api)=>{
         const p=api.value(1), wn=api.value(2), above=api.value(3), cs=params.coordSys;

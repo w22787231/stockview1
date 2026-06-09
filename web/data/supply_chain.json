@@ -104,8 +104,8 @@
     {
       "key": "passive",
       "name": "被動元件 / MLCC",
-      "bottleneck": "瓶頸=高容量/高頻 MLCC 與車用/AI 伺服器規格;高階由日廠村田/TDK/太陽誘電寡占,台廠卡中低階+利基,景氣循環與庫存敏感。",
-      "note": "選股邏輯:高階 MLCC 寡占在日(Murata/TDK/Taiyo Yuden),台股龍頭吃中低階+併購擴規模(國巨);美股以 Vishay/CTS 為主。看 AI 伺服器/車用拉貨+庫存週期落底。",
+      "bottleneck": "瓶頸=高階MLCC(高容/車規)由村田/三星/太陽誘電寡占;更深瓶頸在上游材料——離型膜(日 Top5 佔 87%)、鎳超微粉(日近獨占)、鈦酸鋇瓷粉(日主導),台灣材料端僅信昌電(瓷粉自製)。AI 伺服器(單機櫃 45 萬顆)+車用引爆 2026 漲價循環。",
+      "note": "選股邏輯:成品層(國巨/華新科/禾伸堂)已被定價、追高風險;前置 alpha 在上游材料 chokepoint——台灣唯一可投=信昌電(6173,瓷粉自製+2027 擴產 50%),勤凱(電極漿料+TIM)為次級受惠;最純瓶頸(離型膜/鎳粉/瓷粉)在日本(東麗/JFE/堺化學),台灣買不到。美股 Vishay/CTS 為 AI/車用+漲價受惠。",
       "stocks": [
         {"code": "2327", "market": "tw", "name": "國巨", "role": "MLCC/被動元件龍頭(併 KEMET/普思)", "tag": "龍頭"},
         {"code": "2492", "market": "tw", "name": "華新科", "role": "MLCC/晶片電阻", "tag": "MLCC"},
@@ -115,7 +115,15 @@
         {"code": "6981.T", "market": "other", "name": "村田 Murata(日)", "role": "MLCC 全球龍頭(~40%)", "tag": "全球龍頭"},
         {"code": "6762.T", "market": "other", "name": "TDK(日)", "role": "MLCC/電感/車用", "tag": "高階"},
         {"code": "6976.T", "market": "other", "name": "太陽誘電 Taiyo Yuden(日)", "role": "高頻/車用 MLCC", "tag": "高階"},
-        {"code": "6971.T", "market": "other", "name": "京瓷 Kyocera(日)", "role": "MLCC/含 AVX", "tag": "高階"}
+        {"code": "6971.T", "market": "other", "name": "京瓷 Kyocera(日)", "role": "MLCC/含 AVX", "tag": "高階"},
+        {"code": "6173", "market": "tw", "name": "信昌電", "role": "介電陶瓷粉(BaTiO3)自製·高壓MLCC｜台灣唯一上游瓷粉", "tag": "瓷粉★瓶頸"},
+        {"code": "4760", "market": "tw", "name": "勤凱", "role": "被動元件電極漿料(銀/銀鈀/銅漿)+CoWoS TIM 散熱膏", "tag": "電極漿料"},
+        {"code": "1303", "market": "tw", "name": "南亞", "role": "MLCC 離型膜(台灣唯一·占比小)", "tag": "離型膜"},
+        {"code": "4078.T", "market": "other", "name": "堺化學 Sakai(日)", "role": "鈦酸鋇介電粉龍頭", "tag": "瓷粉★瓶頸"},
+        {"code": "3402.T", "market": "other", "name": "東麗 Toray(日)", "role": "MLCC 離型膜(日 Top5 佔 87%)", "tag": "離型膜★瓶頸"},
+        {"code": "3101.T", "market": "other", "name": "東洋紡 Toyobo(日)", "role": "MLCC 離型膜(日 Top5)", "tag": "離型膜★瓶頸"},
+        {"code": "5411.T", "market": "other", "name": "JFE 控股(日)", "role": "MLCC 鎳超微粉(JFE Mineral·日近獨占)", "tag": "鎳粉★瓶頸"},
+        {"code": "009150.KS", "market": "other", "name": "三星電機 Samsung EM(韓)", "role": "韓系 MLCC 大廠", "tag": "製造"}
       ]
     },
     {

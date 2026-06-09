@@ -2002,6 +2002,7 @@ window.addEventListener("popstate",function(){ if(document.getElementById("backB
 function switchView(v){
   _detailReturn=null;          // 進入任一主分頁即清除詳情返回點
   VIEW = v;
+  try{ localStorage.setItem("curView", v); }catch(e){}   // 記住當前主分頁,F5 重整後還原
   if(window._newsTimer){ clearInterval(window._newsTimer); window._newsTimer=null; }  // 離開新聞→停止輪詢
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   const isPoolView = (v==="trend"||v==="cross");  // 交叉分頁與趨勢共用池分頁列
@@ -3220,7 +3221,9 @@ function refreshCurrent(){
   let idx=null;
   try{ idx=await (await fetch("data/index.json?t="+Date.now(),{cache:"no-store"})).json(); }catch(e){}
   renderTabs(idx);
-  load();
+  let startView="trend";   // F5 重整還原上次主分頁(無則預設趨勢動能榜)
+  try{ const sv=localStorage.getItem("curView"); if(sv && NAV.some(n=>n.view===sv)) startView=sv; }catch(e){}
+  switchView(startView);
   const b=document.createElement("div"); b.id="autoBadge";   // 自動更新指示徽章
   b.style.cssText="position:fixed;left:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);color:var(--ink3);font-size:10.5px;padding:4px 9px;border-radius:8px;box-shadow:var(--shadow);z-index:40";
   b.textContent="🔄 自動更新 每5分"; document.body.appendChild(b);

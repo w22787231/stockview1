@@ -99,7 +99,7 @@ def fetch_inst_hist(now, n=60):
         if r and r.get("date"):
             out.append({"date": r["date"], "foreign": r["foreign"],
                         "trust": r["trust"], "dealer": r["dealer"], "total": r["total"]})
-        d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.12)
+        d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.25)
     return out
 
 
@@ -175,7 +175,7 @@ def fetch_margin_hist(now, n=60):
         r = _margin_one(d.strftime("%Y%m%d"))
         if r:
             out.append({"date": r["date"], "margin_bal": r["margin_bal"], "short_bal": r["short_bal"]})
-        d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.12)
+        d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.3)
     return out
 
 
@@ -398,6 +398,7 @@ def main():
     pv = (prev or {}).get("tw") or {}
     inst_hist = merge_hist(pv.get("inst_hist"), fetch_inst_hist(now, 60))
     inst_today = inst_hist[-1] if inst_hist else None
+    time.sleep(3)   # 兩段 TWSE 歷史掃描間暫停,避免限流
     margin_hist = merge_hist(pv.get("margin_hist"), fetch_margin_hist(now, 60))
     margin_today = margin_hist[-1] if margin_hist else None
     tx_oi = fetch_tx_oi(now, 95)

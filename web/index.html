@@ -2046,12 +2046,7 @@ async function openStock(sym){
     $("#poolNote").innerHTML="";
     renderStock(d);
   }catch(e){
-    const has=(STOCK_IDX&&STOCK_IDX.syms||[]);
-    $("#content").innerHTML='<div class="backbtn" id="backBtn">← 返回</div>'+
-      '<div class="loading-screen">⚠️「'+esc(sym)+'」目前沒有詳情資料。<br>'+
-      '個股詳情僅涵蓋已產生的清單('+has.length+' 檔)，未涵蓋全市場。<br>'+
-      '可在上方搜尋有詳情的代號，或回榜單頁。</div>';
-    enterDetail(); const b=document.getElementById("backBtn"); if(b) b.onclick=()=>history.back();
+    showLiveQuote(sym);   // 清單外 → 即時生成完整詳情(失敗再退輕量卡)
   }
 }
 
@@ -3277,6 +3272,24 @@ function drawOptChart(calls,puts,price,mp){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 // 任意代號即時報價卡(不限預生的 1700 檔)──呼叫 Worker /api/quotes
+// 清單外股的「完整詳情」:用 /api/stockfull 回的 OHLCV+估值+三表,客戶端補算 MA/金叉/評等。
+function _maSeries(cdl,n){ const out=[]; for(let i=0;i<cdl.length;i++){ if(i<n-1||cdl[i].c==null){out.push({t:cdl[i].t,v:null});continue;} let s=0,ok=1;for(let j=i-n+1;j<=i;j++){ if(cdl[j].c==null){ok=0;break;} s+=cdl[j].c;} out.push({t:cdl[i].t,v:ok?s/n:null}); } return out; }
+function _crossSignals(cdl,sn,ln){ const sm=_maSeries(cdl,sn),lm=_maSeries(cdl,ln),out=[]; for(let i=1;i<cdl.length;i++){ const ps=sm[i-1].v,pl=lm[i-1].v,cs=sm[i].v,cl=lm[i].v; if(ps==null||pl==null||cs==null||cl==null)continue; if(ps<=pl&&cs>cl)out.push({t:cdl[i].t,price:cdl[i].c,type:"golden"}); else if(ps>=pl&&cs<cl)out.push({t:cdl[i].t,price:cdl[i].c,type:"death"}); } return out; }
+function _overallRating(m){ if(!m)return "中"; let s=0;
+  if(m.roe!=null){ if(m.roe>0.15)s++; else if(m.roe<0.05)s--; }
+  if(m.rev_growth!=null){ if(m.rev_growth>0.15)s++; else if(m.rev_growth<0)s--; }
+  if(m.profit_margin!=null){ if(m.profit_margin>0.15)s++; else if(m.profit_margin<0)s--; }
+  if(m.peg!=null){ if(m.peg>0&&m.peg<1.2)s++; else if(m.peg>3)s--; }
+  return s>=2?"強":(s<=-1?"弱":"中"); }
+function buildStockFromFull(full, sym, nameZh){
+  const candles=(full.candles||[]).map(c=>({t:c.t,o:c.o,h:c.h,l:c.l,c:c.c,v:c.v}));
+  const m=full.metrics||{};
+  return { sym: full.sym||sym, name_zh: nameZh||null, generated_at:new Date().toISOString(),
+    source:"即時生成", has_fundamentals: !!(m && (m.mktcap!=null||m.pe!=null)),
+    metrics:m, overall:_overallRating(m),
+    candles, ma:{ma_short:_maSeries(candles,10),ma_long:_maSeries(candles,50),short_n:10,long_n:50},
+    signals:_crossSignals(candles,10,50), statements:full.statements||{}, backtest:null, news:[], events:null, chip_links:[] };
+}
 async function showLiveQuote(raw){
   const q=(raw||"").trim().toUpperCase();
   let cands;
@@ -3284,6 +3297,21 @@ async function showLiveQuote(raw){
   else if(/^\d/.test(q)) cands=[q+".TW", q+".TWO"];       // 台股純數字 → 試上市/上櫃
   else cands=[q];                                        // 美股等
   $("#content").innerHTML='<div class="loading-screen">即時查詢 '+esc(raw)+' …</div>';
+  // 1) 先試完整詳情(清單外即時生成,與 1700 檔同樣的圖表/籌碼/估值/三表)
+  const nm=await loadNames().catch(()=>null);
+  for(const c of cands){
+    try{
+      const full=await (await fetch("/api/stockfull?sym="+encodeURIComponent(c)+"&t="+Date.now(),{cache:"no-store"})).json();
+      if(full && full.candles && full.candles.length>30){
+        const zh=(nm&&/\.(TW|TWO)$/i.test(c))?(nm[c.toUpperCase()]||null):null;
+        const d=buildStockFromFull(full, c, zh);
+        $("#meta").innerHTML='<div><b>'+esc(d.sym)+'</b> 個股詳情</div><div>即時生成(清單外)</div>';
+        $("#poolNote").innerHTML="";
+        renderStock(d); return;
+      }
+    }catch(e){}
+  }
+  // 2) 退回輕量即時報價卡(+成本分布)
   try{
     const d=await (await fetch("/api/quotes?kline=1&syms="+encodeURIComponent(cands.join(","))+"&t="+Date.now(),{cache:"no-store"})).json();
     let qt=null;

@@ -318,6 +318,95 @@ async function handleIntraday(request) {
   });
 }
 
+// ── 任意代號完整詳情(預生 1700 檔以外):chart OHLCV + quoteSummary(估值+三表)──
+function _stmtRows(arr, map) {
+  // arr: quoteSummary 各期物件陣列(新→舊);map: [[label, field], ...]
+  const raw = o => (o && o.raw != null) ? o.raw : null;
+  const periods = arr.map(e => { const f = (e.endDate && e.endDate.fmt) || ""; return f.slice(0, 7); });
+  const rows = map.map(([label, field]) => {
+    const vals = arr.map(e => raw(e[field]));
+    const yoy = (vals[0] != null && vals[4] != null && vals[4] !== 0) ? (vals[0] - vals[4]) / Math.abs(vals[4]) * 100 : null;
+    return { label, vals, yoy };
+  }).filter(r => r.vals.some(v => v != null));
+  return { periods, rows };
+}
+async function fetchStockFull(sym, crumb, cookie) {
+  const raw = o => (o && o.raw != null) ? o.raw : (typeof o === "number" ? o : null);
+  // 1) K 線 OHLCV(2 年,公開)
+  let candles = [];
+  try {
+    const cr = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) + "?interval=1d&range=2y",
+      { headers: { "User-Agent": "Mozilla/5.0" }, cf: { cacheTtl: 600 } });
+    const cj = await cr.json();
+    const res = cj.chart && cj.chart.result && cj.chart.result[0];
+    if (res) {
+      const ts = res.timestamp || [], q = ((res.indicators || {}).quote || [])[0] || {};
+      for (let i = 0; i < ts.length; i++) {
+        if (q.close && q.close[i] != null) {
+          const d = new Date(ts[i] * 1000).toISOString().slice(0, 10);
+          candles.push({ t: d, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume ? q.volume[i] : null });
+        }
+      }
+    }
+  } catch (e) {}
+  // 2) quoteSummary:估值 + 三表
+  let metrics = null, statements = null;
+  try {
+    const u = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/" + encodeURIComponent(sym) +
+      "?modules=defaultKeyStatistics,financialData,summaryDetail,price,summaryProfile," +
+      "incomeStatementHistoryQuarterly,balanceSheetHistoryQuarterly,cashflowStatementHistoryQuarterly&crumb=" + encodeURIComponent(crumb);
+    const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0", "Cookie": cookie }, cf: { cacheTtl: 600 } });
+    if (r.ok) {
+      const j = await r.json();
+      const res = j.quoteSummary && j.quoteSummary.result && j.quoteSummary.result[0];
+      if (res) {
+        const ks = res.defaultKeyStatistics || {}, fd = res.financialData || {}, sd = res.summaryDetail || {},
+          pr = res.price || {}, sp = res.summaryProfile || {};
+        metrics = {
+          name: pr.longName || pr.shortName || sym, sector: sp.sector || null, industry: sp.industry || null,
+          price: raw(fd.currentPrice) != null ? raw(fd.currentPrice) : raw(pr.regularMarketPrice),
+          mktcap: raw(pr.marketCap), pe: raw(sd.trailingPE), forwardPe: raw(sd.forwardPE) != null ? raw(sd.forwardPE) : raw(ks.forwardPE),
+          ps: raw(sd.priceToSalesTrailing12Months), pb: raw(ks.priceToBook),
+          roe: raw(fd.returnOnEquity), profit_margin: raw(fd.profitMargins), rev_growth: raw(fd.revenueGrowth),
+          high52: raw(sd.fiftyTwoWeekHigh), low52: raw(sd.fiftyTwoWeekLow), target: raw(fd.targetMeanPrice),
+          fwdEps: raw(ks.forwardEps), fwdPe: raw(ks.forwardPE),
+          peg: raw(ks.trailingPegRatio) != null ? raw(ks.trailingPegRatio) : raw(ks.pegRatio),
+        };
+        const inc = ((res.incomeStatementHistoryQuarterly || {}).incomeStatementHistory) || [];
+        const bal = ((res.balanceSheetHistoryQuarterly || {}).balanceSheetStatements) || [];
+        const cf = ((res.cashflowStatementHistoryQuarterly || {}).cashflowStatements) || [];
+        statements = {
+          period_type: "quarterly",
+          income: inc.length ? _stmtRows(inc, [["Total Revenue", "totalRevenue"], ["Gross Profit", "grossProfit"],
+            ["Operating Income", "operatingIncome"], ["Net Income", "netIncome"]]) : null,
+          balance: bal.length ? _stmtRows(bal, [["Total Assets", "totalAssets"], ["Total Liabilities Net Minority Interest", "totalLiab"],
+            ["Stockholders Equity", "totalStockholderEquity"], ["Cash And Cash Equivalents", "cash"]]) : null,
+          cashflow: cf.length ? _stmtRows(cf, [["Operating Cash Flow", "totalCashFromOperatingActivities"],
+            ["Investing Cash Flow", "totalCashflowsFromInvestingActivities"], ["Financing Cash Flow", "totalCashFromFinancingActivities"]]) : null,
+        };
+      }
+    }
+  } catch (e) {}
+  return { sym, candles, metrics, statements };
+}
+async function handleStockFull(request) {
+  const url = new URL(request.url);
+  const sym = (url.searchParams.get("sym") || "").trim();
+  if (!sym) return new Response(JSON.stringify({ error: "no sym" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+  const cache = caches.default;
+  const ckey = new Request("https://stockfull.cache/api/stockfull?sym=" + sym);
+  const hit = await cache.match(ckey);
+  if (hit) return hit;
+  let crumb = "", cookie = "";
+  try { ({ crumb, cookie } = await _yahooCrumb()); } catch (e) {}
+  const data = await fetchStockFull(sym, crumb, cookie);
+  const resp = new Response(JSON.stringify(data), {
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=900", "Access-Control-Allow-Origin": "*" },
+  });
+  if (data.candles && data.candles.length) { try { await cache.put(ckey, resp.clone()); } catch (e) {} }
+  return resp;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -326,6 +415,7 @@ export default {
     if (url.pathname === "/api/fundamentals") return handleFundamentals(request);
     if (url.pathname === "/api/options") return handleOptions(request);
     if (url.pathname === "/api/intraday") return handleIntraday(request);
+    if (url.pathname === "/api/stockfull") return handleStockFull(request);
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },
 };

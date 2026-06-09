@@ -113,6 +113,18 @@ US_BIG = [
 ]
 
 
+def _us_session(ts):
+    """由財報時間(美東)判斷:盤前(BMO)/盤後(AMC)/空(未定)。"""
+    try:
+        et = ts.tz_convert("America/New_York") if getattr(ts, "tzinfo", None) else ts
+        h = et.hour
+    except Exception:
+        h = 0
+    if h <= 0:
+        return ""
+    return "盤前" if h < 12 else "盤後"
+
+
 def build_earnings_us(now_tpe, end_tpe):
     try:
         import yfinance as yf
@@ -122,23 +134,21 @@ def build_earnings_us(now_tpe, end_tpe):
     out = []
     for sym, zh in US_BIG:
         try:
-            cal = yf.Ticker(sym).calendar
-            ed_dates = cal.get("Earnings Date") if isinstance(cal, dict) else None
-            if not ed_dates:
-                continue
-            cand = []
-            for x in ed_dates:
-                dx = x.date() if hasattr(x, "date") else x
+            df = yf.Ticker(sym).get_earnings_dates(limit=12)
+            cand = []   # (date, 時段)
+            for ts in (df.index if df is not None else []):
+                dx = ts.date() if hasattr(ts, "date") else ts
                 if isinstance(dx, datetime.date) and nd <= dx <= ed:
-                    cand.append(dx)
+                    cand.append((dx, _us_session(ts)))
             if not cand:
                 continue
-            d = min(cand)
+            cand.sort(key=lambda x: x[0])
+            d, sess = cand[0]
             out.append({"sym": sym, "name": zh, "date": d.strftime("%Y-%m-%d"),
-                        "region": "US", "estimated": True})
+                        "region": "US", "estimated": True, "session": sess})
         except Exception:
             continue
-    out.sort(key=lambda e: e["date"])
+    out.sort(key=lambda e: (e["date"], e.get("session") or "z"))
     return out
 
 

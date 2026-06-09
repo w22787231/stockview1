@@ -100,6 +100,9 @@
   .cal-badge.econ{background:#eaf2ff;color:var(--blue)}
   .cal-badge.earn{background:#fff3e0;color:#b9770e}
   .cal-badge.inv{background:#f0ecff;color:#7c4dff}
+  .cal-badge.sess{margin-left:4px}
+  .cal-badge.sess.bmo{background:#fff4e0;color:#c2750a}
+  .cal-badge.sess.amc{background:#e6eefc;color:#3056b5}
   .tw-toggle{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 12px}
   .tw-tg-lab{font-size:12px;color:var(--ink3)}
   .tw-tg{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer}
@@ -2660,7 +2663,7 @@ function renderCalList(d){
       ev.push({date:e.date,time:e.time,type:"econ",region:"US",imp:e.importance,title:e.name,sub:sub,subHtml:subHtml});
     });
   }else if(CAL_REGION==="usearn"){
-    (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),sub:"財報(預估)"}));
+    (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),session:e.session||"",sub:e.session?"":"財報(預估)"}));
   }else{
     (d.earnings_tw||[]).forEach(e=>ev.push({date:e.date,time:e.time||"",type:"earn",region:"TW",title:e.sym+(e.name?" "+e.name:""),sub:e.kind||"法說會",inv:!!e.inv}));
   }
@@ -2697,10 +2700,11 @@ function renderCalList(d){
     html+='<div class="cal-day"><div class="cal-date">'+ds.slice(5).replace("-","/")+
       ' <span class="cal-wd">(週'+wd[dt.getDay()]+')</span> <span class="cal-cd">'+cd+'</span></div>';
     byDate[ds].sort((a,b)=>((a.time||"99:99")>(b.time||"99:99")?1:-1)).forEach(e=>{
+      const sessBadge=e.session?('<span class="cal-badge sess '+(e.session==="盤前"?"bmo":"amc")+'">'+(e.session==="盤前"?"🌅 盤前":"🌙 盤後")+'</span>'):"";
       const badge=e.type==="econ"?'<span class="cal-badge econ">📊 數據</span>'
         :(e.region==="TW"
            ?(e.inv?'<span class="cal-badge inv">🎤 受邀</span>':'<span class="cal-badge earn">📈 法說</span>')
-           :'<span class="cal-badge earn">📈 財報</span>');
+           :'<span class="cal-badge earn">📈 財報</span>'+sessBadge);
       const valPart=e.subHtml?'<span class="cal-val">'+e.subHtml+'</span>':'<span class="cal-sub">'+esc(e.sub||"")+'</span>';
       html+='<div class="cal-ev">'+
         '<span class="cal-time">'+(e.time||"–")+'</span>'+badge+dot(e.imp)+

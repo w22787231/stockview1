@@ -65,13 +65,16 @@ def latest_trading_date(now):
     return None, None
 
 
-# ── 大盤三大法人(BFI82U,單位→億元)──
-def fetch_inst_market():
+# ── 大盤三大法人(BFI82U;dayDate 可抓歷史,單位→億元)──
+def _bfi(day=""):
+    url = "https://www.twse.com.tw/rwd/zh/fund/BFI82U?response=json"
+    if day:
+        url += "&dayDate=" + day
     try:
-        j = json.loads(_get("https://www.twse.com.tw/rwd/zh/fund/BFI82U?response=json"))
+        j = json.loads(_get(url))
     except Exception:
         return None
-    if j.get("stat") != "OK":
+    if j.get("stat") != "OK" or not j.get("data"):
         return None
     foreign = trust = dealer = 0.0
     for row in j.get("data", []):
@@ -82,10 +85,34 @@ def fetch_inst_market():
             foreign += diff
         elif "自營" in nm:
             dealer += diff
-    dd = j.get("date", "")
+    dd = j.get("date", day)
     date = "%s-%s-%s" % (dd[:4], dd[4:6], dd[6:8]) if len(dd) == 8 else dd
     return {"date": date, "foreign": round(foreign, 1), "trust": round(trust, 1),
             "dealer": round(dealer, 1), "total": round(foreign + trust + dealer, 1)}
+
+
+def fetch_inst_hist(now, n=60):
+    """回補近 n 交易日大盤三大法人(往前掃 ~95 日,略過假日)。"""
+    out, d, tries = [], now.date(), 0
+    while len(out) < n and tries < 95:
+        r = _bfi(d.strftime("%Y%m%d"))
+        if r and r.get("date"):
+            out.append({"date": r["date"], "foreign": r["foreign"],
+                        "trust": r["trust"], "dealer": r["dealer"], "total": r["total"]})
+        d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.12)
+    return out
+
+
+def merge_hist(prev_list, new_list, cap=60):
+    """以日期為鍵 union(新資料覆蓋舊),容忍單次抓取失敗 → 歷史不會被清空。"""
+    m = {}
+    for r in (prev_list or []):
+        if r.get("date"):
+            m[r["date"]] = r
+    for r in (new_list or []):
+        if r.get("date"):
+            m[r["date"]] = r
+    return [m[k] for k in sorted(m)][-cap:]
 
 
 # ── 個股外資/投信買賣超 Top(T86,股→張)──
@@ -142,6 +169,115 @@ def fetch_margin(now):
     return None
 
 
+def fetch_margin_hist(now, n=60):
+    out, d, tries = [], now.date(), 0
+    while len(out) < n and tries < 95:
+        r = _margin_one(d.strftime("%Y%m%d"))
+        if r:
+            out.append({"date": r["date"], "margin_bal": r["margin_bal"], "short_bal": r["short_bal"]})
+        d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.12)
+    return out
+
+
+# ── 外資台指期未平倉(TAIFEX CSV,Big5;支援日期區間)──
+def fetch_tx_oi(now, days=90):
+    end = now.date(); start = end - datetime.timedelta(days=days)
+    try:
+        raw = urllib.request.urlopen(urllib.request.Request(
+            "https://www.taifex.com.tw/cht/3/futContractsDateDown",
+            data=urllib.parse.urlencode({
+                "down_type": "1", "commodity_id": "TX",
+                "queryStartDate": start.strftime("%Y/%m/%d"),
+                "queryEndDate": end.strftime("%Y/%m/%d")}).encode(),
+            headers=UA), timeout=45, context=_SSL).read().decode("big5", "ignore")
+    except Exception:
+        return {"foreign": [], "trust": [], "dealer": []}
+    rows = list(csv.reader(io.StringIO(raw)))
+    # 欄位:日期,商品,身份別,...,[13]多空未平倉口數淨額
+    series = {"foreign": [], "trust": [], "dealer": []}
+    for r in rows:
+        if len(r) < 14:
+            continue
+        dt = r[0].replace("/", "-").strip()
+        if not re.match(r"\d{4}-\d{2}-\d{2}", dt):
+            continue
+        if r[1].strip() != "臺股期貨":          # 區間下載含全商品 → 只留大台 TX
+            continue
+        who = r[2]
+        net = _num(r[13])
+        if "外資" in who or "陸資" in who:
+            series["foreign"].append({"date": dt, "oi": round(net)})
+        elif "投信" in who:
+            series["trust"].append({"date": dt, "oi": round(net)})
+        elif "自營" in who:
+            series["dealer"].append({"date": dt, "oi": round(net)})
+    for k in series:
+        series[k] = sorted(series[k], key=lambda x: x["date"])[-60:]
+    return series
+
+
+# ── 千張大戶(TDCC 集保股權分散;分級15=1,000張以上;週頻,prev 週累積算變化)──
+def fetch_large_holders(prev, topn=20):
+    try:
+        raw = _get("https://opendata.tdcc.com.tw/getOD.ashx?id=1-5", timeout=70)
+    except Exception:
+        return None
+    cur = {}; date = ""
+    for r in csv.reader(io.StringIO(raw.lstrip("﻿"))):
+        if len(r) < 6 or r[2].strip() == "持股分級":
+            continue
+        if r[2].strip() == "15":               # 1,000,001 股以上(千張大戶)
+            date = r[0].strip()
+            cur[r[1].strip()] = round(_num(r[5]), 2)   # 占集保庫存比例 %
+    if not cur:
+        return None
+    names = load_names()
+    prevm = (((prev or {}).get("tw") or {}).get("large") or {}).get("ratios") or {}
+    rows = []
+    for code, ratio in cur.items():
+        if not re.fullmatch(r"\d{4}", code):    # 只留一般 4 位股票
+            continue
+        nm = name_of(code, names)
+        if not nm or ratio >= 99.5:             # 過濾無名稱/單一股東(100%)的冷門股
+            continue
+        chg = round(ratio - prevm[code], 2) if code in prevm else None
+        rows.append({"code": code, "name": nm, "ratio": ratio, "chg": chg})
+    concentrated = sorted(rows, key=lambda x: x["ratio"], reverse=True)[:topn]
+    has_chg = [x for x in rows if x["chg"] is not None]
+    rising = sorted(has_chg, key=lambda x: x["chg"], reverse=True)[:topn]
+    falling = sorted(has_chg, key=lambda x: x["chg"])[:topn]
+    dd = date
+    if len(dd) == 8:
+        dd = "%s-%s-%s" % (dd[:4], dd[4:6], dd[6:8])
+    return {"date": dd, "ratios": cur, "concentrated": concentrated,
+            "rising": rising, "falling": falling, "has_chg": bool(has_chg)}
+
+
+# ── COT(CFTC Traders in Financial Futures;E-MINI S&P 500)──
+def fetch_cot(weeks=26):
+    url = ("https://publicreporting.cftc.gov/resource/gpe5-46if.json?"
+           "$where=" + urllib.parse.quote("market_and_exchange_names like 'E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE'") +
+           "&$order=" + urllib.parse.quote("report_date_as_yyyy_mm_dd DESC") + "&$limit=%d" % weeks)
+    try:
+        d = json.loads(_get(url, timeout=40))
+    except Exception:
+        return []
+    out = []
+    for r in d:
+        try:
+            out.append({
+                "date": r["report_date_as_yyyy_mm_dd"][:10],
+                "lev_net": int(r.get("lev_money_positions_long", 0)) - int(r.get("lev_money_positions_short", 0)),
+                "am_net": int(r.get("asset_mgr_positions_long", 0)) - int(r.get("asset_mgr_positions_short", 0)),
+                "dealer_net": int(r.get("dealer_positions_long_all", 0)) - int(r.get("dealer_positions_short_all", 0)),
+                "oi": int(r.get("open_interest_all", 0)),
+            })
+        except Exception:
+            continue
+    out.sort(key=lambda x: x["date"])
+    return out
+
+
 # ── FRED ──
 def fred(sid, limit=400):
     if not FRED_KEY:
@@ -161,9 +297,9 @@ def fred(sid, limit=400):
 
 
 def fetch_fed_liquidity():
-    walcl = fred("WALCL", 120)            # 週,百萬美元
-    tga = dict(fred("WTREGEN", 600))      # 日,百萬
-    rrp = dict(fred("RRPONTSYD", 600))    # 日,十億
+    walcl = fred("WALCL", 320)            # 週,百萬美元(~6年)
+    tga = dict(fred("WTREGEN", 2200))     # 日,百萬
+    rrp = dict(fred("RRPONTSYD", 2200))   # 日,十億
     if not walcl:
         return []
 
@@ -177,7 +313,7 @@ def fetch_fed_liquidity():
         return dct.get(best, 0.0) if best else 0.0
 
     out = []
-    for date, w in walcl[-60:]:
+    for date, w in walcl[-260:]:          # 近 ~5 年(週)
         liq = w / 1000.0 - nearest(tga, date) / 1000.0 - nearest(rrp, date)  # → 十億美元
         out.append({"date": date, "val": round(liq / 1000.0, 2)})           # → 兆美元
     return out
@@ -190,29 +326,41 @@ SECTORS = [("XLK", "科技"), ("XLC", "通訊"), ("XLY", "非必需消費"), ("X
 
 
 def _yc(sym):
+    """回 (closes, volumes)。"""
     try:
-        d = json.loads(_get("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=2mo" % sym))
-        c = d["chart"]["result"][0]["indicators"]["quote"][0]["close"]
-        return [x for x in c if x is not None]
+        d = json.loads(_get("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=3mo" % sym))
+        q = d["chart"]["result"][0]["indicators"]["quote"][0]
+        c = q["close"]; v = q.get("volume", [])
+        pair = [(c[i], (v[i] if i < len(v) else None)) for i in range(len(c)) if c[i] is not None]
+        return [p[0] for p in pair], [p[1] for p in pair if p[1] is not None]
     except Exception:
-        return []
+        return [], []
 
 
 def _ret(c, n):
     return round((c[-1] / c[-1 - n] - 1) * 100, 2) if len(c) > n else None
 
 
+def _volr(v):
+    """近5日均量 / 近20日均量(>1=量能放大,資金流入)。"""
+    if len(v) < 20:
+        return None
+    a5 = sum(v[-5:]) / 5.0; a20 = sum(v[-20:]) / 20.0
+    return round(a5 / a20, 2) if a20 else None
+
+
 def fetch_sectors():
-    spy = _yc("SPY")
+    spy, _ = _yc("SPY")
     spy20 = _ret(spy, 20) or 0
     out = []
     for sym, nm in SECTORS:
-        c = _yc(sym)
+        c, v = _yc(sym)
         if not c:
             continue
         r20 = _ret(c, 20)
         out.append({"etf": sym, "name": nm, "r1": _ret(c, 1), "r5": _ret(c, 5),
-                    "r20": r20, "rs": (round(r20 - spy20, 2) if r20 is not None else None)})
+                    "r20": r20, "rs": (round(r20 - spy20, 2) if r20 is not None else None),
+                    "volr": _volr(v)})
     out.sort(key=lambda x: (x["r20"] if x["r20"] is not None else -99), reverse=True)
     return {"spy_r20": spy20, "list": out}
 
@@ -246,41 +394,43 @@ def main():
     names = load_names()
 
     ds, t86 = latest_trading_date(now)
-    inst = fetch_inst_market()
     ranks = fetch_t86_ranks(t86, names) if t86 else {}
-    margin = fetch_margin(now)
+    pv = (prev or {}).get("tw") or {}
+    inst_hist = merge_hist(pv.get("inst_hist"), fetch_inst_hist(now, 60))
+    inst_today = inst_hist[-1] if inst_hist else None
+    margin_hist = merge_hist(pv.get("margin_hist"), fetch_margin_hist(now, 60))
+    margin_today = margin_hist[-1] if margin_hist else None
+    tx_oi = fetch_tx_oi(now, 95)
+    large = fetch_large_holders(prev)
 
-    inst_entry = None
-    if inst:
-        inst_entry = {"date": inst["date"], "foreign": inst["foreign"],
-                      "trust": inst["trust"], "dealer": inst["dealer"]}
-    margin_entry = None
-    if margin and "margin_bal" in margin:
-        margin_entry = {"date": margin["date"], "margin_bal": margin["margin_bal"],
-                        "short_bal": margin.get("short_bal")}
+    # 融資今日增減(由歷史末兩筆)
+    if margin_today and len(margin_hist) >= 2:
+        p = margin_hist[-2]
+        margin_today = dict(margin_today)
+        margin_today["margin_chg"] = round(margin_today["margin_bal"] - p["margin_bal"], 1)
+        margin_today["short_chg"] = round(margin_today["short_bal"] - p["short_bal"])
 
     tw = {
-        "inst_today": inst,
-        "inst_hist": append_hist(prev, ("tw", "inst_hist"), inst_entry),
-        "ranks": ranks,
-        "margin_today": margin,
-        "margin_hist": append_hist(prev, ("tw", "margin_hist"), margin_entry),
+        "inst_today": inst_today, "inst_hist": inst_hist, "ranks": ranks,
+        "margin_today": margin_today, "margin_hist": margin_hist,
+        "tx_oi": tx_oi, "large": large,
     }
-
     us = {
         "fed_liq": fetch_fed_liquidity(),
-        "hy_spread": [{"date": d, "val": v} for d, v in fred("BAMLH0A0HYM2", 180)[-120:]],
-        "mmf": [{"date": d, "val": round(v, 1)} for d, v in fred("RMFSL", 36)[-24:]],
+        "hy_spread": [{"date": d, "val": v} for d, v in fred("BAMLH0A0HYM2", 1500)[::5][-260:]],
+        "mmf": [{"date": d, "val": round(v, 1)} for d, v in fred("RMFSL", 72)[-60:]],
         "sectors": fetch_sectors(),
+        "cot": fetch_cot(26),
     }
 
     out = {"generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "tw": tw, "us": us}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
-    print("[capital] -> data/capital.json  法人%s 融資%s 法人榜%d 板塊%d FedLiq%d" % (
-        (inst["date"] if inst else "—"), (margin["date"] if margin else "—"),
-        len(ranks.get("foreign_buy", [])), len(us["sectors"].get("list", [])), len(us["fed_liq"])))
+    print("[capital] 法人hist%d 融資hist%d 法人榜%d 台指外資OI%d 大戶%s 板塊%d FedLiq%d COT%d" % (
+        len(inst_hist), len(margin_hist), len(ranks.get("foreign_buy", [])),
+        len(tx_oi.get("foreign", [])), (large["date"] if large else "—"),
+        len(us["sectors"].get("list", [])), len(us["fed_liq"]), len(us["cot"])))
 
 
 if __name__ == "__main__":

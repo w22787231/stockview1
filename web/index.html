@@ -2782,13 +2782,13 @@ function loadCapital(){
 }
 function renderCapital(){
   const d=CAP_DATA; if(!d) return;
-  const subs=[["inst","🇹🇼 法人動向"],["margin","🇹🇼 融資融券"],["liq","🇺🇸 美股流動性"],["sector","🇺🇸 類股輪動"]];
+  const subs=[["inst","🇹🇼 法人動向"],["margin","🇹🇼 融資融券"],["txoi","🇹🇼 外資期貨OI"],["large","🇹🇼 千張大戶"],["liq","🇺🇸 流動性"],["sector","🇺🇸 類股輪動"],["cot","🇺🇸 COT"]];
   const tabs='<div id="capTabs" class="news-tabs">'+subs.map(s=>'<button class="ntab'+(CAP_SUB===s[0]?" on":"")+'" data-r="'+s[0]+'">'+s[1]+'</button>').join("")+'</div>';
   $("#content").innerHTML='<section><div class="sec-head"><h2>資金流向</h2><span class="tag">籌碼面 + 流動性</span>'+
       '<span class="hint">台股=三大法人/融資券(TWSE,盤後);美股=Fed流動性/類股輪動(FRED+Yahoo)。</span></div>'+
       tabs+'<div id="capBody"></div>'+
-      '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。台股法人趨勢每日累積。'+
-      '<br>⏳ 之後補:外資台指期未平倉、千張大戶、美股 ETF 淨流入、COT、Margin debt(免費源限制)。</div></section>';
+      '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。台股法人/融資趨勢每日累積、千張大戶每週累積。'+
+      '<br>⏳ 仍無免費源:美股 ETF 淨流入(需付費資料)、FINRA Margin debt(無 API,月頻手動)。其餘(外資期貨OI/千張大戶/COT)已納入。</div></section>';
   document.querySelectorAll("#capTabs .ntab").forEach(b=>b.onclick=()=>{
     CAP_SUB=b.dataset.r;
     document.querySelectorAll("#capTabs .ntab").forEach(x=>x.classList.toggle("on",x.dataset.r===CAP_SUB));
@@ -2801,8 +2801,11 @@ function renderCapBody(){
   const d=CAP_DATA, box=$("#capBody"); if(!box) return;
   if(CAP_SUB==="inst") return renderCapInst(d,box);
   if(CAP_SUB==="margin") return renderCapMargin(d,box);
+  if(CAP_SUB==="txoi") return renderCapTxoi(d,box);
+  if(CAP_SUB==="large") return renderCapLarge(d,box);
   if(CAP_SUB==="liq") return renderCapLiq(d,box);
   if(CAP_SUB==="sector") return renderCapSector(d,box);
+  if(CAP_SUB==="cot") return renderCapCot(d,box);
 }
 // 法人動向:今日三大法人 + 趨勢圖 + 外資/投信買賣超榜
 function renderCapInst(d,box){
@@ -2861,15 +2864,70 @@ function renderCapLiq(d,box){
   if(fl.length>=2) drawCapLines("capFedChart",fl.map(x=>x.date),[["Fed淨流動性(兆$)",fl.map(x=>x.val),"#1f6feb","val"]],"兆$");
   if(hy.length>=2) drawCapLines("capHyChart",hy.map(x=>x.date),[["HY利差(%)",hy.map(x=>x.val),"#f59e0b","val"]],"%");
 }
+let SEC_SORT={key:"r20",dir:-1};
 function renderCapSector(d,box){
-  const s=d.us.sectors||{}, list=s.list||[];
-  let h='<div class="cap-sub2">11 類股 ETF 動能 · 基準 SPY 20日 '+(s.spy_r20!=null?(s.spy_r20>0?"+":"")+s.spy_r20+"%":"—")+'。錢往報酬高、相對強(RS>0)的板塊流;依 20 日排序。</div>';
-  h+='<table class="cap-tbl wide"><thead><tr><th>類股</th><th>1日</th><th>5日</th><th>20日</th><th>相對SPY</th></tr></thead><tbody>';
-  const pc=v=>v==null?'<span class="dim">—</span>':'<span class="'+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v+'%</span>';
-  list.forEach(x=>{ h+='<tr><td class="sym clk" data-code="'+x.etf+'"><b>'+x.etf+'</b> '+esc(x.name)+'</td><td>'+pc(x.r1)+'</td><td>'+pc(x.r5)+'</td><td>'+pc(x.r20)+'</td><td>'+pc(x.rs)+'</td></tr>'; });
+  const s=d.us.sectors||{}, list=(s.list||[]).slice();
+  const k=SEC_SORT.key,dir=SEC_SORT.dir;
+  list.sort((a,b)=>{ const av=a[k],bv=b[k]; if(av==null)return 1; if(bv==null)return -1; return (av-bv)*dir; });
+  const cols=[["r1","1日"],["r5","5日"],["r20","20日"],["rs","相對SPY"],["volr","量能5/20"]];
+  const arrow=key=>SEC_SORT.key===key?(SEC_SORT.dir<0?" ▼":" ▲"):"";
+  let h='<div class="cap-sub2">11 類股 ETF 動能 · 基準 SPY 20日 '+(s.spy_r20!=null?(s.spy_r20>0?"+":"")+s.spy_r20+"%":"—")+'。<b>量能5/20</b>=近5日均量÷20日均量(>1=放量,資金流入);相對SPY>0=強於大盤。點欄位標題可排序。</div>';
+  h+='<table class="cap-tbl wide"><thead><tr><th>類股</th>'+cols.map(c=>'<th class="sortable" data-k="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join("")+'</tr></thead><tbody>';
+  const pc=(v,suf)=>v==null?'<span class="dim">—</span>':'<span class="'+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v+(suf||"")+'</span>';
+  list.forEach(x=>{ h+='<tr><td class="sym clk" data-code="'+x.etf+'"><b>'+x.etf+'</b> '+esc(x.name)+'</td><td>'+pc(x.r1,"%")+'</td><td>'+pc(x.r5,"%")+'</td><td>'+pc(x.r20,"%")+'</td><td>'+pc(x.rs,"%")+'</td><td>'+(x.volr==null?'<span class="dim">—</span>':'<span class="'+(x.volr>1?"pos":"dim")+'">'+x.volr+'×</span>')+'</td></tr>'; });
   h+='</tbody></table>';
   box.innerHTML=h;
+  box.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{ const key=th.dataset.k; if(SEC_SORT.key===key)SEC_SORT.dir*=-1; else SEC_SORT={key:key,dir:-1}; renderCapSector(d,box); });
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>showLiveQuote(td.dataset.code));
+}
+// 外資台指期未平倉(口數;負=淨空)
+function renderCapTxoi(d,box){
+  const t=d.tw.tx_oi||{}, f=t.foreign||[];
+  const last=f.length?f[f.length-1]:null;
+  let cards="";
+  if(last){
+    const v=last.oi;
+    cards='<div class="cap-cards"><div class="cap-card"><div class="cap-lab">外資台指期淨未平倉</div><div class="cap-big '+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v.toLocaleString()+'<span class="cap-u">口</span></div><div class="cap-chg">'+esc(last.date)+'</div></div></div>';
+  }
+  box.innerHTML=cards+'<div class="cap-sub2">外資在台指期(大台 TX)的多空未平倉淨額:正=偏多布局、負=偏空避險。與現貨外資買賣超合看,判斷外資對大盤方向。</div>'+
+    '<div id="capTxChart" class="cap-chart"></div>';
+  const series=[["外資",f,"#1f6feb"],["投信",t.trust||[],"#16a34a"],["自營",t.dealer||[],"#f59e0b"]].filter(s=>s[1].length);
+  if(f.length>=2) drawCapLines("capTxChart",f.map(x=>x.date),series.map(s=>[s[0],s[1].map(x=>x.oi),s[2],"oi"]),"口");
+  else $("#capTxChart").innerHTML='<div class="legend">暫無期貨資料。</div>';
+}
+// 千張大戶(集保分級15 ≥1000張持股比 %)
+function renderCapLarge(d,box){
+  const lg=d.tw.large; if(!lg){ box.innerHTML='<div class="legend">暫無千張大戶資料。</div>'; return; }
+  const tbl=(title,arr,col,suf,cls)=>{
+    if(!arr||!arr.length) return "";
+    let h='<div class="cap-rank"><div class="cap-rank-h '+(cls||"")+'">'+title+'</div><table class="cap-tbl"><tbody>';
+    arr.forEach(x=>{ const v=x[col]; const vs=v==null?"—":(col==="chg"?((v>0?"+":"")+v+"%"):(v+"%")); const c=col==="chg"?(v>0?"pos":(v<0?"neg":"dim")):""; h+='<tr><td class="sym clk" data-code="'+x.code+'">'+x.code+'</td><td class="cap-nm">'+esc(x.name||"")+'</td><td class="'+c+'">'+vs+'</td></tr>'; });
+    return h+'</tbody></table></div>';
+  };
+  let h='<div class="cap-sub2">千張大戶=持股 ≥1,000 張(100萬股)的股東占集保比例(資料日 '+esc(lg.date)+',週頻)。<b>大戶持股比上升=籌碼往大戶集中</b>(通常偏多);下降=大戶出貨。</div>';
+  if(lg.has_chg){
+    h+='<div class="cap-ranks">'+tbl("大戶增加 Top(週)",lg.rising,"chg","%","buy")+tbl("大戶減少 Top(週)",lg.falling,"chg","%","sell")+'</div>';
+  }else{
+    h+='<div class="legend" style="margin:6px 0">週變化需累積 ≥2 週(每週自動累積);先顯示目前大戶持股比最高者。</div>';
+  }
+  h+='<div class="cap-sub2" style="margin-top:14px">大戶持股比最高 Top20</div><div class="cap-ranks">'+tbl("籌碼最集中",lg.concentrated,"ratio","%","")+'</div>';
+  box.innerHTML=h;
+  box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code,td.dataset.code));
+}
+// COT:E-mini S&P 500 大型法人淨部位
+function renderCapCot(d,box){
+  const cot=d.us.cot||[]; if(!cot.length){ box.innerHTML='<div class="legend">暫無 COT 資料。</div>'; return; }
+  const last=cot[cot.length-1];
+  const c=(lab,v,hint)=>'<div class="cap-card"><div class="cap-lab">'+lab+'</div><div class="cap-big '+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v.toLocaleString()+'</div><div class="cap-chg">'+(hint||"")+'</div></div>';
+  box.innerHTML='<div class="cap-cards">'+
+      c("槓桿基金淨部位",last.lev_net,"避險基金/投機(口)")+
+      c("資產經理人淨部位",last.am_net,"長線資金(口)")+
+      c("交易商淨部位",last.dealer_net,"造市商(口)")+
+    '</div>'+
+    '<div class="cap-sub2">E-mini S&P 500 期貨(CFTC,'+esc(last.date)+',週頻)。槓桿基金=投機資金常與趨勢同向、轉折處易反向;資產經理人=長線多頭部位。正=淨多、負=淨空。</div>'+
+    '<div id="capCotChart" class="cap-chart"></div>';
+  drawCapLines("capCotChart",cot.map(x=>x.date),
+    [["槓桿基金",cot.map(x=>x.lev_net),"#e11d48","val"],["資產經理人",cot.map(x=>x.am_net),"#1f6feb","val"],["交易商",cot.map(x=>x.dealer_net),"#f59e0b","val"]],"口");
 }
 function drawCapBars(id,dates,series,unit){
   const el=$("#"+id); if(!el||!window.echarts) return;
@@ -2884,11 +2942,16 @@ function drawCapBars(id,dates,series,unit){
 function drawCapLines(id,dates,series,unit){
   const el=$("#"+id); if(!el||!window.echarts) return;
   const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
-  ch.setOption({grid:{left:54,right:14,top:24,bottom:30},
-    legend:{top:0,textStyle:{fontSize:11}},tooltip:{trigger:"axis"},
-    xAxis:{type:"category",data:dates.map(s=>s.slice(5)),axisLabel:{fontSize:9}},
+  const toMs=s=>new Date(s.length<=10?s+"T00:00:00":s).getTime();
+  const single=series.length===1;
+  ch.setOption({grid:{left:56,right:14,top:24,bottom:30},
+    legend:{top:0,textStyle:{fontSize:11},show:!single},tooltip:{trigger:"axis"},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:{type:"value",name:unit,nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
-    series:series.map(s=>({name:s[0],type:"line",smooth:true,showSymbol:false,data:s[1],lineStyle:{color:s[2],width:2},itemStyle:{color:s[2]},areaStyle:{color:s[2],opacity:.08}}))},true);
+    series:series.map(s=>({name:s[0],type:"line",smooth:true,showSymbol:false,
+      data:dates.map((d,i)=>[toMs(d),s[1][i]]),lineStyle:{color:s[2],width:2},itemStyle:{color:s[2]},
+      areaStyle:single?{color:s[2],opacity:.08}:undefined}))},true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──

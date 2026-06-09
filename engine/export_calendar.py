@@ -179,17 +179,19 @@ def build_earnings_tw(now_tpe, end_tpe):
                     d = datetime.date(yyyy, int(dm.group(2)), int(dm.group(3)))
                 except ValueError:
                     continue
-                if not (nd <= d <= ed) or code in seen:
+                key = (code, d)
+                if not (nd <= d <= ed) or key in seen:
                     continue
                 full = " ".join(cells)
-                if "受邀" in full or re.search(r"受.{0,10}邀請", full):
-                    continue        # 濾掉「受邀參加外資券商會議/NDR」,只留公司自辦正式法說會
+                # 受邀參加券商會議/NDR/論壇 → 標記 inv=True(前端可切換顯示),非公司自辦正式法說
+                invited = ("受邀" in full) or bool(re.search(r"受.{0,10}邀請", full))
                 ci = cells.index(code)
                 name = cells[ci + 1] if ci + 1 < len(cells) and not re.fullmatch(r"\d{4}", cells[ci + 1]) else ""
                 tm = next((c for c in cells if re.fullmatch(r"\d{2}:\d{2}", c)), "")
-                seen.add(code)
+                seen.add(key)
                 out.append({"sym": code, "name": name, "date": d.strftime("%Y-%m-%d"),
-                            "time": tm, "region": "TW", "kind": "法說會"})
+                            "time": tm, "region": "TW",
+                            "kind": "受邀論壇" if invited else "法說會", "inv": invited})
     out.sort(key=lambda e: (e["date"], e.get("time") or ""))
     return out
 

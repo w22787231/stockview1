@@ -99,6 +99,11 @@
   .cal-badge{font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;white-space:nowrap}
   .cal-badge.econ{background:#eaf2ff;color:var(--blue)}
   .cal-badge.earn{background:#fff3e0;color:#b9770e}
+  .cal-badge.inv{background:#f0ecff;color:#7c4dff}
+  .tw-toggle{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 12px}
+  .tw-tg-lab{font-size:12px;color:var(--ink3)}
+  .tw-tg{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer}
+  .tw-tg.on{background:var(--blue);border-color:var(--blue);color:#fff}
   .cal-dot{display:inline-block;width:7px;height:7px;border-radius:50%}
   .cal-dot.hi{background:var(--red)} .cal-dot.mid{background:var(--amber)}
   .cal-title{font-size:13.5px;color:var(--ink);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2585,6 +2590,7 @@ function loadCalendar(){
     .catch(e=>{ $("#content").innerHTML='<section><div class="sec-head"><h2>財報/數據</h2></div><div class="note">⚠️ 找不到行事曆資料(data/calendar.json)。請在 GitHub Actions 跑一次 export。</div></section>'; });
 }
 let CAL_REGION="usdata";    // 財報/數據 子分頁:usdata=美股數據、usearn=美股財報、tw=台股法說
+let CAL_TW_ALL=false;       // 台股法說:false=只看自辦法說、true=含受邀券商論壇/NDR
 function renderCalendar(d){
   const _b=(r,lab)=>'<button class="ntab'+(CAL_REGION===r?" on":"")+'" data-r="'+r+'">'+lab+'</button>';
   const tabs='<div id="calTabs" class="news-tabs">'+
@@ -2603,7 +2609,7 @@ function renderCalendar(d){
 }
 function renderCalList(d){
   const box=$("#calList"); if(!box) return;
-  const ev=[];
+  let ev=[];
   if(CAL_REGION==="usdata"){
     // 排程名稱 → us_data 指標 label;把「前值(上期已公布值)/實際(待公布)」併進每筆時程。
     const E2D={"非農就業報告":"非農就業","CPI 消費者物價":"CPI 消費者物價","核心 CPI":"核心 CPI",
@@ -2622,7 +2628,15 @@ function renderCalList(d){
   }else if(CAL_REGION==="usearn"){
     (d.earnings_us||[]).forEach(e=>ev.push({date:e.date,time:"",type:"earn",region:"US",title:e.sym+(e.name?" "+e.name:""),sub:"財報(預估)"}));
   }else{
-    (d.earnings_tw||[]).forEach(e=>ev.push({date:e.date,time:e.time||"",type:"earn",region:"TW",title:e.sym+(e.name?" "+e.name:""),sub:e.kind||"法說會"}));
+    (d.earnings_tw||[]).forEach(e=>ev.push({date:e.date,time:e.time||"",type:"earn",region:"TW",title:e.sym+(e.name?" "+e.name:""),sub:e.kind||"法說會",inv:!!e.inv}));
+  }
+  let twToggle="";
+  if(CAL_REGION==="tw"){
+    const selN=ev.filter(e=>!e.inv).length, allN=ev.length;
+    twToggle='<div class="tw-toggle"><span class="tw-tg-lab">顯示</span>'+
+      '<button class="tw-tg'+(!CAL_TW_ALL?" on":"")+'" data-m="self">自辦法說 ('+selN+')</button>'+
+      '<button class="tw-tg'+(CAL_TW_ALL?" on":"")+'" data-m="all">全部含受邀論壇 ('+allN+')</button></div>';
+    if(!CAL_TW_ALL) ev=ev.filter(e=>!e.inv);
   }
   const today=new Date(); today.setHours(0,0,0,0);
   const end=new Date(today); end.setDate(end.getDate()+30);
@@ -2633,8 +2647,9 @@ function renderCalList(d){
       '物價類(CPI/核心CPI/PCE/PPI)為年增YoY、零售為月增、非農為月增人數、GDP 為年化季增。'+
       '<b>預期(consensus)無免費資料源</b>。來源 FRED。</div>'
     : "";
-  const _emptyTxt={usdata:"美股重要數據",usearn:"美股大型股財報(財報季約季中起,屆時自動帶出)",tw:"台股正式法說會"}[CAL_REGION];
-  if(!inRange.length){ box.innerHTML=pre+'<div class="legend">未來30天暫無'+_emptyTxt+'時程。</div>'; return; }
+  const _emptyTxt={usdata:"美股重要數據",usearn:"美股大型股財報(財報季約季中起,屆時自動帶出)",tw:(CAL_TW_ALL?"台股法說/受邀論壇":"台股正式法說會")}[CAL_REGION];
+  const _bindTw=()=>{ box.querySelectorAll(".tw-tg").forEach(b=>b.onclick=()=>{ CAL_TW_ALL=(b.dataset.m==="all"); renderCalList(d); }); };
+  if(!inRange.length){ box.innerHTML=twToggle+pre+'<div class="legend">未來30天暫無'+_emptyTxt+'時程。</div>'; _bindTw(); return; }
   const wd=["日","一","二","三","四","五","六"];
   const dot=imp=>imp==="high"?'<span class="cal-dot hi" title="高重要度"></span>':(imp==="mid"?'<span class="cal-dot mid" title="中重要度"></span>':'');
   const flag=r=>r==="TW"?"🇹🇼":"🇺🇸";
@@ -2649,7 +2664,9 @@ function renderCalList(d){
       ' <span class="cal-wd">(週'+wd[dt.getDay()]+')</span> <span class="cal-cd">'+cd+'</span></div>';
     byDate[ds].sort((a,b)=>((a.time||"99:99")>(b.time||"99:99")?1:-1)).forEach(e=>{
       const badge=e.type==="econ"?'<span class="cal-badge econ">📊 數據</span>'
-        :'<span class="cal-badge earn">📈 '+(e.region==="TW"?"法說":"財報")+'</span>';
+        :(e.region==="TW"
+           ?(e.inv?'<span class="cal-badge inv">🎤 受邀</span>':'<span class="cal-badge earn">📈 法說</span>')
+           :'<span class="cal-badge earn">📈 財報</span>');
       const valPart=e.subHtml?'<span class="cal-val">'+e.subHtml+'</span>':'<span class="cal-sub">'+esc(e.sub||"")+'</span>';
       html+='<div class="cal-ev">'+
         '<span class="cal-time">'+(e.time||"–")+'</span>'+badge+dot(e.imp)+
@@ -2658,7 +2675,8 @@ function renderCalList(d){
     });
     html+='</div>';
   });
-  box.innerHTML=pre+html;
+  box.innerHTML=twToggle+pre+html;
+  _bindTw();
 }
 // ── 供應鏈選股:AI 瓶頸卡位精選(data/supply_chain.json)+ 即時報價(/api/quotes)──
 let SUPPLY_DATA=null, SUPPLY_CUR=0;

@@ -319,17 +319,6 @@ async function handleIntraday(request) {
 }
 
 // ── 任意代號完整詳情(預生 1700 檔以外):chart OHLCV + quoteSummary(估值+三表)──
-function _stmtRows(arr, map) {
-  // arr: quoteSummary 各期物件陣列(新→舊);map: [[label, field], ...]
-  const raw = o => (o && o.raw != null) ? o.raw : null;
-  const periods = arr.map(e => { const f = (e.endDate && e.endDate.fmt) || ""; return f.slice(0, 7); });
-  const rows = map.map(([label, field]) => {
-    const vals = arr.map(e => raw(e[field]));
-    const yoy = (vals[0] != null && vals[4] != null && vals[4] !== 0) ? (vals[0] - vals[4]) / Math.abs(vals[4]) * 100 : null;
-    return { label, vals, yoy };
-  }).filter(r => r.vals.some(v => v != null));
-  return { periods, rows };
-}
 async function fetchStockFull(sym, crumb, cookie) {
   const raw = o => (o && o.raw != null) ? o.raw : (typeof o === "number" ? o : null);
   // 1) K 線 OHLCV(2 年,公開)
@@ -349,12 +338,11 @@ async function fetchStockFull(sym, crumb, cookie) {
       }
     }
   } catch (e) {}
-  // 2) quoteSummary:估值 + 三表
-  let metrics = null, statements = null;
+  // 2) quoteSummary:估值指標
+  let metrics = null;
   try {
     const u = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/" + encodeURIComponent(sym) +
-      "?modules=defaultKeyStatistics,financialData,summaryDetail,price,summaryProfile," +
-      "incomeStatementHistoryQuarterly,balanceSheetHistoryQuarterly,cashflowStatementHistoryQuarterly&crumb=" + encodeURIComponent(crumb);
+      "?modules=defaultKeyStatistics,financialData,summaryDetail,price,summaryProfile&crumb=" + encodeURIComponent(crumb);
     const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0", "Cookie": cookie }, cf: { cacheTtl: 600 } });
     if (r.ok) {
       const j = await r.json();
@@ -372,19 +360,49 @@ async function fetchStockFull(sym, crumb, cookie) {
           fwdEps: raw(ks.forwardEps), fwdPe: raw(ks.forwardPE),
           peg: raw(ks.trailingPegRatio) != null ? raw(ks.trailingPegRatio) : raw(ks.pegRatio),
         };
-        const inc = ((res.incomeStatementHistoryQuarterly || {}).incomeStatementHistory) || [];
-        const bal = ((res.balanceSheetHistoryQuarterly || {}).balanceSheetStatements) || [];
-        const cf = ((res.cashflowStatementHistoryQuarterly || {}).cashflowStatements) || [];
-        statements = {
-          period_type: "quarterly",
-          income: inc.length ? _stmtRows(inc, [["Total Revenue", "totalRevenue"], ["Gross Profit", "grossProfit"],
-            ["Operating Income", "operatingIncome"], ["Net Income", "netIncome"]]) : null,
-          balance: bal.length ? _stmtRows(bal, [["Total Assets", "totalAssets"], ["Total Liabilities Net Minority Interest", "totalLiab"],
-            ["Stockholders Equity", "totalStockholderEquity"], ["Cash And Cash Equivalents", "cash"]]) : null,
-          cashflow: cf.length ? _stmtRows(cf, [["Operating Cash Flow", "totalCashFromOperatingActivities"],
-            ["Investing Cash Flow", "totalCashflowsFromInvestingActivities"], ["Financing Cash Flow", "totalCashFromFinancingActivities"]]) : null,
-        };
       }
+    }
+  } catch (e) {}
+  // 3) 財務三表:fundamentals-timeseries(最新季報,與 yfinance 同源)
+  let statements = null;
+  try {
+    const now = Math.floor(Date.now() / 1000), p1 = now - 86400 * 800;
+    const types = ["quarterlyTotalRevenue", "quarterlyGrossProfit", "quarterlyOperatingIncome", "quarterlyNetIncome",
+      "quarterlyTotalAssets", "quarterlyTotalLiabilitiesNetMinorityInterest", "quarterlyStockholdersEquity", "quarterlyCashAndCashEquivalents",
+      "quarterlyOperatingCashFlow", "quarterlyInvestingCashFlow", "quarterlyFinancingCashFlow", "quarterlyFreeCashFlow"];
+    const tu = "https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/" + encodeURIComponent(sym) +
+      "?symbol=" + encodeURIComponent(sym) + "&type=" + types.join(",") + "&period1=" + p1 + "&period2=" + now +
+      "&merge=false&crumb=" + encodeURIComponent(crumb);
+    const tr = await fetch(tu, { headers: { "User-Agent": "Mozilla/5.0", "Cookie": cookie }, cf: { cacheTtl: 600 } });
+    if (tr.ok) {
+      const tj = await tr.json();
+      const tsmap = {};
+      (((tj.timeseries || {}).result) || []).forEach(rr => {
+        const ty = rr.meta && rr.meta.type && rr.meta.type[0]; if (!ty || !rr[ty]) return;
+        tsmap[ty] = rr[ty].filter(Boolean).map(e => ({ date: (e.asOfDate || "").slice(0, 7), val: (e.reportedValue && e.reportedValue.raw != null) ? e.reportedValue.raw : null }));
+      });
+      const mk = mapping => {
+        let periods = [];
+        mapping.forEach(([, ty]) => { const a = tsmap[ty]; if (a && a.length > periods.length) periods = a.map(x => x.date); });
+        if (!periods.length) return null;
+        periods = periods.slice().reverse().slice(0, 6);   // 新→舊,最多 6 季
+        const rows = mapping.map(([label, ty]) => {
+          const byd = {}; (tsmap[ty] || []).forEach(x => { byd[x.date] = x.val; });
+          const vals = periods.map(p => byd[p] != null ? byd[p] : null);
+          const yoy = (vals[0] != null && vals[4] != null && vals[4] !== 0) ? (vals[0] - vals[4]) / Math.abs(vals[4]) * 100 : null;
+          return { label, vals, yoy };
+        }).filter(r => r.vals.some(v => v != null));
+        return rows.length ? { periods, rows } : null;
+      };
+      statements = {
+        period_type: "quarterly",
+        income: mk([["Total Revenue", "quarterlyTotalRevenue"], ["Gross Profit", "quarterlyGrossProfit"],
+          ["Operating Income", "quarterlyOperatingIncome"], ["Net Income", "quarterlyNetIncome"]]),
+        balance: mk([["Total Assets", "quarterlyTotalAssets"], ["Total Liabilities Net Minority Interest", "quarterlyTotalLiabilitiesNetMinorityInterest"],
+          ["Stockholders Equity", "quarterlyStockholdersEquity"], ["Cash And Cash Equivalents", "quarterlyCashAndCashEquivalents"]]),
+        cashflow: mk([["Operating Cash Flow", "quarterlyOperatingCashFlow"], ["Investing Cash Flow", "quarterlyInvestingCashFlow"],
+          ["Financing Cash Flow", "quarterlyFinancingCashFlow"], ["Free Cash Flow", "quarterlyFreeCashFlow"]]),
+      };
     }
   } catch (e) {}
   return { sym, candles, metrics, statements };

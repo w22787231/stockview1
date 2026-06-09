@@ -1929,12 +1929,12 @@ function drawChart(d){
   if(prof){
     const maxC=Math.max.apply(null,prof.chips)||1;
     const halfBin=(prof.prices.length>1?(prof.prices[1]-prof.prices[0])/2:0);
-    const _xi=dates.length-1;   // 固定錨在最後一根(永遠在 dataZoom 可視窗內,否則會被略過不畫)
-    const pdata=prof.prices.map((p,i)=>[_xi,p,prof.chips[i]/maxC,(curPrice!=null&&p>curPrice)?1:0]);
-    profSeries={type:"custom",z:1,silent:true,clip:true,data:pdata,
+    // 掛在獨立數值 X 軸(index 1,不受 dataZoom 縮放)→ 籌碼柱永遠貼右緣、不被 cull
+    const pdata=prof.prices.map((p,i)=>[0.5,p,prof.chips[i]/maxC,(curPrice!=null&&p>curPrice)?1:0]);
+    profSeries={type:"custom",z:1,silent:true,clip:true,xAxisIndex:1,yAxisIndex:0,data:pdata,
       renderItem:(params,api)=>{
         const p=api.value(1), wn=api.value(2), above=api.value(3), cs=params.coordSys;
-        const yC=api.coord([0,p])[1], yT=api.coord([0,p+halfBin])[1];
+        const yC=api.coord([0.5,p])[1], yT=api.coord([0.5,p+halfBin])[1];
         const h=Math.max(1.5,Math.abs(yC-yT)*2*0.82);
         const w=cs.width*0.26*wn;
         return {type:"rect",shape:{x:cs.x+cs.width-w,y:yC-h/2,width:w,height:h},
@@ -1999,13 +1999,14 @@ function drawChart(d){
       }},
     legend:{data:["K線","MA"+sn,"MA"+ln],top:0,right:8,itemWidth:14,itemHeight:8,
       textStyle:{fontSize:11,color:"#5a6678"}},
-    xAxis:{type:"category",data:dates,boundaryGap:true,
+    xAxis:[{type:"category",data:dates,boundaryGap:true,
       axisLine:{lineStyle:{color:"#e3e8f0"}},axisLabel:{color:"#9aa6b6",fontSize:10,
         formatter:v=>v.slice(5)}, splitLine:{show:false}},
+      {type:"value",min:0,max:1,show:false}],   // index 1:籌碼柱專用,不受縮放
     yAxis:{scale:true,position:"right",axisLine:{show:false},
       axisLabel:{color:"#9aa6b6",fontSize:10},
       splitLine:{lineStyle:{color:"#eef1f6"}}},
-    dataZoom:[{type:"inside",start:80,end:100},{type:"slider",height:16,bottom:18,
+    dataZoom:[{type:"inside",start:80,end:100,xAxisIndex:[0]},{type:"slider",height:16,bottom:18,xAxisIndex:[0],
       borderColor:"#e3e8f0",fillerColor:"rgba(37,99,235,.08)",
       handleStyle:{color:"#2563eb"},textStyle:{color:"#9aa6b6",fontSize:9}}],
     series:[

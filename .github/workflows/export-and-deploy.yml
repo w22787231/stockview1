@@ -163,6 +163,15 @@ jobs:
           cd engine
           python export_tw_names.py || true
 
+      - name: Export capital flows (TW 三大法人/融資券 + US Fed流動性/類股輪動)
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}   # 美股流動性序列(WALCL/TGA/RRP/HY/MMF)
+        run: |
+          cd engine
+          python export_capital.py || true
+
       - name: Stage web output
         run: |
           mkdir -p public

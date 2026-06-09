@@ -104,6 +104,26 @@
   .tw-tg-lab{font-size:12px;color:var(--ink3)}
   .tw-tg{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer}
   .tw-tg.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .cap-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:6px 0 4px}
+  .cap-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel)}
+  .cap-lab{font-size:12px;color:var(--ink3);margin-bottom:4px}
+  .cap-big{font-size:21px;font-weight:800;letter-spacing:-.5px}
+  .cap-u{font-size:12px;font-weight:600;color:var(--ink3);margin-left:2px}
+  .cap-chg{font-size:12px;color:var(--ink2);margin-top:3px}
+  .cap-sub2{font-size:12.5px;color:var(--ink2);margin:8px 0 4px}
+  .cap-chart{width:100%;height:240px;margin:6px 0}
+  .cap-ranks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .cap-rank{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .cap-rank-h{font-size:13px;font-weight:700;padding:7px 10px;color:#fff}
+  .cap-rank-h.buy{background:#d13a4a} .cap-rank-h.sell{background:#1f9d57}
+  .cap-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .cap-tbl td{padding:5px 10px;border-top:1px solid var(--line);white-space:nowrap}
+  .cap-tbl td:last-child{text-align:right;font-weight:600}
+  .cap-nm{color:var(--ink2);width:99%;overflow:hidden;text-overflow:ellipsis;max-width:0}
+  .cap-tbl.wide th{font-size:12px;color:var(--ink3);text-align:right;padding:6px 10px;border-bottom:1px solid var(--line)}
+  .cap-tbl.wide th:first-child{text-align:left}
+  .cap-tbl.wide td{text-align:right}
+  .cap-tbl.wide td:first-child{text-align:left}
   .cal-dot{display:inline-block;width:7px;height:7px;border-radius:50%}
   .cal-dot.hi{background:var(--red)} .cal-dot.mid{background:var(--amber)}
   .cal-title{font-size:13.5px;color:var(--ink);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1995,6 +2015,7 @@ function switchView(v){
   else if(v==="holdings") loadHoldings();
   else if(v==="calendar") loadCalendar();
   else if(v==="options") loadOptions();
+  else if(v==="capital") loadCapital();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 // ── 主分頁:動態渲染 + 可拖曳重排(順序存 localStorage navOrder)──
@@ -2007,6 +2028,7 @@ const NAV=[
   {view:"supply",  label:"供應鏈選股"},
   {view:"etf",     label:"ETF持股異動"},
   {view:"calendar",label:"財報/數據"},
+  {view:"capital", label:"資金"},
   {view:"options", label:"選擇權"},
   {view:"news",    label:"新聞"},
 ];
@@ -2744,6 +2766,129 @@ async function fetchSupplyQuotes(theme){
   });
   box.innerHTML=html||'<div class="legend">此主題暫無個股。</div>';
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
+}
+// ── 資金流向:台股法人/融資券(TWSE)+ 美股流動性/類股輪動(FRED+Yahoo)(data/capital.json)──
+let CAP_DATA=null, CAP_SUB="inst";
+function loadCapital(){
+  $("#meta").innerHTML='<div><b>資金流向</b></div><div>台股籌碼 · 美股流動性</div>';
+  $("#poolNote").innerHTML="";
+  $("#content").innerHTML='<div class="loading-screen">載入 資金流向 …</div>';
+  if(CAP_DATA){ renderCapital(); return; }
+  fetch("data/capital.json?t="+Date.now(),{cache:"no-store"})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d=>{ CAP_DATA=d; renderCapital(); })
+    .catch(e=>{ $("#content").innerHTML='<section><div class="sec-head"><h2>資金流向</h2></div><div class="note">⚠️ 找不到資金資料(data/capital.json)。請在 GitHub Actions 跑一次 export。</div></section>'; });
+}
+function renderCapital(){
+  const d=CAP_DATA; if(!d) return;
+  const subs=[["inst","🇹🇼 法人動向"],["margin","🇹🇼 融資融券"],["liq","🇺🇸 美股流動性"],["sector","🇺🇸 類股輪動"]];
+  const tabs='<div id="capTabs" class="news-tabs">'+subs.map(s=>'<button class="ntab'+(CAP_SUB===s[0]?" on":"")+'" data-r="'+s[0]+'">'+s[1]+'</button>').join("")+'</div>';
+  $("#content").innerHTML='<section><div class="sec-head"><h2>資金流向</h2><span class="tag">籌碼面 + 流動性</span>'+
+      '<span class="hint">台股=三大法人/融資券(TWSE,盤後);美股=Fed流動性/類股輪動(FRED+Yahoo)。</span></div>'+
+      tabs+'<div id="capBody"></div>'+
+      '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。台股法人趨勢每日累積。'+
+      '<br>⏳ 之後補:外資台指期未平倉、千張大戶、美股 ETF 淨流入、COT、Margin debt(免費源限制)。</div></section>';
+  document.querySelectorAll("#capTabs .ntab").forEach(b=>b.onclick=()=>{
+    CAP_SUB=b.dataset.r;
+    document.querySelectorAll("#capTabs .ntab").forEach(x=>x.classList.toggle("on",x.dataset.r===CAP_SUB));
+    renderCapBody();
+  });
+  renderCapBody();
+}
+function _capSign(v,unit,digits){ if(v==null) return '<span class="dim">—</span>'; const s=v>0?"+":""; const c=v>0?"pos":(v<0?"neg":"dim"); return '<span class="'+c+'">'+s+(digits!=null?v.toFixed(digits):v.toLocaleString())+(unit||"")+'</span>'; }
+function renderCapBody(){
+  const d=CAP_DATA, box=$("#capBody"); if(!box) return;
+  if(CAP_SUB==="inst") return renderCapInst(d,box);
+  if(CAP_SUB==="margin") return renderCapMargin(d,box);
+  if(CAP_SUB==="liq") return renderCapLiq(d,box);
+  if(CAP_SUB==="sector") return renderCapSector(d,box);
+}
+// 法人動向:今日三大法人 + 趨勢圖 + 外資/投信買賣超榜
+function renderCapInst(d,box){
+  const it=d.tw.inst_today, hist=d.tw.inst_hist||[];
+  let cards="";
+  if(it){
+    const c=(lab,v)=>'<div class="cap-card"><div class="cap-lab">'+lab+'</div><div class="cap-big '+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v.toLocaleString()+'<span class="cap-u">億</span></div></div>';
+    cards='<div class="cap-cards">'+c("外資",it.foreign)+c("投信",it.trust)+c("自營商",it.dealer)+c("三大法人合計",it.total)+'</div>'+
+      '<div class="cap-sub2">大盤三大法人買賣超 · '+esc(it.date)+'(單位:億元;正=買超)</div>';
+  }
+  const rk=d.tw.ranks||{};
+  const tbl=(title,arr,buy)=>{
+    if(!arr||!arr.length) return "";
+    let h='<div class="cap-rank"><div class="cap-rank-h '+(buy?"buy":"sell")+'">'+title+'</div><table class="cap-tbl"><tbody>';
+    arr.forEach(x=>{ h+='<tr><td class="sym clk" data-code="'+x.code+'">'+x.code+'</td><td class="cap-nm">'+esc(x.name||"")+'</td><td class="'+(buy?"pos":"neg")+'">'+(x.net>0?"+":"")+x.net.toLocaleString()+'</td></tr>'; });
+    return h+'</tbody></table></div>';
+  };
+  const ranks='<div class="cap-ranks">'+
+    tbl("外資買超 Top",rk.foreign_buy,true)+tbl("外資賣超 Top",rk.foreign_sell,false)+
+    tbl("投信買超 Top",rk.trust_buy,true)+tbl("投信賣超 Top",rk.trust_sell,false)+'</div>';
+  box.innerHTML=cards+'<div id="capInstChart" class="cap-chart"></div>'+
+    '<div class="cap-sub2" style="margin-top:14px">外資/投信 個股買賣超榜(上市,單位:張)</div>'+ranks;
+  box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code,td.dataset.code));
+  if(hist.length>=2) drawCapBars("capInstChart",hist.map(h=>h.date),
+    [["外資",hist.map(h=>h.foreign),"#1f6feb"],["投信",hist.map(h=>h.trust),"#16a34a"],["自營",hist.map(h=>h.dealer),"#f59e0b"]],"億元");
+  else $("#capInstChart").innerHTML='<div class="legend">趨勢圖需累積 ≥2 個交易日(每日自動累積)。</div>';
+}
+function renderCapMargin(d,box){
+  const m=d.tw.margin_today, hist=d.tw.margin_hist||[];
+  let cards="";
+  if(m){
+    cards='<div class="cap-cards">'+
+      '<div class="cap-card"><div class="cap-lab">融資餘額</div><div class="cap-big">'+m.margin_bal.toLocaleString()+'<span class="cap-u">億</span></div><div class="cap-chg">日增減 '+_capSign(m.margin_chg,"億",1)+'</div></div>'+
+      '<div class="cap-card"><div class="cap-lab">融券餘額</div><div class="cap-big">'+m.short_bal.toLocaleString()+'<span class="cap-u">張</span></div><div class="cap-chg">日增減 '+_capSign(m.short_chg,"張")+'</div></div>'+
+      '</div><div class="cap-sub2">大盤信用交易 · '+esc(m.date)+'。融資增=散戶/散資追價,融券增=空方布局。</div>';
+  }
+  box.innerHTML=cards+'<div id="capMgnChart" class="cap-chart"></div>';
+  if(hist.length>=2) drawCapLines("capMgnChart",hist.map(h=>h.date),
+    [["融資餘額(億)",hist.map(h=>h.margin_bal),"#e11d48","val"]],"億元");
+  else $("#capMgnChart").innerHTML='<div class="legend">趨勢圖需累積 ≥2 個交易日。</div>';
+}
+function renderCapLiq(d,box){
+  const fl=d.us.fed_liq||[], hy=d.us.hy_spread||[], mmf=d.us.mmf||[];
+  const last=a=>a.length?a[a.length-1]:null;
+  const fL=last(fl),hL=last(hy),mL=last(mmf);
+  const c=(lab,val,unit,sub)=>'<div class="cap-card"><div class="cap-lab">'+lab+'</div><div class="cap-big">'+(val!=null?val.toLocaleString():"—")+'<span class="cap-u">'+(unit||"")+'</span></div><div class="cap-chg">'+(sub||"")+'</div></div>';
+  box.innerHTML='<div class="cap-cards">'+
+      c("Fed 淨流動性",fL?fL.val:null,"兆$",fL?esc(fL.date):"")+
+      c("高收益債利差",hL?hL.val:null,"%",hL?esc(hL.date):"")+
+      c("貨幣基金(MMF)",mL?mL.val:null,"十億$",mL?esc(mL.date):"")+
+    '</div>'+
+    '<div class="cap-sub2">Fed 淨流動性 = 聯準會資產 − 財政部TGA − 逆回購RRP。上升=市場錢變多(大盤長線同向)。</div>'+
+    '<div id="capFedChart" class="cap-chart"></div>'+
+    '<div class="cap-sub2" style="margin-top:12px">高收益債利差(%):縮窄=風險偏好升、資金進風險資產;急擴=避險。</div>'+
+    '<div id="capHyChart" class="cap-chart"></div>';
+  if(fl.length>=2) drawCapLines("capFedChart",fl.map(x=>x.date),[["Fed淨流動性(兆$)",fl.map(x=>x.val),"#1f6feb","val"]],"兆$");
+  if(hy.length>=2) drawCapLines("capHyChart",hy.map(x=>x.date),[["HY利差(%)",hy.map(x=>x.val),"#f59e0b","val"]],"%");
+}
+function renderCapSector(d,box){
+  const s=d.us.sectors||{}, list=s.list||[];
+  let h='<div class="cap-sub2">11 類股 ETF 動能 · 基準 SPY 20日 '+(s.spy_r20!=null?(s.spy_r20>0?"+":"")+s.spy_r20+"%":"—")+'。錢往報酬高、相對強(RS>0)的板塊流;依 20 日排序。</div>';
+  h+='<table class="cap-tbl wide"><thead><tr><th>類股</th><th>1日</th><th>5日</th><th>20日</th><th>相對SPY</th></tr></thead><tbody>';
+  const pc=v=>v==null?'<span class="dim">—</span>':'<span class="'+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v+'%</span>';
+  list.forEach(x=>{ h+='<tr><td class="sym clk" data-code="'+x.etf+'"><b>'+x.etf+'</b> '+esc(x.name)+'</td><td>'+pc(x.r1)+'</td><td>'+pc(x.r5)+'</td><td>'+pc(x.r20)+'</td><td>'+pc(x.rs)+'</td></tr>'; });
+  h+='</tbody></table>';
+  box.innerHTML=h;
+  box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>showLiveQuote(td.dataset.code));
+}
+function drawCapBars(id,dates,series,unit){
+  const el=$("#"+id); if(!el||!window.echarts) return;
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({grid:{left:48,right:14,top:24,bottom:30},
+    legend:{top:0,textStyle:{fontSize:11}},tooltip:{trigger:"axis"},
+    xAxis:{type:"category",data:dates.map(s=>s.slice(5)),axisLabel:{fontSize:9}},
+    yAxis:{type:"value",name:unit,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+    series:series.map(s=>({name:s[0],type:"bar",data:s[1],itemStyle:{color:s[2]}}))},true);
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+function drawCapLines(id,dates,series,unit){
+  const el=$("#"+id); if(!el||!window.echarts) return;
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({grid:{left:54,right:14,top:24,bottom:30},
+    legend:{top:0,textStyle:{fontSize:11}},tooltip:{trigger:"axis"},
+    xAxis:{type:"category",data:dates.map(s=>s.slice(5)),axisLabel:{fontSize:9}},
+    yAxis:{type:"value",name:unit,nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+    series:series.map(s=>({name:s[0],type:"line",smooth:true,showSymbol:false,data:s[1],lineStyle:{color:s[2],width:2},itemStyle:{color:s[2]},areaStyle:{color:s[2],opacity:.08}}))},true);
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──
 let OPT_SYM="SPY", OPT_EXP=null;

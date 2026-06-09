@@ -2790,13 +2790,13 @@ function loadCapital(){
 }
 function renderCapital(){
   const d=CAP_DATA; if(!d) return;
-  const subs=[["inst","🇹🇼 法人動向"],["margin","🇹🇼 融資融券"],["txoi","🇹🇼 期貨籌碼"],["large","🇹🇼 千張大戶"],["liq","🇺🇸 流動性"],["sector","🇺🇸 類股輪動"],["cot","🇺🇸 COT"]];
+  const subs=[["inst","🇹🇼 法人動向"],["margin","🇹🇼 融資融券"],["txoi","🇹🇼 期貨籌碼"],["large","🇹🇼 千張大戶"],["liq","🇺🇸 流動性"],["sector","🇺🇸 類股輪動"],["cot","🇺🇸 COT"],["fx","🌐 匯率/熱錢"]];
   const tabs='<div id="capTabs" class="news-tabs">'+subs.map(s=>'<button class="ntab'+(CAP_SUB===s[0]?" on":"")+'" data-r="'+s[0]+'">'+s[1]+'</button>').join("")+'</div>';
   $("#content").innerHTML='<section><div class="sec-head"><h2>資金流向</h2><span class="tag">籌碼面 + 流動性</span>'+
       '<span class="hint">台股=三大法人/融資券(TWSE,盤後);美股=Fed流動性/類股輪動(FRED+Yahoo)。</span></div>'+
       tabs+'<div id="capBody"></div>'+
-      '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。台股法人/融資趨勢每日累積、千張大戶每週累積。'+
-      '<br>⏳ 仍無免費源:美股 ETF 淨流入(需付費資料)、FINRA Margin debt(無 API,月頻手動)。其餘(外資期貨OI/千張大戶/COT)已納入。</div></section>';
+      '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。台股法人/融資/借券趨勢每日累積、千張大戶每週累積。'+
+      '<br>⏳ 無法穩定免費抓:AAII 散戶情緒、NAAIM 經理人曝險、CNN 恐懼貪婪(皆機器人/會員牆封鎖)、美股 ETF 淨流入(需付費)、FINRA Margin debt(無 API)。台股散戶情緒已用微台/小台散戶多空比、美股法人部位已用 COT 涵蓋。</div></section>';
   document.querySelectorAll("#capTabs .ntab").forEach(b=>b.onclick=()=>{
     CAP_SUB=b.dataset.r;
     document.querySelectorAll("#capTabs .ntab").forEach(x=>x.classList.toggle("on",x.dataset.r===CAP_SUB));
@@ -2814,6 +2814,7 @@ function renderCapBody(){
   if(CAP_SUB==="liq") return renderCapLiq(d,box);
   if(CAP_SUB==="sector") return renderCapSector(d,box);
   if(CAP_SUB==="cot") return renderCapCot(d,box);
+  if(CAP_SUB==="fx") return renderCapFx(d,box);
 }
 // 法人動向:今日三大法人 + 趨勢圖 + 外資/投信買賣超榜
 function renderCapInst(d,box){
@@ -2844,16 +2845,20 @@ function renderCapInst(d,box){
 function renderCapMargin(d,box){
   const m=d.tw.margin_today, hist=d.tw.margin_hist||[];
   let cards="";
+  const bw=d.tw.borrow_today, bwh=d.tw.borrow_hist||[];
   if(m){
     cards='<div class="cap-cards">'+
       '<div class="cap-card"><div class="cap-lab">融資餘額</div><div class="cap-big">'+m.margin_bal.toLocaleString()+'<span class="cap-u">億</span></div><div class="cap-chg">日增減 '+_capSign(m.margin_chg,"億",1)+'</div></div>'+
       '<div class="cap-card"><div class="cap-lab">融券餘額</div><div class="cap-big">'+m.short_bal.toLocaleString()+'<span class="cap-u">張</span></div><div class="cap-chg">日增減 '+_capSign(m.short_chg,"張")+'</div></div>'+
-      '</div><div class="cap-sub2">大盤信用交易 · '+esc(m.date)+'。融資增=散戶/散資追價,融券增=空方布局。</div>';
+      (bw?'<div class="cap-card"><div class="cap-lab">借券賣出餘額</div><div class="cap-big">'+bw.balance.toLocaleString()+'<span class="cap-u">張</span></div><div class="cap-chg">'+esc(bw.date)+'</div></div>':"")+
+      '</div><div class="cap-sub2">大盤信用交易 · '+esc(m.date)+'。融資增=散戶/散資追價,融券增=空方布局;<b>借券賣出</b>多為法人/外資的實質空單(規模常遠大於融券)。</div>';
   }
-  box.innerHTML=cards+'<div id="capMgnChart" class="cap-chart"></div>';
+  box.innerHTML=cards+'<div id="capMgnChart" class="cap-chart"></div>'+
+    (bwh.length>=2?'<div class="cap-sub2" style="margin-top:14px">借券賣出餘額趨勢(張)</div><div id="capBwChart" class="cap-chart"></div>':"");
   if(hist.length>=2) drawCapLines("capMgnChart",hist.map(h=>h.date),
     [["融資餘額(億)",hist.map(h=>h.margin_bal),"#e11d48","val"]],"億元");
   else $("#capMgnChart").innerHTML='<div class="legend">趨勢圖需累積 ≥2 個交易日。</div>';
+  if(bwh.length>=2) drawCapLines("capBwChart",bwh.map(h=>h.date),[["借券賣出餘額",bwh.map(h=>h.balance),"#9333ea","val"]],"張");
 }
 function renderCapLiq(d,box){
   const fl=d.us.fed_liq||[], hy=d.us.hy_spread||[], mmf=d.us.mmf||[];
@@ -2897,22 +2902,25 @@ function renderCapTxoi(d,box){
     const v=last.oi;
     cards='<div class="cap-cards"><div class="cap-card"><div class="cap-lab">外資台指期淨未平倉</div><div class="cap-big '+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v.toLocaleString()+'<span class="cap-u">口</span></div><div class="cap-chg">'+esc(last.date)+'</div></div></div>';
   }
-  // 微台散戶多空比
-  const rt=d.tw.retail||[]; const rl=rt.length?rt[rt.length-1]:null;
-  let rcard="";
-  if(rl){
-    const v=rl.ratio;
-    rcard='<div class="cap-cards"><div class="cap-card"><div class="cap-lab">微台散戶多空比</div><div class="cap-big '+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+v+'<span class="cap-u">%</span></div><div class="cap-chg">散戶淨 '+(rl.net>0?"+":"")+rl.net.toLocaleString()+' 口 · '+esc(rl.date)+'</div></div></div>';
-  }
+  // 微台 / 小台 散戶多空比(對照)
+  const rt=d.tw.retail||[], rs=d.tw.retail_small||[];
+  const rl=rt.length?rt[rt.length-1]:null, sl=rs.length?rs[rs.length-1]:null;
+  const rcardOf=(lab,o)=>o?'<div class="cap-card"><div class="cap-lab">'+lab+'</div><div class="cap-big '+(o.ratio>0?"pos":(o.ratio<0?"neg":"dim"))+'">'+(o.ratio>0?"+":"")+o.ratio+'<span class="cap-u">%</span></div><div class="cap-chg">散戶淨 '+(o.net>0?"+":"")+o.net.toLocaleString()+' 口</div></div>':"";
   box.innerHTML=cards+'<div class="cap-sub2">外資在台指期(大台 TX)的多空未平倉淨額:正=偏多布局、負=偏空避險。與現貨外資買賣超合看,判斷外資對大盤方向。</div>'+
     '<div id="capTxChart" class="cap-chart"></div>'+
-    '<div class="cap-sub2" style="margin-top:16px">微台散戶多空比(散戶 = 全市場 − 三大法人)</div>'+rcard+
-    '<div class="cap-sub2">散戶在微型臺指的淨多空 ÷ 總未平倉量。<b>常為反向指標</b>:散戶大幅偏多(高正值)→ 過熱偏空;大幅偏空(負值)→ 觸底偏多。</div>'+
+    '<div class="cap-sub2" style="margin-top:16px">散戶多空比(散戶 = 全市場 − 三大法人;微台 vs 小台對照)</div>'+
+    '<div class="cap-cards">'+rcardOf("微台散戶",rl)+rcardOf("小台散戶",sl)+'</div>'+
+    '<div class="cap-sub2">散戶淨多空 ÷ 該契約總未平倉量。<b>常為反向指標</b>:散戶大幅偏多(高正值)→ 過熱偏空;大幅偏空(負值)→ 觸底偏多。微台散戶成分更高、更靈敏。</div>'+
     '<div id="capRetailChart" class="cap-chart"></div>';
   const series=[["外資",f,"#1f6feb"],["投信",t.trust||[],"#16a34a"],["自營",t.dealer||[],"#f59e0b"]].filter(s=>s[1].length);
   if(f.length>=2) drawCapLines("capTxChart",f.map(x=>x.date),series.map(s=>[s[0],s[1].map(x=>x.oi),s[2],"oi"]),"口");
   else $("#capTxChart").innerHTML='<div class="legend">暫無期貨資料。</div>';
-  if(rt.length>=2) drawCapLines("capRetailChart",rt.map(x=>x.date),[["散戶多空比",rt.map(x=>x.ratio),"#7c4dff","val"]],"%");
+  const rmap={},smap={}; rt.forEach(x=>rmap[x.date]=x.ratio); rs.forEach(x=>smap[x.date]=x.ratio);
+  const rdates=[...new Set([...rt.map(x=>x.date),...rs.map(x=>x.date)])].sort();
+  const rseries=[];
+  if(rt.length) rseries.push(["微台散戶",rdates.map(d=>rmap[d]!=null?rmap[d]:null),"#7c4dff"]);
+  if(rs.length) rseries.push(["小台散戶",rdates.map(d=>smap[d]!=null?smap[d]:null),"#0891b2"]);
+  if(rseries.length) drawCapLines("capRetailChart",rdates,rseries.map(s=>[s[0],s[1],s[2],"val"]),"%");
   else $("#capRetailChart").innerHTML='<div class="legend">暫無散戶多空比資料。</div>';
 }
 // 千張大戶(集保分級15 ≥1000張持股比 %)
@@ -2949,6 +2957,24 @@ function renderCapCot(d,box){
   drawCapLines("capCotChart",cot.map(x=>x.date),
     [["槓桿基金",cot.map(x=>x.lev_net),"#e11d48","val"],["資產經理人",cot.map(x=>x.am_net),"#1f6feb","val"],["交易商",cot.map(x=>x.dealer_net),"#f59e0b","val"]],"口");
 }
+// 匯率/熱錢:USD/TWD + 美元指數 DXY
+function renderCapFx(d,box){
+  const fx=d.fx||{}, tw=fx.usdtwd||[], dx=fx.dxy||[];
+  const tl=tw.length?tw[tw.length-1]:null, dl=dx.length?dx[dx.length-1]:null;
+  const chg=(arr)=>{ if(arr.length<2) return null; return round2(arr[arr.length-1].val-arr[0].val); };
+  const c=(lab,o,unit,sub)=>'<div class="cap-card"><div class="cap-lab">'+lab+'</div><div class="cap-big">'+(o!=null?o.toLocaleString():"—")+'<span class="cap-u">'+(unit||"")+'</span></div><div class="cap-chg">'+(sub||"")+'</div></div>';
+  box.innerHTML='<div class="cap-cards">'+
+      c("USD/TWD",tl?tl.val:null,"",tl?esc(tl.date):"")+
+      c("美元指數 DXY",dl?dl.val:null,"",dl?esc(dl.date):"")+
+    '</div>'+
+    '<div class="cap-sub2"><b>新台幣升值(USD/TWD 下降)</b>常伴隨外資匯入買台股(熱錢流入);貶值=資金流出。<b>美元指數 DXY</b> 走強=美元回流、新興市場(含台股)承壓。</div>'+
+    '<div id="capTwdChart" class="cap-chart"></div>'+
+    '<div class="cap-sub2" style="margin-top:12px">美元指數 DXY(1年)</div>'+
+    '<div id="capDxyChart" class="cap-chart"></div>';
+  if(tw.length>=2) drawCapLines("capTwdChart",tw.map(x=>x.date),[["USD/TWD",tw.map(x=>x.val),"#0891b2","val"]],"匯率");
+  if(dx.length>=2) drawCapLines("capDxyChart",dx.map(x=>x.date),[["DXY",dx.map(x=>x.val),"#16a34a","val"]],"指數");
+}
+function round2(v){ return Math.round(v*100)/100; }
 function drawCapBars(id,dates,series,unit){
   const el=$("#"+id); if(!el||!window.echarts) return;
   const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});

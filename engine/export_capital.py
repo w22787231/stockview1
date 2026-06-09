@@ -192,6 +192,7 @@ def fetch_futures(now, days=95):
     rng = {"queryStartDate": start.strftime("%Y/%m/%d"), "queryEndDate": end.strftime("%Y/%m/%d")}
     tx = {"foreign": [], "trust": [], "dealer": []}
     micro_inst = {}     # date -> 微型臺指 三大法人未平倉淨額合計(口)
+    small_inst = {}     # date -> 小型臺指 三大法人未平倉淨額合計(口)
     try:
         rows = list(csv.reader(io.StringIO(_taifex_post(
             "futContractsDateDown", dict(rng, down_type="1", commodity_id="TX")))))
@@ -209,43 +210,50 @@ def fetch_futures(now, days=95):
                     tx["trust"].append({"date": dt, "oi": round(net)})
                 elif "自營" in who:
                     tx["dealer"].append({"date": dt, "oi": round(net)})
-            elif prod == "微型臺指期貨":         # 微台 三大法人未平倉淨額(加總)
+            elif prod == "微型臺指期貨":
                 micro_inst[dt] = micro_inst.get(dt, 0) + net
+            elif prod == "小型臺指期貨":
+                small_inst[dt] = small_inst.get(dt, 0) + net
     except Exception:
         pass
     for k in tx:
         tx[k] = sorted(tx[k], key=lambda x: x["date"])[-60:]
-    # 微台總未平倉量(futDataDown 區間上限 ~1 月 → 分 25 天段抓再合併;一般時段各月加總)
-    micro_oi = {}
-    cs = start
-    while cs <= end:
-        ce = min(cs + datetime.timedelta(days=24), end)
-        try:
-            rows = list(csv.reader(io.StringIO(_taifex_post("futDataDown", {
-                "down_type": "1", "commodity_id": "TMF",
-                "queryStartDate": cs.strftime("%Y/%m/%d"),
-                "queryEndDate": ce.strftime("%Y/%m/%d")}))))
-            for r in rows:
-                if len(r) < 18:
-                    continue
-                dt = r[0].replace("/", "-").strip()
-                if not re.match(r"\d{4}-\d{2}-\d{2}", dt) or "盤後" in r[17]:
-                    continue
-                try:
-                    micro_oi[dt] = micro_oi.get(dt, 0) + float(r[11].replace(",", ""))
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        cs = ce + datetime.timedelta(days=1)
-    # 散戶多空比% = 散戶淨 / 總OI;散戶淨 = −三大法人淨
-    retail = []
-    for dt in sorted(set(micro_inst) & set(micro_oi)):
-        oi = micro_oi[dt]
-        if oi > 0:
-            retail.append({"date": dt, "ratio": round(-micro_inst[dt] / oi * 100, 2),
-                           "net": round(-micro_inst[dt])})
-    return {"tx": tx, "retail": retail[-60:]}
+
+    def _oi_by_date(cid):   # futDataDown 區間上限 ~1 月 → 分 25 天段;一般時段各月加總
+        oi = {}; cs = start
+        while cs <= end:
+            ce = min(cs + datetime.timedelta(days=24), end)
+            try:
+                rows = list(csv.reader(io.StringIO(_taifex_post("futDataDown", {
+                    "down_type": "1", "commodity_id": cid,
+                    "queryStartDate": cs.strftime("%Y/%m/%d"),
+                    "queryEndDate": ce.strftime("%Y/%m/%d")}))))
+                for r in rows:
+                    if len(r) < 18:
+                        continue
+                    dt = r[0].replace("/", "-").strip()
+                    if not re.match(r"\d{4}-\d{2}-\d{2}", dt) or "盤後" in r[17]:
+                        continue
+                    try:
+                        oi[dt] = oi.get(dt, 0) + float(r[11].replace(",", ""))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            cs = ce + datetime.timedelta(days=1)
+        return oi
+
+    def _retail(inst, oi):   # 散戶多空比% = 散戶淨/總OI;散戶淨 = −三大法人淨
+        out = []
+        for dt in sorted(set(inst) & set(oi)):
+            if oi[dt] > 0:
+                out.append({"date": dt, "ratio": round(-inst[dt] / oi[dt] * 100, 2),
+                            "net": round(-inst[dt])})
+        return out[-60:]
+
+    return {"tx": tx,
+            "retail": _retail(micro_inst, _oi_by_date("TMF")),
+            "retail_small": _retail(small_inst, _oi_by_date("MTX"))}
 
 
 # ── 千張大戶(TDCC 集保股權分散;分級15=1,000張以上;週頻,prev 週累積算變化)──
@@ -283,6 +291,46 @@ def fetch_large_holders(prev, topn=20):
         dd = "%s-%s-%s" % (dd[:4], dd[4:6], dd[6:8])
     return {"date": dd, "ratios": cur, "concentrated": concentrated,
             "rising": rising, "falling": falling, "has_chg": bool(has_chg)}
+
+
+# ── 借券賣出餘額(TWSE TWT93U,逐檔加總 col12 今日餘額,股→張;每日累積)──
+def fetch_borrow(now):
+    d = now.date()
+    for _ in range(6):
+        ds = d.strftime("%Y%m%d")
+        try:
+            j = json.loads(_get("https://www.twse.com.tw/rwd/zh/marginTrading/TWT93U?date=%s&response=json" % ds))
+            if j.get("stat") == "OK" and j.get("data"):
+                tot = 0.0
+                for r in j["data"]:
+                    if len(r) > 12:
+                        tot += _num(r[12])
+                dd = j.get("date", ds)
+                date = "%s-%s-%s" % (dd[:4], dd[4:6], dd[6:8]) if len(dd) == 8 else dd
+                return {"date": date, "balance": round(tot / 1000)}   # 股 → 張
+        except Exception:
+            pass
+        d -= datetime.timedelta(days=1)
+    return None
+
+
+# ── 匯率/熱錢:USD/TWD + 美元指數 DXY(Yahoo)──
+def fetch_fx():
+    out = {}
+    for key, sym in [("usdtwd", "TWD=X"), ("dxy", "DX-Y.NYB")]:
+        try:
+            d = json.loads(_get("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1y" % sym))
+            res = d["chart"]["result"][0]
+            ts = res["timestamp"]; cl = res["indicators"]["quote"][0]["close"]
+            ser = []
+            for i in range(len(ts)):
+                if cl[i] is not None:
+                    dt = datetime.datetime.utcfromtimestamp(ts[i]).strftime("%Y-%m-%d")
+                    ser.append({"date": dt, "val": round(cl[i], 3)})
+            out[key] = ser[-180:]
+        except Exception:
+            out[key] = []
+    return out
 
 
 # ── COT(CFTC Traders in Financial Futures;E-MINI S&P 500)──
@@ -434,8 +482,12 @@ def main():
     margin_hist = merge_hist(pv.get("margin_hist"), fetch_margin_hist(now, 60))
     margin_today = margin_hist[-1] if margin_hist else None
     fut = fetch_futures(now, 95)
-    tx_oi = fut["tx"]; retail = fut["retail"]
+    tx_oi = fut["tx"]; retail = fut["retail"]; retail_small = fut["retail_small"]
     large = fetch_large_holders(prev)
+    time.sleep(2)
+    borrow = fetch_borrow(now)
+    borrow_hist = merge_hist(pv.get("borrow_hist"),
+                             [{"date": borrow["date"], "balance": borrow["balance"]}] if borrow else [])
 
     # 融資今日增減(由歷史末兩筆)
     if margin_today and len(margin_hist) >= 2:
@@ -447,7 +499,8 @@ def main():
     tw = {
         "inst_today": inst_today, "inst_hist": inst_hist, "ranks": ranks,
         "margin_today": margin_today, "margin_hist": margin_hist,
-        "tx_oi": tx_oi, "retail": retail, "large": large,
+        "tx_oi": tx_oi, "retail": retail, "retail_small": retail_small,
+        "borrow_today": borrow, "borrow_hist": borrow_hist, "large": large,
     }
     us = {
         "fed_liq": fetch_fed_liquidity(),
@@ -456,15 +509,17 @@ def main():
         "sectors": fetch_sectors(),
         "cot": fetch_cot(26),
     }
+    fx = fetch_fx()
 
-    out = {"generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "tw": tw, "us": us}
+    out = {"generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "tw": tw, "us": us, "fx": fx}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
-    print("[capital] 法人hist%d 融資hist%d 法人榜%d 台指外資OI%d 微台散戶%d 大戶%s 板塊%d FedLiq%d COT%d" % (
-        len(inst_hist), len(margin_hist), len(ranks.get("foreign_buy", [])),
-        len(tx_oi.get("foreign", [])), len(retail), (large["date"] if large else "—"),
-        len(us["sectors"].get("list", [])), len(us["fed_liq"]), len(us["cot"])))
+    print("[capital] 法人%d 融資%d 微台散戶%d 小台散戶%d 借券%s 大戶%s 板塊%d FedLiq%d COT%d FX(twd%d dxy%d)" % (
+        len(inst_hist), len(margin_hist), len(retail), len(retail_small),
+        (borrow["date"] if borrow else "—"), (large["date"] if large else "—"),
+        len(us["sectors"].get("list", [])), len(us["fed_liq"]), len(us["cot"]),
+        len(fx.get("usdtwd", [])), len(fx.get("dxy", []))))
 
 
 if __name__ == "__main__":

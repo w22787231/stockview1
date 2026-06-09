@@ -3311,10 +3311,57 @@ function renderLiveQuote(q){
       '<div class="mc"><div class="k">52週 高/低</div><div class="v">'+fmt(q.wkHigh)+' / '+fmt(q.wkLow)+'</div></div>'+
       '<div class="mc"><div class="k">成交量</div><div class="v">'+fmt(q.vol)+'</div></div>'+
     '</div>'+
+    ((q.closes&&q.closes.length>=20)?
+      '<section style="margin-top:14px"><div class="sec-head"><h2>成本分布(籌碼)</h2><span class="tag">各價位估算持有量</span></div>'+
+      '<div class="tw-toggle"><span class="tw-tg-lab">期間</span>'+
+        ["20","60","120"].map(n=>'<button class="tw-tg livechip-lb'+(LIVE_CHIP_LB==+n?" on":"")+'" data-n="'+n+'">'+n+'日</button>').join("")+
+        '<span id="liveChipSum" class="cap-sub2" style="margin-left:8px"></span></div>'+
+      '<div id="liveChip" style="width:100%;height:300px"></div>'+
+      '<div class="legend">由近 N 日「收盤價 × 量 + 時間衰減」估算各價位籌碼(輕量版以收盤計、無高低價,故較粗);<b class="neg">紅</b>=現價上方套牢、<b class="pos">綠</b>=下方獲利,藍虛線=現價。</div></section>':'')+
     '<div class="legend">即時報價(Yahoo,可能延遲約 15 分)。任意代號即時查詢;財報/評分/翻譯新聞等深度詳情僅 1700 檔預生清單內提供。</div>';
   $("#meta").innerHTML='<div><b>即時查詢</b> '+esc(q.sym)+'</div><div>'+esc(q.name||"")+'</div>';
   $("#poolNote").innerHTML="";
   enterDetail(); const b=document.getElementById("backBtn"); if(b) b.onclick=()=>history.back();
+  if(q.closes&&q.closes.length>=20) drawLiveChip(q);
+}
+let LIVE_CHIP_LB=120;
+// 由收盤價×量(時間衰減)估算成本分布——輕量頁無高低價,以收盤計
+function _chipFromCloses(cl, vl, lb){
+  if(!cl||!vl||cl.length<10) return null;
+  const m=Math.min(lb, cl.length, vl.length);
+  const c=cl.slice(cl.length-m), v=vl.slice(vl.length-m);
+  let pmin=Infinity,pmax=-Infinity;
+  for(const x of c){ if(x!=null){ pmin=Math.min(pmin,x); pmax=Math.max(pmax,x); } }
+  if(!isFinite(pmin)) return null;
+  const bins=40, span=(pmax-pmin)||1, bw=span/bins, chips=new Array(bins).fill(0), n=c.length;
+  const hl=Math.max(20,lb/3), lam=Math.LN2/hl;
+  for(let i=0;i<n;i++){ if(c[i]==null||v[i]==null) continue;
+    const w=Math.exp(-lam*(n-1-i))*v[i];
+    let b=Math.floor((c[i]-pmin)/bw); if(b<0)b=0; if(b>=bins)b=bins-1; chips[b]+=w; }
+  const prices=chips.map((_,b)=>pmin+(b+0.5)*bw), total=chips.reduce((a,b)=>a+b,0)||1;
+  return {chips,prices,total};
+}
+function drawLiveChip(q){
+  const el=document.getElementById("liveChip"); if(!el||!window.echarts) return;
+  const r=_chipFromCloses(q.closes,q.volumes,LIVE_CHIP_LB);
+  if(!r){ el.innerHTML='<div class="legend">資料不足以估算。</div>'; return; }
+  const price=q.price, cats=r.prices.map(p=>p.toFixed(2));
+  const bars=r.chips.map((vv,i)=>({value:+(vv/r.total*100).toFixed(3),
+    itemStyle:{color:(price!=null&&r.prices[i]>price)?"#e11d48":"#16a34a"}}));
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  let nr=cats[0],bd=Infinity; cats.forEach(cc=>{const dd=Math.abs(+cc-(price||0));if(dd<bd){bd=dd;nr=cc;}});
+  ch.setOption({grid:{left:58,right:24,top:8,bottom:24},
+    tooltip:{trigger:"axis",axisPointer:{type:"shadow"},formatter:ps=>'價位 '+cats[ps[0].dataIndex]+'<br>籌碼 '+ps[0].value+'%'},
+    xAxis:{type:"value",axisLabel:{fontSize:9,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
+    yAxis:{type:"category",data:cats,axisLabel:{fontSize:9,interval:Math.max(0,Math.floor(cats.length/14))},axisTick:{show:false}},
+    series:[{type:"bar",data:bars,barWidth:"92%",
+      markLine:price!=null?{silent:true,symbol:"none",data:[{yAxis:nr,lineStyle:{color:"#2563eb",type:"dashed",width:1.5},label:{formatter:"現價 "+(+price).toFixed(2),fontSize:10,color:"#2563eb",position:"insideEndTop"}}]}:undefined}]},true);
+  let above=0,below=0,wsum=0; r.chips.forEach((vv,i)=>{ wsum+=vv*r.prices[i]; if(price!=null){ if(r.prices[i]>price) above+=vv; else below+=vv; } });
+  const se=document.getElementById("liveChipSum");
+  if(se) se.innerHTML='平均成本 <b>'+(wsum/r.total).toFixed(2)+'</b>'+(price!=null?' · 上方套牢 <b class="neg">'+(above/r.total*100).toFixed(1)+'%</b> · 下方獲利 <b class="pos">'+(below/r.total*100).toFixed(1)+'%</b>':'');
+  document.querySelectorAll(".livechip-lb").forEach(b=>b.onclick=()=>{ LIVE_CHIP_LB=+b.dataset.n;
+    document.querySelectorAll(".livechip-lb").forEach(x=>x.classList.toggle("on",+x.dataset.n===LIVE_CHIP_LB)); drawLiveChip(q); });
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
 async function doSearch(){

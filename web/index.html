@@ -1744,6 +1744,7 @@ function renderStock(d){
         stmtTable("現金流量表", d.statements&&d.statements.cashflow)+
       '</div>'+
       '<div class="legend">季報，最近 5 季。<b>YoY</b>＝最新季與去年同季比(看成長動能)。數字 T兆/B十億/M百萬，紅字為負。</div></section>'+
+      chipDistBlock(d)+
       chipBlock(d.metrics, d.chip_links)+
       eventsBlock(d.events)+
       newsBlock(d.news);
@@ -1759,6 +1760,69 @@ function renderStock(d){
     sigBtn.innerHTML = open ? ('顯示其餘 '+hid.children.length+' 個 ▼') : '收合 ▲';
   };
   drawChart(d);
+  drawChipDist(d);
+}
+// ── 成本分布(籌碼):由歷史量價+時間衰減估算各價位持有量 ──
+let CHIP_LB=120;
+function chipDistBlock(d){
+  if(!d.candles || d.candles.filter(c=>c.v!=null&&c.o!=null).length<20) return "";
+  return '<section><div class="sec-head"><h2>成本分布(籌碼)</h2><span class="tag">各價位估算持有量</span>'+
+      '<span class="hint">由歷史量價估算,非實際股東成本</span></div>'+
+    '<div class="tw-toggle"><span class="tw-tg-lab">期間</span>'+
+      ["60","120","250"].map(n=>'<button class="tw-tg chip-lb'+(CHIP_LB==+n?" on":"")+'" data-n="'+n+'">'+n+'日</button>').join("")+'</div>'+
+    '<div id="chipSummary" class="cap-sub2"></div>'+
+    '<div id="chipChart" style="width:100%;height:340px"></div>'+
+    '<div class="legend">成本分布=以近 N 日「成交量 × 時間衰減」分配到當日高低價區間估算各價位累積籌碼。<b class="neg">紅</b>=現價上方(套牢賣壓區)、<b class="pos">綠</b>=現價下方(獲利支撐區);藍虛線=現價。為估算值,實際股東成本以集保/官方為準。</div></section>';
+}
+function _chipCompute(candles, lookback){
+  const cdl=candles.filter(c=>c.o!=null&&c.v!=null&&c.h!=null&&c.l!=null).slice(-lookback);
+  if(cdl.length<5) return null;
+  let pmin=Infinity,pmax=-Infinity;
+  cdl.forEach(c=>{ pmin=Math.min(pmin,c.l); pmax=Math.max(pmax,c.h); });
+  const bins=40, span=(pmax-pmin)||1, bw=span/bins;
+  const chips=new Array(bins).fill(0), n=cdl.length;
+  const halflife=Math.max(20,lookback/3), lambda=Math.LN2/halflife;
+  cdl.forEach((c,i)=>{
+    const w=Math.exp(-lambda*(n-1-i))*c.v;       // 時間衰減後的量(近期權重高)
+    const lo=c.l, hi=c.h, mid=(c.h+c.l+c.c+c.c)/4;
+    const b0=Math.max(0,Math.floor((lo-pmin)/bw)), b1=Math.min(bins-1,Math.floor((hi-pmin)/bw));
+    let tw=[], sum=0;
+    const half=Math.max((hi-lo)/2,bw);
+    for(let b=b0;b<=b1;b++){ const center=pmin+(b+0.5)*bw; const t=Math.max(0,1-Math.abs(center-mid)/half); tw.push(t); sum+=t; }
+    if(sum<=0){ for(let b=b0;b<=b1;b++) chips[b]+=w/(b1-b0+1); }
+    else{ for(let b=b0;b<=b1;b++) chips[b]+=w*tw[b-b0]/sum; }
+  });
+  const prices=chips.map((_,b)=>pmin+(b+0.5)*bw);
+  const total=chips.reduce((a,b)=>a+b,0)||1;
+  return {chips,prices,total};
+}
+function drawChipDist(d){
+  const el=document.getElementById("chipChart"); if(!el||!window.echarts) return;
+  window._chipD=d;
+  const m=d.metrics||{}, last=d.candles[d.candles.length-1];
+  const price=(m.price!=null?m.price:(last?last.c:null));
+  const res=_chipCompute(d.candles, CHIP_LB);
+  if(!res){ el.innerHTML='<div class="legend">資料不足以估算。</div>'; return; }
+  const cats=res.prices.map(p=>p.toFixed(2));
+  const bars=res.chips.map((v,i)=>({value:+(v/res.total*100).toFixed(3),
+    itemStyle:{color:(price!=null&&res.prices[i]>price)?"#e11d48":"#16a34a"}}));
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  let nearest=cats[0],bd=Infinity; cats.forEach(c=>{const dd=Math.abs(+c-(price||0));if(dd<bd){bd=dd;nearest=c;}});
+  ch.setOption({grid:{left:58,right:26,top:8,bottom:24},
+    tooltip:{trigger:"axis",axisPointer:{type:"shadow"},formatter:ps=>{const p=ps[0];return '價位 '+cats[p.dataIndex]+'<br>籌碼 '+p.value+'%';}},
+    xAxis:{type:"value",axisLabel:{fontSize:9,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
+    yAxis:{type:"category",data:cats,axisLabel:{fontSize:9,interval:Math.max(0,Math.floor(cats.length/14))},axisTick:{show:false}},
+    series:[{type:"bar",data:bars,barWidth:"92%",
+      markLine:price!=null?{silent:true,symbol:"none",data:[{yAxis:nearest,lineStyle:{color:"#2563eb",type:"dashed",width:1.5},label:{formatter:"現價 "+(+price).toFixed(2),fontSize:10,color:"#2563eb",position:"insideEndTop"}}]}:undefined}]
+  },true);
+  let above=0,below=0,wsum=0;
+  res.chips.forEach((v,i)=>{ wsum+=v*res.prices[i]; if(price!=null){ if(res.prices[i]>price) above+=v; else below+=v; } });
+  const avg=wsum/res.total, maxIdx=res.chips.indexOf(Math.max.apply(null,res.chips));
+  const se=document.getElementById("chipSummary");
+  if(se) se.innerHTML='平均成本 <b>'+avg.toFixed(2)+'</b> · 籌碼最密集 <b>'+res.prices[maxIdx].toFixed(2)+'</b>'+
+    (price!=null?' · 現價上方套牢 <b class="neg">'+(above/res.total*100).toFixed(1)+'%</b> · 下方獲利 <b class="pos">'+(below/res.total*100).toFixed(1)+'%</b>':'');
+  document.querySelectorAll(".chip-lb").forEach(b=>b.onclick=()=>{ CHIP_LB=+b.dataset.n; document.querySelectorAll(".chip-lb").forEach(x=>x.classList.toggle("on",+x.dataset.n===CHIP_LB)); drawChipDist(window._chipD); });
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
 function backtestBlock(bt){

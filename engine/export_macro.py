@@ -28,6 +28,7 @@ INDICES = [
     {"sym": "^TNX",      "label": "10Y 公債殖利率",  "note": "美國10年期", "yield_like": True, "unit": "bps"},
     {"sym": "UTWO",      "label": "2Y 公債(UTWO)",  "note": "2年期公債ETF代理"},
     {"sym": "GC=F",      "label": "黃金",           "note": "黃金期貨"},
+    {"sym": "CL=F",      "label": "原油 WTI",        "note": "西德州原油期貨"},
     {"sym": "DX-Y.NYB",  "label": "美元指數",        "note": "DXY"},
 ]
 

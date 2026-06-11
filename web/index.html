@@ -1727,13 +1727,19 @@ function renderStock(d){
     metricsBlock+
     (function(){
       const sn=(d.ma&&d.ma.short_n)||10, ln=(d.ma&&d.ma.long_n)||50;
-      return '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + MA'+sn+'/MA'+ln+' · 籌碼分布 · 近2年</span></div>'+
+      return '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + 均線交叉指標 · 籌碼分布 · 近2年</span></div>'+
       '<div id="chart"></div>'+
-      '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#f59e0b"></span>MA'+sn+'(短)</span>'+
-      '<span class="lg"><span class="sw" style="background:#2563eb"></span>MA'+ln+'(長)</span>'+
-      '<span class="lg"><span class="pos">▲金叉</span></span><span class="lg"><span class="neg">▼死叉</span></span>'+
+      '<div class="chart-legend"><span class="lg"><span class="sw" style="background:#16a34a"></span>均線漲</span>'+
+      '<span class="lg"><span class="sw" style="background:#e11d48"></span>均線跌</span>'+
+      '<span class="lg"><span class="pos">▲Buy</span> / <span class="neg">▼Sell</span></span>'+
       '<span class="lg"><span class="sw" style="background:rgba(225,29,72,.5)"></span>籌碼(右側)</span>'+
       '<span class="lg">綠漲紅跌</span></div>'+
+      '<div class="tw-toggle" style="margin-top:6px"><span class="tw-tg-lab">MA交叉</span>'+
+        '<button class="tw-tg mac-on'+(MACROSS_ON?" on":"")+'" data-v="1">開</button>'+
+        '<button class="tw-tg mac-on'+(!MACROSS_ON?" on":"")+'" data-v="0">關</button>'+
+        ["ema","sma","wma"].map(t=>'<button class="tw-tg mac-type'+(MACROSS_TYPE===t?" on":"")+'" data-t="'+t+'">'+t.toUpperCase()+'</button>').join("")+
+        '<input class="mac-n buy-in" data-k="s" value="'+MACROSS_SHORT+'" style="width:44px;text-align:center" title="短週期">'+
+        '<span class="tw-tg-lab">/</span><input class="mac-n buy-in" data-k="l" value="'+MACROSS_LONG+'" style="width:44px;text-align:center" title="長週期"></div>'+
       '<div class="tw-toggle" style="margin-top:6px"><span class="tw-tg-lab">籌碼期間</span>'+
         ["5","20","60","120","250"].map(n=>'<button class="tw-tg chip-lb'+(CHIP_LB==+n?" on":"")+'" data-n="'+n+'">'+n+'日</button>').join("")+
         '<span id="chipSummary" class="cap-sub2" style="margin:0 0 0 8px"></span></div></section>';
@@ -1763,6 +1769,25 @@ function renderStock(d){
     sigBtn.innerHTML = open ? ('顯示其餘 '+hid.children.length+' 個 ▼') : '收合 ▲';
   };
   drawChart(d);
+}
+// ── ChartArt MA 交叉指標:EMA/SMA/WMA、可選週期、趨勢變色、Buy/Sell 箭頭、交叉背景 ──
+let MACROSS_ON=true, MACROSS_TYPE="ema", MACROSS_SHORT=20, MACROSS_LONG=60;
+function _maCalc(cl, n, type){
+  const out=new Array(cl.length).fill(null);
+  if(type==="ema"){
+    const k=2/(n+1); let ema=null;
+    for(let i=0;i<cl.length;i++){
+      if(i<n-1){ continue; }
+      if(i===n-1){ let s=0,ok=1; for(let j=0;j<n;j++){ if(cl[i-j]==null){ok=0;break;} s+=cl[i-j]; } ema=ok?s/n:null; out[i]=ema; continue; }
+      if(cl[i]==null||ema==null){ out[i]=ema; continue; }
+      ema=cl[i]*k+ema*(1-k); out[i]=ema;
+    }
+  }else if(type==="wma"){
+    for(let i=n-1;i<cl.length;i++){ let s=0,w=0,ok=1; for(let j=0;j<n;j++){ if(cl[i-j]==null){ok=0;break;} const ww=n-j; s+=cl[i-j]*ww; w+=ww; } out[i]=ok?s/w:null; }
+  }else{ // sma
+    for(let i=n-1;i<cl.length;i++){ let s=0,ok=1; for(let j=0;j<n;j++){ if(cl[i-j]==null){ok=0;break;} s+=cl[i-j]; } out[i]=ok?s/n:null; }
+  }
+  return out;
 }
 // ── 成本分布(籌碼):由歷史量價+時間衰減估算各價位持有量 ──
 let CHIP_LB=120;
@@ -1949,31 +1974,49 @@ function drawChart(d){
       (curPrice!=null?' · 上方套牢 <b class="neg">'+(above/prof.total*100).toFixed(1)+'%</b> · 下方獲利 <b class="pos">'+(below/prof.total*100).toFixed(1)+'%</b>':''); },0);
   }
 
-  // 均線對齊到日期軸(用 map 補 null)
-  const ma=d.ma||{};
-  const shortArr=ma.ma_short||ma.ma20||[], longArr=ma.ma_long||ma.ma60||[];
-  const sn=ma.short_n||10, ln=ma.long_n||50;
-  const sMap={}, lMap={};
-  shortArr.forEach(p=>{if(p.v!=null)sMap[p.t]=p.v;});
-  longArr.forEach(p=>{if(p.v!=null)lMap[p.t]=p.v;});
-  const sLine=dates.map(t=>sMap[t]!=null?+sMap[t].toFixed(2):null);
-  const lLine=dates.map(t=>lMap[t]!=null?+lMap[t].toFixed(2):null);
+  // 均線:預設用預生 MA;開 ChartArt MA交叉指標時改用 EMA/SMA/WMA(可選週期)並依趨勢變色
+  const closesArr=cdl.map(c=>c.c);
+  let sn, ln, sLine, lLine, shrtDir=null, lngDir=null, markPts, bgArea=[], maNames;
+  if(MACROSS_ON){
+    sn=MACROSS_SHORT; ln=MACROSS_LONG;
+    sLine=_maCalc(closesArr,sn,MACROSS_TYPE).map(v=>v==null?null:+v.toFixed(2));
+    lLine=_maCalc(closesArr,ln,MACROSS_TYPE).map(v=>v==null?null:+v.toFixed(2));
+    const dirOf=a=>a.map((v,i)=>(v==null||a[i-1]==null)?0:(v>a[i-1]?1:(v<a[i-1]?-1:0)));
+    shrtDir=dirOf(sLine); lngDir=dirOf(lLine);
+    const buys=[],sells=[];
+    for(let i=1;i<cdl.length;i++){ const ps=sLine[i-1],pl=lLine[i-1],cs=sLine[i],cl=lLine[i];
+      if(ps==null||pl==null||cs==null||cl==null) continue;
+      if(ps<=pl&&cs>cl && cdl[i].c>cdl[i-1].c) buys.push(i);
+      else if(ps>=pl&&cs<cl && cdl[i].c<cdl[i-1].c) sells.push(i);
+    }
+    markPts=[].concat(
+      buys.map(i=>({coord:[dates[i],cdl[i].l],symbol:"arrow",symbolSize:11,itemStyle:{color:"#16a34a"},
+        label:{show:true,position:"bottom",fontSize:10,color:"#16a34a",formatter:"Buy"}})),
+      sells.map(i=>({coord:[dates[i],cdl[i].h],symbol:"arrow",symbolRotate:180,symbolSize:11,itemStyle:{color:"#e11d48"},
+        label:{show:true,position:"top",fontSize:10,color:"#e11d48",formatter:"Sell"}})));
+    bgArea=[].concat(
+      buys.map(i=>[{xAxis:dates[i],itemStyle:{color:"rgba(22,163,74,.12)"}},{xAxis:dates[Math.min(dates.length-1,i+1)]}]),
+      sells.map(i=>[{xAxis:dates[i],itemStyle:{color:"rgba(225,29,72,.12)"}},{xAxis:dates[Math.min(dates.length-1,i+1)]}]));
+    maNames=[MACROSS_TYPE.toUpperCase()+sn, MACROSS_TYPE.toUpperCase()+ln];
+  }else{
+    const ma=d.ma||{};
+    const shortArr=ma.ma_short||ma.ma20||[], longArr=ma.ma_long||ma.ma60||[];
+    sn=ma.short_n||10; ln=ma.long_n||50;
+    const sMap={}, lMap={};
+    shortArr.forEach(p=>{if(p.v!=null)sMap[p.t]=p.v;});
+    longArr.forEach(p=>{if(p.v!=null)lMap[p.t]=p.v;});
+    sLine=dates.map(t=>sMap[t]!=null?+sMap[t].toFixed(2):null);
+    lLine=dates.map(t=>lMap[t]!=null?+lMap[t].toFixed(2):null);
+    markPts=(d.signals||[]).map(s=>{ const golden=s.type==="golden";
+      return {coord:[s.t,s.price],symbol:golden?"triangle":"pin",symbolSize:golden?14:16,symbolRotate:golden?0:180,
+        itemStyle:{color:golden?"#16a34a":"#e11d48"},
+        label:{show:true,position:golden?"bottom":"top",fontSize:10,color:golden?"#16a34a":"#e11d48",formatter:golden?"金叉":"死叉"}}; });
+    maNames=["MA"+sn,"MA"+ln];
+  }
 
-  // 灰色填色帶：底=兩線較低者(透明)，上疊=兩線差(灰)。用 stack 達成 TradingView 的銀色帶。
+  // 灰色填色帶
   const bandLow=dates.map((t,i)=>(sLine[i]!=null&&lLine[i]!=null)?Math.min(sLine[i],lLine[i]):null);
   const bandGap=dates.map((t,i)=>(sLine[i]!=null&&lLine[i]!=null)?+Math.abs(sLine[i]-lLine[i]).toFixed(2):null);
-
-  // 金叉/死叉標記點(標在當天 K 棒)
-  const markPts=(d.signals||[]).map(s=>{
-    const golden=s.type==="golden";
-    return {name:golden?"金叉":"死叉", coord:[s.t, s.price],
-      value:golden?"金叉":"死叉",
-      symbol: golden?"triangle":"pin", symbolSize: golden?14:16,
-      symbolRotate: golden?0:180,
-      itemStyle:{color: golden?"#16a34a":"#e11d48"},
-      label:{show:true,position:golden?"bottom":"top",fontSize:10,
-        color:golden?"#16a34a":"#e11d48",formatter:golden?"金叉":"死叉"}};
-  });
 
   chart.setOption({
     animation:false,
@@ -1992,13 +2035,19 @@ function drawChart(d){
           '開 '+fx(k[0])+'　收 '+fx(k[1])+'<br>高 '+fx(k[3])+'　低 '+fx(k[2]);
         // 均線值
         ps.forEach(p=>{
-          if(p.seriesName&&p.seriesName.indexOf("MA")===0&&p.value!=null)
-            html+='<br><span style="color:'+p.color+'">'+p.seriesName+'</span> '+fx(p.value);
+          if(p.seriesName&&(p.seriesName===maNames[0]||p.seriesName===maNames[1])){
+            const val=Array.isArray(p.value)?p.value[1]:p.value;
+            if(val!=null) html+='<br><span style="color:'+p.color+'">'+p.seriesName+'</span> '+fx(val);
+          }
         });
         return html;
       }},
-    legend:{data:["K線","MA"+sn,"MA"+ln],top:0,right:8,itemWidth:14,itemHeight:8,
+    legend:{data:["K線",maNames[0],maNames[1]],top:0,right:8,itemWidth:14,itemHeight:8,
       textStyle:{fontSize:11,color:"#5a6678"}},
+    visualMap:(MACROSS_ON&&shrtDir)?[
+      {show:false,seriesIndex:3,type:"piecewise",dimension:2,pieces:[{value:1,color:"#16a34a"},{value:-1,color:"#e11d48"},{value:0,color:"#2563eb"}]},
+      {show:false,seriesIndex:4,type:"piecewise",dimension:2,pieces:[{value:1,color:"#16a34a"},{value:-1,color:"#e11d48"},{value:0,color:"#2563eb"}]}
+    ]:undefined,
     xAxis:[{type:"category",data:dates,boundaryGap:true,
       axisLine:{lineStyle:{color:"#e3e8f0"}},axisLabel:{color:"#9aa6b6",fontSize:10,
         formatter:v=>v.slice(5)}, splitLine:{show:false}},
@@ -2018,18 +2067,24 @@ function drawChart(d){
       // K線
       {name:"K線",type:"candlestick",data:kdata,z:3,
         itemStyle:{color:"#16a34a",color0:"#e11d48",borderColor:"#16a34a",borderColor0:"#e11d48"},
-        markPoint:{data:markPts,silent:true}},
-      // 雙均線
-      {name:"MA"+sn,type:"line",data:sLine,smooth:true,symbol:"none",z:4,
-        lineStyle:{color:"#f59e0b",width:1.6},connectNulls:true},
-      {name:"MA"+ln,type:"line",data:lLine,smooth:true,symbol:"none",z:4,
-        lineStyle:{color:"#2563eb",width:2},connectNulls:true},
+        markPoint:{data:markPts,silent:true},
+        markArea:bgArea.length?{silent:true,data:bgArea}:undefined},
+      // 雙均線(指標開啟時帶 dir 維度供 visualMap 變色)
+      {name:maNames[0],type:"line",data:(MACROSS_ON&&shrtDir)?dates.map((t,i)=>[i,sLine[i],shrtDir[i]]):sLine,
+        smooth:true,symbol:"none",z:4,lineStyle:{color:"#f59e0b",width:1.8},connectNulls:true},
+      {name:maNames[1],type:"line",data:(MACROSS_ON&&lngDir)?dates.map((t,i)=>[i,lLine[i],lngDir[i]]):lLine,
+        smooth:true,symbol:"none",z:4,lineStyle:{color:"#2563eb",width:2.6},connectNulls:true},
     ].concat(profSeries?[profSeries]:[]),
   });
   const ro=()=>chart.resize();
   window.addEventListener("resize",ro);
   document.querySelectorAll(".chip-lb").forEach(b=>b.onclick=()=>{ CHIP_LB=+b.dataset.n;
     document.querySelectorAll(".chip-lb").forEach(x=>x.classList.toggle("on",+x.dataset.n===CHIP_LB)); drawChart(d); });
+  document.querySelectorAll(".mac-on").forEach(b=>b.onclick=()=>{ MACROSS_ON=b.dataset.v==="1"; drawChart(d); });
+  document.querySelectorAll(".mac-type").forEach(b=>b.onclick=()=>{ MACROSS_TYPE=b.dataset.t; MACROSS_ON=true; drawChart(d); });
+  document.querySelectorAll(".mac-n").forEach(inp=>{ inp.onclick=e=>e.stopPropagation();
+    inp.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); inp.blur(); } };
+    inp.onchange=()=>{ const v=parseInt(inp.value,10); if(v>=2&&v<=400){ if(inp.dataset.k==="s")MACROSS_SHORT=v; else MACROSS_LONG=v; MACROSS_ON=true; drawChart(d); } }; });
 }
 
 async function openStock(sym){

@@ -39,6 +39,7 @@ const $ = sel => ({ set innerHTML(v){ CONTENT = v; }, get innerHTML(){ return CO
 const src = stub +
   extract("sortCrossRows") + "\n" +
   extract("freshCrosses") + "\n" +
+  extract("_crossBtScore") + "\n" +
   extract("crossSignalTable") + "\n" +
   extract("renderCross") + "\n" +
   "return { renderCross, getContent: ()=>CONTENT, getCaptured: ()=>CAPTURED };";
@@ -54,7 +55,7 @@ const out = mod.getContent();
 const cap = mod.getCaptured();
 
 assert(out.includes("交叉訊號"), "缺標題");
-assert(out.includes("MA10×MA50"), "缺 MA 標籤");
+assert(out.includes("EMA20×EMA60"), "缺 EMA 標籤");
 assert(out.includes(d.pool_label), "缺 pool_label");  // NDX100 無特殊字元
 assert(out.includes("最近剛觸發"), "缺剛觸發區");
 assert(out.includes("全部金叉（"+cs.n_golden+" 檔）"), "金叉檔數標籤錯");
@@ -85,23 +86,32 @@ assert(empt.includes("（本池目前無死叉）"), "缺死叉空訊息");
 assert(empt.includes("近 3 日無新交叉觸發"), "缺剛觸發空訊息");
 console.log("empty pool OK");
 
-// 4) 剛觸發股帶回測欄位：fresh 表須出現 金叉勝率/平均報酬/樣本 表頭 + 數值；
-//    全部金叉/死叉表不應有這些表頭(只有 fresh 表 withBacktest=true)。
+// 4) 回測欄位：fresh 表 + 全部金叉表都 withBacktest=true,須出現
+//    金叉勝率/平均報酬/平均賺/平均賠/賺賠比/金叉評分/樣本 表頭 + 數值;死叉表不帶。
 const freshRow = {sym:"ZZZ", name:null, cross_state:"golden", cross_days:1,
-                  sc5:80, r5:5.0, score:1000, bt_win_rate:67, bt_avg:12.3, bt_n:9};
+                  sc5:80, r5:5.0, score:1000, bt_win_rate:67, bt_avg:12.3, bt_n:9,
+                  bt_avg_win:18.0, bt_avg_loss:-4.0, bt_pl_ratio:4.5};
 const oldRow  = {sym:"YYY", name:null, cross_state:"golden", cross_days:40,
-                 sc5:50, r5:1.0, score:500};
+                 sc5:50, r5:1.0, score:500, bt_win_rate:40, bt_avg:2.1, bt_n:12,
+                 bt_avg_win:10.0, bt_avg_loss:-3.0, bt_pl_ratio:3.33};
 mod.renderCross({pool_label:"T", n_ok:2,
   cross_signals:{fresh_days:3, golden:[freshRow, oldRow], death:[], n_golden:2, n_death:0}});
 const bt = mod.getContent();
-assert(bt.includes("金叉勝率"), "fresh 表缺 金叉勝率 表頭");
-assert(bt.includes("平均報酬"), "fresh 表缺 平均報酬 表頭");
-assert(bt.includes(">樣本<"), "fresh 表缺 樣本 表頭");
+assert(bt.includes("金叉勝率"), "缺 金叉勝率 表頭");
+assert(bt.includes("平均報酬"), "缺 平均報酬 表頭");
+assert(bt.includes("平均賺"), "缺 平均賺 表頭");
+assert(bt.includes("平均賠"), "缺 平均賠 表頭");
+assert(bt.includes("賺賠比"), "缺 賺賠比 表頭");
+assert(bt.includes("金叉評分"), "缺 金叉評分 表頭");
+assert(bt.includes(">樣本<"), "缺 樣本 表頭");
 assert(bt.includes("67%"), "缺 bt_win_rate 值");      // 67 -> "67%"
 assert(bt.includes("+12.3%"), "缺 bt_avg 值");        // sgn(12.3,1)
-// 全部金叉表(withBacktest 預設 false)不該有回測表頭：取 t-cross-gold 那段檢查
+assert(bt.includes("+18.0%"), "缺 bt_avg_win 值");
+assert(bt.includes("-4.0%"), "缺 bt_avg_loss 值");
+assert(bt.includes("4.50"), "缺 bt_pl_ratio 值");     // toFixed(2)
+// 全部金叉表現在也帶回測欄
 const goldSeg = bt.slice(bt.indexOf('id="t-cross-gold"'), bt.indexOf('</table>', bt.indexOf('id="t-cross-gold"')));
-assert(!goldSeg.includes("金叉勝率"), "全部金叉表不應帶回測欄");
-console.log("fresh backtest columns OK");
+assert(goldSeg.includes("金叉評分"), "全部金叉表應帶回測欄");
+console.log("backtest columns OK (fresh + 全部金叉)");
 
 console.log("\nheadless renderCross tests passed");

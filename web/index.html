@@ -714,8 +714,22 @@ function crossTable(rows){
   return buildTable("t-cross", rows, cols, {empty:"（全池無 5日評分≥80 者）"});
 }
 
+// 金叉綜合評分(0~100):把 5 年回測四指標標準化後加權,再乘樣本信心。
+// 權重:勝率30% + 賺賠比30% + 平均賺20% + 平均賠(下檔控制)20%;樣本<10 折扣。
+function _crossBtScore(r){
+  if(r.bt_n==null || r.bt_win_rate==null) return null;
+  const clamp=(x)=>x<0?0:(x>1?1:x);
+  const win = clamp((r.bt_win_rate||0)/100);                      // 0~100% → 0~1
+  const pl  = r.bt_pl_ratio==null?0:clamp((r.bt_pl_ratio-1)/2);   // 1.0→0、≥3.0→1
+  const aw  = r.bt_avg_win==null?0:clamp(r.bt_avg_win/20);        // 0→0、≥+20%→1
+  const al  = r.bt_avg_loss==null?0:clamp(1-Math.abs(r.bt_avg_loss)/10); // 0%→1、≥-10%→0
+  const raw = 0.30*win + 0.30*pl + 0.20*aw + 0.20*al;            // 0~1
+  const conf = 0.6 + 0.4*clamp((r.bt_n||0)/10);                  // 樣本<10 折扣到 0.6
+  return Math.round(raw*conf*100);
+}
+
 // 交叉訊號表格：代號/名稱・狀態・幾天前・5日漲%・5日評分・Score。沿用 buildTable。
-// withBacktest=true 時(僅🔥剛觸發表)再加 金叉勝率/平均報酬/樣本(5年金叉完整波段回測)。
+// withBacktest=true 時加 金叉勝率/平均報酬/平均賺/平均賠/賺賠比/金叉評分/樣本(5年金叉完整波段回測)。
 function crossSignalTable(tableId, rows, emptyMsg, withBacktest){
   const cols=[
     {h:"#", key:null, rownum:true},
@@ -741,6 +755,19 @@ function crossSignalTable(tableId, rows, emptyMsg, withBacktest){
       {h:"平均報酬", key:"bt_avg",
         sortVal:r=>r.bt_avg==null?-1e9:r.bt_avg,
         cell:r=>r.bt_avg==null?'<td class="dim">–</td>':'<td class="'+cls(r.bt_avg)+'">'+sgn(r.bt_avg,1)+'%</td>'},
+      {h:"平均賺", key:"bt_avg_win",
+        sortVal:r=>r.bt_avg_win==null?-1e9:r.bt_avg_win,
+        cell:r=>r.bt_avg_win==null?'<td class="dim">–</td>':'<td class="pos">'+sgn(r.bt_avg_win,1)+'%</td>'},
+      {h:"平均賠", key:"bt_avg_loss",
+        sortVal:r=>r.bt_avg_loss==null?1e9:r.bt_avg_loss,
+        cell:r=>r.bt_avg_loss==null?'<td class="dim">–</td>':'<td class="neg">'+sgn(r.bt_avg_loss,1)+'%</td>'},
+      {h:"賺賠比", key:"bt_pl_ratio",
+        sortVal:r=>r.bt_pl_ratio==null?-1:r.bt_pl_ratio,
+        cell:r=>r.bt_pl_ratio==null?'<td class="dim">–</td>'
+               :'<td class="'+(r.bt_pl_ratio>=2?"pos":(r.bt_pl_ratio>=1?"":"neg"))+'" style="font-weight:600">'+r.bt_pl_ratio.toFixed(2)+'</td>'},
+      {h:"金叉評分", key:"bt_score", sortVal:r=>{const s=_crossBtScore(r);return s==null?-1:s;},
+        cell:r=>{const s=_crossBtScore(r); return s==null?'<td class="dim">–</td>'
+               :'<td style="font-weight:800;color:'+(s>=70?"var(--green)":(s>=45?"var(--amber)":"var(--ink2)"))+'">'+s+'</td>';}},
       {h:"樣本", key:"bt_n",
         sortVal:r=>r.bt_n==null?-1:r.bt_n,
         cell:r=>r.bt_n==null?'<td class="dim">–</td>':'<td class="dim">'+r.bt_n+'</td>'}
@@ -777,15 +804,15 @@ function renderCross(d){
       '<div class="tg-gname">🔥 最近剛觸發（≤'+fd+' 天）　<span class="dim" style="font-weight:400">金叉 '+freshGold+' ・ 死叉 '+freshDeath+'</span></div>'+
       freshBlock+
 
-      '<details style="margin-top:14px"><summary class="tg-gname" style="cursor:pointer">▼ 全部金叉（'+cs.n_golden+' 檔）</summary>'+
-        '<div style="margin-top:8px">'+crossSignalTable("t-cross-gold", sortCrossRows(cs.golden), "（本池目前無金叉）")+'</div>'+
+      '<details style="margin-top:14px" open><summary class="tg-gname" style="cursor:pointer">▼ 全部金叉（'+cs.n_golden+' 檔）　<span class="dim" style="font-weight:400">附 5 年回測:勝率/平均賺/平均賠/賺賠比/評分</span></summary>'+
+        '<div style="margin-top:8px">'+crossSignalTable("t-cross-gold", sortCrossRows(cs.golden), "（本池目前無金叉）", true)+'</div>'+
       '</details>'+
 
       '<details style="margin-top:10px"><summary class="tg-gname" style="cursor:pointer">▼ 全部死叉（'+cs.n_death+' 檔）</summary>'+
         '<div style="margin-top:8px">'+crossSignalTable("t-cross-death", sortCrossRows(cs.death), "（本池目前無死叉）")+'</div>'+
       '</details>'+
 
-      '<div class="legend">Buy(金叉)＝EMA20 上穿 EMA60（偏多）、Sell(死叉)＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序,點欄頭可改排序。<b>🔥剛觸發</b>那幾檔附該股近5年完整波段回測:<b>金叉勝率</b>＝歷史金叉後抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均報酬、<b>樣本</b>＝幾次金叉(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
+      '<div class="legend">Buy(金叉)＝EMA20 上穿 EMA60（偏多）、Sell(死叉)＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序,點欄頭可改排序(點「金叉評分」可挑歷史品質最佳的金叉)。<br><b>🔥剛觸發</b>與<b>全部金叉</b>附該股近5年完整波段回測:<b>金叉勝率</b>＝金叉抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均(期望值)、<b>平均賺/平均賠</b>＝賺/賠波段各自平均、<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>金叉評分</b>(0~100)＝勝率30%＋賺賠比30%＋平均賺20%＋平均賠(下檔控制)20%,再依樣本數打信心折扣(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
     '</section>';
 }
 

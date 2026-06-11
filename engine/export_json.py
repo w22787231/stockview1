@@ -336,11 +336,12 @@ def _cross_sort_key(r):
     return (days, -(r.get("score") or 0.0))
 
 
-def _annotate_fresh_backtest(fresh_rows, downloader=None):
-    """對「剛觸發」的少數股票抓5年收盤、跑金叉完整波段回測，
-    把 bt_win_rate / bt_avg / bt_n(金叉勝率/平均報酬/樣本數)併回各列(in place)。
-    範圍只含 fresh_rows(通常幾~幾十檔)，不拖慢全池。downloader 供測試注入。"""
-    syms = [r["sym"] for r in fresh_rows]
+def _annotate_fresh_backtest(rows, downloader=None):
+    """對指定 rows 抓5年收盤、跑金叉完整波段回測，把回測統計併回各列(in place):
+    bt_win_rate(金叉勝率) / bt_avg(平均報酬) / bt_n(樣本數) /
+    bt_avg_win(平均賺) / bt_avg_loss(平均賠) / bt_pl_ratio(賺賠比)。
+    一次批次下載,downloader 供測試注入。"""
+    syms = [r["sym"] for r in rows]
     if not syms:
         return
     dl = downloader or (lambda ss: yf.download(
@@ -350,7 +351,7 @@ def _annotate_fresh_backtest(fresh_rows, downloader=None):
         df = dl(syms)
     except Exception:
         return
-    for r in fresh_rows:
+    for r in rows:
         s = r["sym"]
         try:
             if getattr(df.columns, "nlevels", 1) > 1 and s in df.columns.get_level_values(0):
@@ -362,12 +363,15 @@ def _annotate_fresh_backtest(fresh_rows, downloader=None):
                 r["bt_win_rate"] = bt["win_rate"]
                 r["bt_avg"] = bt["avg"]
                 r["bt_n"] = bt["n"]
+                r["bt_avg_win"] = bt["avg_win"]
+                r["bt_avg_loss"] = bt["avg_loss"]
+                r["bt_pl_ratio"] = bt["pl_ratio"]
         except Exception:
             continue
 
 
 def build_cross_signals(rows, downloader=None):
-    """全池 MA10×MA50 交叉清單。把 compute_trend 的全池 rows 依交叉狀態分組。
+    """全池 EMA20×EMA60 交叉清單。把 compute_trend 的全池 rows 依交叉狀態分組。
     golden/death 各自依「越新觸發越前、同天數 Score 大→前」排序；
     cross_state 非 golden/death(資料不足)者略過。「剛觸發」由前端依 fresh_days 篩。
     「剛觸發」那幾檔(cross_days<=fresh_days)額外跑5年金叉回測，標 bt_win_rate/bt_avg/bt_n。"""
@@ -389,9 +393,11 @@ def build_cross_signals(rows, downloader=None):
             death.append(pack(r))
     golden.sort(key=_cross_sort_key)
     death.sort(key=_cross_sort_key)
-    fresh = [r for r in (golden + death)
-             if r["cross_days"] is not None and r["cross_days"] <= FRESH_CROSS_DAYS]
-    _annotate_fresh_backtest(fresh, downloader=downloader)
+    # 全部金叉都標 5 年回測(勝率/平均賺/平均賠/賺賠比);死叉只標剛觸發(供🔥表)
+    _annotate_fresh_backtest(golden, downloader=downloader)
+    fresh_death = [r for r in death
+                   if r["cross_days"] is not None and r["cross_days"] <= FRESH_CROSS_DAYS]
+    _annotate_fresh_backtest(fresh_death, downloader=downloader)
     return {"fresh_days": FRESH_CROSS_DAYS,
             "golden": golden, "death": death,
             "n_golden": len(golden), "n_death": len(death)}

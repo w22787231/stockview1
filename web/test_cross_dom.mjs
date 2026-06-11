@@ -39,6 +39,8 @@ const $ = sel => ({ set innerHTML(v){ CONTENT = v; }, get innerHTML(){ return CO
 const src = stub +
   "let CROSS_MODE='pool';\n" +
   extract("crossModeBar") + "\n" +
+  extract("_pushOn") + "\n" +
+  extract("pushBar") + "\n" +
   extract("sortCrossRows") + "\n" +
   extract("freshCrosses") + "\n" +
   extract("_crossBtScore") + "\n" +

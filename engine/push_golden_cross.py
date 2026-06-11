@@ -1,44 +1,82 @@
 # -*- coding: utf-8 -*-
-"""收盤後偵測「自訂股池」當日新黃金交叉(EMA20×EMA60) → 發 Web Push 通知。
+"""收盤後偵測「全市場(各池)」當日新黃金交叉(EMA20×EMA60) → 發 Web Push 摘要通知。
 
 資料流:
-  - 訂閱由前端 POST /api/push/subscribe 寫入 Cloudflare KV(binding PUSH_SUBS)。
-  - 本腳本(GitHub Actions,收盤後)用 Cloudflare API 讀 KV 所有 sub:* 訂閱,
-    對每個訂閱的 watchlist 計算 EMA20/60,挑「最後一根剛金叉」者,發推播。
-  - 去重:KV 寫 pn:<hash>:<sym>=<crossdate>,同一次金叉只推一次(best-effort)。
+  - 各池 data/<pool>.json 的 cross_signals.golden 已含今日金叉(cross_days==0=今日觸發)。
+  - 本腳本(GitHub Actions,收盤後、export 之後)讀本機 ../data/*.json,彙整今日新金叉,
+    依「金叉評分」排序,組一則摘要,推播給 KV 內所有訂閱者。
+  - 去重:KV 寫 gx:<sym>=<date>,同一檔同日只計一次(避免台股/美股兩次排程重複通知)。
 
-缺任一環境變數即直接結束(no-op),不影響其他部署步驟。
-環境變數:CLOUDFLARE_API_TOKEN(需 KV 讀寫)、CLOUDFLARE_ACCOUNT_ID、PUSH_KV_ID、
+訂閱由前端 POST /api/push/subscribe 寫入 KV(binding PUSH_SUBS)。
+缺任一環境變數即 no-op,不影響其他部署步驟。
+環境變數:CLOUDFLARE_API_TOKEN(KV 讀寫)、CLOUDFLARE_ACCOUNT_ID、PUSH_KV_ID、
          VAPID_PRIVATE_PEM、VAPID_SUBJECT。
 """
-import os, json, sys, re, tempfile, time
+import os, json, glob, time, tempfile
 
 API = "https://api.cloudflare.com/client/v4"
-
-
-def _env(*names):
-    return [os.environ.get(n, "").strip() for n in names]
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(HERE, "..", "data")
 
 
 def _need():
-    tok, acct, kv, pem, subj = _env(
-        "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PUSH_KV_ID",
-        "VAPID_PRIVATE_PEM", "VAPID_SUBJECT")
-    if not (tok and acct and kv and pem and subj):
+    g = lambda n: os.environ.get(n, "").strip()
+    cfg = {"tok": g("CLOUDFLARE_API_TOKEN"), "acct": g("CLOUDFLARE_ACCOUNT_ID"),
+           "kv": g("PUSH_KV_ID"), "pem": g("VAPID_PRIVATE_PEM"), "subj": g("VAPID_SUBJECT")}
+    if not all(cfg.values()):
         print("[push] 缺環境變數(token/acct/PUSH_KV_ID/VAPID_*),跳過推播。")
         return None
-    return {"tok": tok, "acct": acct, "kv": kv, "pem": pem, "subj": subj}
+    return cfg
+
+
+def _score(r):
+    """與前端 _crossBtScore 同公式(0~100):勝率30+賺賠比30+平均賺15+平均賠10+最差15,樣本折扣。"""
+    n, wr = r.get("bt_n"), r.get("bt_win_rate")
+    if n is None or wr is None:
+        return None
+    c = lambda x: 0.0 if x < 0 else (1.0 if x > 1 else x)
+    win = c(wr / 100.0)
+    pl = 0.0 if r.get("bt_pl_ratio") is None else c((r["bt_pl_ratio"] - 1) / 2.0)
+    aw = 0.0 if r.get("bt_avg_win") is None else c(r["bt_avg_win"] / 20.0)
+    al = 0.0 if r.get("bt_avg_loss") is None else c(1 - abs(r["bt_avg_loss"]) / 10.0)
+    wo = 0.0 if r.get("bt_worst") is None else c(1 - abs(r["bt_worst"]) / 30.0)
+    raw = 0.30 * win + 0.30 * pl + 0.15 * aw + 0.10 * al + 0.15 * wo
+    return round(raw * (0.6 + 0.4 * c(n / 10.0)) * 100)
+
+
+def _today_golden():
+    """掃所有池 JSON,回今日新金叉(cross_days==0)清單,依評分高→低、去重(同 sym 取最高分)。"""
+    best = {}
+    for f in sorted(glob.glob(os.path.join(DATA, "*.json"))):
+        try:
+            d = json.load(open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        cs = d.get("cross_signals")
+        if not cs:
+            continue
+        for r in cs.get("golden", []):
+            if r.get("cross_days") != 0:        # 只要今日剛觸發
+                continue
+            sym = r.get("sym")
+            if not sym:
+                continue
+            sc = _score(r) or 0
+            cur = best.get(sym)
+            if cur is None or sc > cur[0]:
+                best[sym] = (sc, r.get("name") or sym)
+    rows = [(sym, sc, nm) for sym, (sc, nm) in best.items()]
+    rows.sort(key=lambda x: -x[1])
+    return rows
 
 
 def _kv_list(cfg, sess):
-    """列出所有 sub:* key。"""
     keys, cursor = [], None
     while True:
         url = f"{API}/accounts/{cfg['acct']}/storage/kv/namespaces/{cfg['kv']}/keys?prefix=sub:&limit=1000"
         if cursor:
             url += "&cursor=" + cursor
-        r = sess.get(url, headers={"Authorization": "Bearer " + cfg["tok"]}, timeout=20)
-        j = r.json()
+        j = sess.get(url, headers={"Authorization": "Bearer " + cfg["tok"]}, timeout=20).json()
         if not j.get("success"):
             print("[push] 讀 KV keys 失敗:", j.get("errors")); return keys
         keys += [k["name"] for k in j.get("result", [])]
@@ -56,10 +94,10 @@ def _kv_get(cfg, sess, key):
     try:
         return json.loads(r.text)
     except Exception:
-        return None
+        return r.text
 
 
-def _kv_put(cfg, sess, key, val):   # best-effort 去重標記
+def _kv_put(cfg, sess, key, val):
     try:
         sess.put(f"{API}/accounts/{cfg['acct']}/storage/kv/namespaces/{cfg['kv']}/values/{key}",
                  headers={"Authorization": "Bearer " + cfg["tok"]}, data=val.encode("utf-8"), timeout=20)
@@ -67,130 +105,12 @@ def _kv_put(cfg, sess, key, val):   # best-effort 去重標記
         pass
 
 
-def _ema(vals, n):
-    k = 2.0 / (n + 1)
-    out, e = [None] * len(vals), None
-    for i, v in enumerate(vals):
-        if i < n - 1:
-            continue
-        if i == n - 1:
-            e = sum(vals[:n]) / n
-        else:
-            e = v * k + e * (1 - k)
-        out[i] = e
-    return out
-
-
-def _candidates(code):
-    code = str(code).upper().strip()
-    if re.fullmatch(r"\d{4,6}", code):
-        return [code + ".TW", code + ".TWO"]
-    return [code]
-
-
-def _last_golden(closes):
-    """回傳 (是否最後一根剛金叉, 名稱用收盤). EMA20 上穿 EMA60 於最後一根。"""
-    if len(closes) < 65:
-        return False
-    s, l = _ema(closes, 20), _ema(closes, 60)
-    n = len(closes)
-    if s[n - 1] is None or l[n - 1] is None or s[n - 2] is None or l[n - 2] is None:
-        return False
-    return (s[n - 2] - l[n - 2]) <= 0 and (s[n - 1] - l[n - 1]) > 0
-
-
-def main():
-    cfg = _need()
-    if not cfg:
-        return
-    import requests
-    import yfinance as yf
+def _kv_del(cfg, sess, key):
     try:
-        from pywebpush import webpush, WebPushException
-    except Exception as e:
-        print("[push] 缺 pywebpush,跳過:", e); return
-
-    sess = requests.Session()
-    keys = _kv_list(cfg, sess)
-    print(f"[push] 訂閱數:{len(keys)}")
-    if not keys:
-        return
-    subs = []
-    allcodes = set()
-    for k in keys:
-        rec = _kv_get(cfg, sess, k)
-        if rec and rec.get("subscription") and rec.get("watchlist"):
-            subs.append((k, rec))
-            allcodes.update(rec["watchlist"])
-    if not subs:
-        return
-
-    # 解析代號 → 可用 yfinance 符號(台股數字試 .TW/.TWO)
-    cand_map = {c: _candidates(c) for c in allcodes}
-    all_syms = sorted({s for cs in cand_map.values() for s in cs})
-    print(f"[push] 計算 {len(all_syms)} 個符號的 EMA20/60 …")
-    golden_sym = set()          # 最後一根剛金叉的「符號」
-    closes_by_sym = {}
-    try:
-        df = yf.download(all_syms, period="1y", interval="1d", group_by="ticker",
-                         progress=False, auto_adjust=False, threads=True)
-    except Exception as e:
-        print("[push] yfinance 下載失敗:", e); return
-    for s in all_syms:
-        try:
-            sub = df[s].dropna() if getattr(df.columns, "nlevels", 1) > 1 else df.dropna()
-            cl = [float(x) for x in sub["Close"].tolist()]
-            closes_by_sym[s] = cl
-            if _last_golden(cl):
-                golden_sym.add(s)
-        except Exception:
-            continue
-    # code → 命中的符號(取第一個有資料者)
-    code_sym = {}
-    for c, cs in cand_map.items():
-        for s in cs:
-            if s in closes_by_sym and closes_by_sym[s]:
-                code_sym[c] = s
-                break
-    today = time.strftime("%Y-%m-%d")
-    sent = 0
-    for key, rec in subs:
-        hits = []
-        for c in rec["watchlist"]:
-            s = code_sym.get(c)
-            if s and s in golden_sym:
-                hits.append((c, s))
-        if not hits:
-            continue
-        # 去重:同股同次金叉只推一次(以 today 當該次標記)
-        fresh = []
-        for c, s in hits:
-            mk = f"pn:{key[4:]}:{s}"      # 去掉 "sub:" 前綴
-            prev = _kv_get(cfg, sess, mk)
-            if prev == today or prev == {"d": today}:
-                continue
-            fresh.append((c, s))
-            _kv_put(cfg, sess, mk, json.dumps(today))
-        if not fresh:
-            continue
-        names = "、".join(c for c, _ in fresh[:6]) + ("…" if len(fresh) > 6 else "")
-        body = f"{names} 出現黃金交叉(EMA20上穿EMA60)" if len(fresh) > 1 else f"{fresh[0][0]} 出現黃金交叉(EMA20上穿EMA60)"
-        payload = json.dumps({"title": "股觀觀股 · 金叉提醒", "body": body, "url": "/?src=push#cross"})
-        try:
-            webpush(subscription_info=rec["subscription"], data=payload,
-                    vapid_private_key=_pem_file(cfg["pem"]), vapid_claims={"sub": cfg["subj"]})
-            sent += 1
-        except WebPushException as e:
-            code = getattr(getattr(e, "response", None), "status_code", None)
-            if code in (404, 410):           # 訂閱失效 → 刪除
-                try:
-                    sess.delete(f"{API}/accounts/{cfg['acct']}/storage/kv/namespaces/{cfg['kv']}/values/{key}",
-                                headers={"Authorization": "Bearer " + cfg["tok"]}, timeout=20)
-                except Exception:
-                    pass
-            else:
-                print("[push] 發送失敗:", e)
-    print(f"[push] 已推播 {sent} 則。")
+        sess.delete(f"{API}/accounts/{cfg['acct']}/storage/kv/namespaces/{cfg['kv']}/values/{key}",
+                    headers={"Authorization": "Bearer " + cfg["tok"]}, timeout=20)
+    except Exception:
+        pass
 
 
 _PEMPATH = None
@@ -198,9 +118,74 @@ def _pem_file(pem):
     global _PEMPATH
     if _PEMPATH is None:
         f = tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False)
-        f.write(pem if "BEGIN" in pem else pem); f.close()
+        f.write(pem); f.close()
         _PEMPATH = f.name
     return _PEMPATH
+
+
+def _short(sym):
+    return sym.replace(".TW", "").replace(".TWO", "")
+
+
+def main():
+    cfg = _need()
+    if not cfg:
+        return
+    import requests
+    try:
+        from pywebpush import webpush, WebPushException
+    except Exception as e:
+        print("[push] 缺 pywebpush,跳過:", e); return
+
+    golden = _today_golden()
+    print(f"[push] 今日全市場新金叉:{len(golden)} 檔")
+    if not golden:
+        print("[push] 今日無新金叉,不推播。"); return
+
+    today = time.strftime("%Y-%m-%d")
+    sess = requests.Session()
+
+    # 去重:過濾掉今天已通知過的 sym(台股/美股兩次排程不重複)
+    fresh = []
+    for sym, sc, nm in golden:
+        mk = "gx:" + sym
+        if _kv_get(cfg, sess, mk) == today:
+            continue
+        fresh.append((sym, sc, nm))
+    if not fresh:
+        print("[push] 今日金叉皆已通知過,略過。"); return
+
+    keys = _kv_list(cfg, sess)
+    print(f"[push] 訂閱數:{len(keys)}")
+    if not keys:
+        return
+
+    top = fresh[:6]
+    names = "、".join(f"{nm}({_short(sym)})" for sym, sc, nm in top)
+    more = f" 等 {len(fresh)} 檔" if len(fresh) > len(top) else ""
+    body = f"今日 {len(fresh)} 檔黃金交叉:{names}{more}" if len(fresh) > 1 else f"{top[0][2]}({_short(top[0][0])}) 出現黃金交叉"
+    payload = json.dumps({"title": "股觀觀股 · 全市場金叉", "body": body, "url": "/?src=push#cross"})
+
+    sent = 0
+    for key in keys:
+        rec = _kv_get(cfg, sess, key)
+        sub = rec.get("subscription") if isinstance(rec, dict) else None
+        if not sub:
+            continue
+        try:
+            webpush(subscription_info=sub, data=payload,
+                    vapid_private_key=_pem_file(cfg["pem"]), vapid_claims={"sub": cfg["subj"]})
+            sent += 1
+        except WebPushException as e:
+            sc = getattr(getattr(e, "response", None), "status_code", None)
+            if sc in (404, 410):
+                _kv_del(cfg, sess, key)
+            else:
+                print("[push] 發送失敗:", e)
+    # 標記今日已通知
+    for sym, _, _ in fresh:
+        _kv_put(cfg, sess, "gx:" + sym, today)
+    print(f"[push] 已推播 {sent} 則(摘要含 {len(fresh)} 檔金叉)。")
 
 
 if __name__ == "__main__":

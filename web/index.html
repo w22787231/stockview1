@@ -811,6 +811,7 @@ function renderCross(d){
       '<div class="sec-head"><h2>交叉訊號</h2><span class="tag">EMA20×EMA60 · 本池 '+esc(d.pool_label)+'</span>'+
         '<span class="hint">本池 '+d.n_ok+' 檔，每日快照</span></div>'+
       crossModeBar()+
+      pushBar()+
       '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
         '⚠️ <b>歷史/快照統計，非未來保證、非買賣建議。</b>Buy(金叉)＝EMA20 上穿 EMA60、Sell(死叉)＝下穿(與技術線圖 Buy/Sell 同口徑);「幾天前」＝距最近一次交叉的交易日數，0＝今日觸發。'+
       '</div>'+
@@ -907,8 +908,8 @@ function _allWatchCodes(){ const set=new Set(); holdPools().list.forEach(p=>hold
 function pushBar(){
   return '<div style="margin:0 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
     (_pushOn()
-      ? '<button class="btn" onclick="disablePush()">🔕 關閉金叉通知</button><span class="dim" style="font-size:12px">已開啟:收盤後自訂股池出現黃金交叉時,App 會推播(關著也收得到)</span>'
-      : '<button class="btn" style="background:#2563eb;color:#fff;border:none;font-weight:600" onclick="enablePush()">🔔 開啟金叉通知</button><span class="dim" style="font-size:12px">收盤後自訂股池出現黃金交叉 → App 推播提醒(iPhone 需先「加入主畫面」)</span>')+
+      ? '<button class="btn" onclick="disablePush()">🔕 關閉金叉通知</button><span class="dim" style="font-size:12px">已開啟:收盤後<b>全市場</b>任一股出現黃金交叉,App 推播摘要(關著也收得到)</span>'
+      : '<button class="btn" style="background:#2563eb;color:#fff;border:none;font-weight:600" onclick="enablePush()">🔔 開啟金叉通知（全市場）</button><span class="dim" style="font-size:12px">收盤後<b>全市場</b>任一股出現黃金交叉 → App 推播摘要(依金叉評分排序;iPhone 需先「加入主畫面」)</span>')+
   '</div>';
 }
 async function enablePush(){

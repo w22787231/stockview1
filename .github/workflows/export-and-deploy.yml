@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: false
+      web_only:
+        description: "純前端部署:只改 index.html/_worker.js 時用。跳過所有資料抓取,全部從線上沿用(~2-3分)"
+        required: false
+        type: boolean
+        default: false
   repository_dispatch:
     types: [refresh-data]
 
@@ -56,6 +61,7 @@ jobs:
           pip install yfinance pandas
 
       - name: Export all pools to JSON
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"            # 關鍵：讓引擎以 UTF-8 讀原始碼，中文趨勢字串才正確
           PYTHONIOENCODING: "utf-8"
@@ -65,6 +71,7 @@ jobs:
           python export_json.py all 50
 
       - name: Export macro market (indices + sector ETFs)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -73,6 +80,7 @@ jobs:
           python export_macro.py
 
       - name: Export Taiwan themes (sector/theme baskets)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -81,6 +89,7 @@ jobs:
           python export_themes.py
 
       - name: Export Taiwan industry chains (quotes + fund flow)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -89,6 +98,7 @@ jobs:
           python export_chain.py
 
       - name: Export active ETF holdings change
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -97,6 +107,7 @@ jobs:
           python export_etf.py || true
 
       - name: Export sentiment indicators (VIX/VXN/SKEW/HYG/breadth/F&G)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -106,6 +117,7 @@ jobs:
           python export_sentiment.py || true
 
       - name: Export calendar (econ data + earnings, Taipei time)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -119,7 +131,7 @@ jobs:
         # 減重：關新聞翻譯(17000次翻譯太慢)、K線抽2年(回測仍自抓5年)。
         # continue-on-error + || true：單池失敗不中斷部署。
         # skip_stocks=true(快速部署)時跳過此步,改由下一步從線上沿用既有詳情。
-        if: ${{ github.event.inputs.skip_stocks != 'true' }}
+        if: ${{ github.event.inputs.skip_stocks != 'true' && github.event.inputs.web_only != 'true' }}
         continue-on-error: true
         env:
           PYTHONUTF8: "1"
@@ -139,7 +151,8 @@ jobs:
 
       - name: Rehydrate per-stock detail from live (fast deploy)
         # skip_stocks=true 時:從線上沿用既有 data/stock/*.json,免重跑 yfinance。
-        if: ${{ github.event.inputs.skip_stocks == 'true' }}
+        # web_only 走下方 pull_live_data 一次抓回全部,故此步不重複。
+        if: ${{ github.event.inputs.skip_stocks == 'true' && github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -147,7 +160,18 @@ jobs:
           cd engine
           python rehydrate_stock.py || true
 
+      - name: Pull ALL data from live (web-only deploy)
+        # web_only=true:純前端更新。完全不重算,從線上沿用整個 data 樹(頂層+池+中文名+個股)。
+        if: ${{ github.event.inputs.web_only == 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python pull_live_data.py || true
+
       - name: Export industry median PE (for holdings 同業PE)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -156,6 +180,7 @@ jobs:
           python export_industry_pe.py || true
 
       - name: Export full TW code→中文名 (上市+上櫃, for holdings 繁中名)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
@@ -164,13 +189,19 @@ jobs:
           python export_tw_names.py || true
 
       - name: Export capital flows (TW 三大法人/融資券 + US Fed流動性/類股輪動)
+        if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}   # 美股流動性序列(WALCL/TGA/RRP/HY/MMF)
         run: |
           cd engine
-          python export_capital.py || true
+          # 資料源限流時最多跑 6 分鐘就中止(timeout),避免整個部署卡死
+          timeout 360 python export_capital.py || echo "[capital] 逾時/失敗,改沿用線上"
+          # 若沒產出(被中止)→ 從線上沿用,確保站上資金資料不消失
+          if [ ! -s ../data/capital.json ]; then
+            python -c "import urllib.request,io; open('../data/capital.json','wb').write(urllib.request.urlopen(urllib.request.Request('https://stockview1.pages.dev/data/capital.json',headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read())" && echo "[capital] 已沿用線上" || echo "[capital] 線上沿用也失敗"
+          fi
 
       - name: Stage web output
         run: |

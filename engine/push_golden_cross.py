@@ -195,48 +195,58 @@ def main():
 
     today = time.strftime("%Y-%m-%d")
     sess = requests.Session()
-
-    # 去重:過濾掉今天已通知過的 sym(台股/美股兩次排程不重複)
-    fresh = []
-    for sym, sc, nm in golden:
-        mk = "gx:" + sym
-        if _kv_get(cfg, sess, mk) == today:
-            continue
-        fresh.append((sym, sc, nm))
-    if not fresh:
-        print("[push] 今日金叉皆已通知過,略過。"); return
-
     keys = _kv_list(cfg, sess)
     print(f"[push] 訂閱數:{len(keys)}")
     if not keys:
         return
 
-    top = fresh[:6]
-    names = "、".join(f"{nm}({_short(sym)})" for sym, sc, nm in top)
-    more = f" 等 {len(fresh)} 檔" if len(fresh) > len(top) else ""
-    body = f"今日 {len(fresh)} 檔黃金交叉:{names}{more}" if len(fresh) > 1 else f"{top[0][2]}({_short(top[0][0])}) 出現黃金交叉"
-    payload = json.dumps({"title": "股觀觀股 · 全市場金叉", "body": body, "url": "/?src=push#cross"})
+    def _strip(s):
+        return s.upper().replace(".TW", "").replace(".TWO", "")
 
     sent = 0
     for key in keys:
         rec = _kv_get(cfg, sess, key)
-        sub = rec.get("subscription") if isinstance(rec, dict) else None
+        if not isinstance(rec, dict):
+            continue
+        sub = rec.get("subscription")
         if not sub:
             continue
+        scope = rec.get("scope", "all")
+        # 依 scope 取相關金叉
+        if scope == "custom":
+            wl = {_strip(c) for c in (rec.get("watchlist") or [])}
+            relevant = [(s, sc, nm) for s, sc, nm in golden if _strip(s) in wl]
+        else:
+            relevant = list(golden)
+        if not relevant:
+            continue
+        # 每訂閱各自去重(台股/美股兩排程同日不重複):pn:<hash> = {date, syms}
+        mk = "pn:" + key[4:]
+        prev = _kv_get(cfg, sess, mk)
+        seen = set(prev.get("syms", [])) if isinstance(prev, dict) and prev.get("date") == today else set()
+        fresh = [(s, sc, nm) for s, sc, nm in relevant if s not in seen]
+        if not fresh:
+            continue
+        top = fresh[:6]
+        names = "、".join(f"{nm}({_short(s)})" for s, sc, nm in top)
+        more = f" 等 {len(fresh)} 檔" if len(fresh) > len(top) else ""
+        scope_lab = "我的股池" if scope == "custom" else "全市場"
+        title = f"股觀觀股 · {scope_lab}金叉"
+        body = (f"{scope_lab}今日 {len(fresh)} 檔黃金交叉:{names}{more}"
+                if len(fresh) > 1 else f"{top[0][2]}({_short(top[0][0])}) 出現黃金交叉")
+        payload = json.dumps({"title": title, "body": body, "url": "/?src=push#cross"})
         try:
             webpush(subscription_info=sub, data=payload,
                     vapid_private_key=_pem_file(cfg["pem"]), vapid_claims={"sub": cfg["subj"]})
             sent += 1
+            _kv_put(cfg, sess, mk, json.dumps({"date": today, "syms": list(seen | {s for s, _, _ in fresh})}))
         except WebPushException as e:
-            sc = getattr(getattr(e, "response", None), "status_code", None)
-            if sc in (404, 410):
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if code in (404, 410):
                 _kv_del(cfg, sess, key)
             else:
                 print("[push] 發送失敗:", e)
-    # 標記今日已通知
-    for sym, _, _ in fresh:
-        _kv_put(cfg, sess, "gx:" + sym, today)
-    print(f"[push] 已推播 {sent} 則(摘要含 {len(fresh)} 檔金叉)。")
+    print(f"[push] 已推播 {sent} 則。")
 
 
 if __name__ == "__main__":

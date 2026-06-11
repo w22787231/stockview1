@@ -903,16 +903,29 @@ async function fetchAndRenderCrossCustom(pid){
 // ── Web Push:黃金交叉 App 通知(收盤後伺服器偵測自訂股池金叉 → 推播)──
 const VAPID_PUBLIC="BM5TgvH445Xw_vCg4bBXfesMmdUEqqeWcfH5Y5k_CI1qMfea4vBwaD9Proc5r9QfHJ6QnF-CQeM0jPR05g2lOWA";
 function _pushOn(){ try{ return localStorage.getItem("pushOn")==="1"; }catch(e){ return false; } }
+function _pushScope(){ try{ return localStorage.getItem("pushScope")==="custom"?"custom":"all"; }catch(e){ return "all"; } }
+function _refreshPushBar(){ const el=document.getElementById("pushBarBox"); if(el) el.innerHTML=pushBarInner(); }
 function _urlB64ToU8(b64){ const pad="=".repeat((4-b64.length%4)%4); const s=(b64+pad).replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(s); const u=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i); return u; }
 function _allWatchCodes(){ const set=new Set(); holdPools().list.forEach(p=>holdCodes(p.id).forEach(c=>set.add(String(c)))); return [...set]; }
-function pushBar(){
-  return '<div style="margin:0 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
-    (_pushOn()
-      ? '<button class="btn" onclick="disablePush()">🔕 關閉金叉通知</button><span class="dim" style="font-size:12px">已開啟:收盤後<b>全市場</b>任一股出現黃金交叉,App 推播摘要(關著也收得到)</span>'
-      : '<button class="btn" style="background:#2563eb;color:#fff;border:none;font-weight:600" onclick="enablePush()">🔔 開啟金叉通知（全市場）</button><span class="dim" style="font-size:12px">收盤後<b>全市場</b>任一股出現黃金交叉 → App 推播摘要(依金叉評分排序;iPhone 需先「加入主畫面」)</span>')+
-  '</div>';
+function pushBar(){ return '<div id="pushBarBox">'+pushBarInner()+'</div>'; }
+function pushBarInner(){
+  const on=_pushOn(), sc=_pushScope();
+  const btn=(s,lab)=>{
+    const active=on&&sc===s;
+    const style=active?'background:#16a34a;color:#fff;border:none':(!on?'background:#2563eb;color:#fff;border:none':'');
+    return '<button class="btn" style="font-weight:600;'+style+'" onclick="enablePush(\''+s+'\')">'+(active?'✓ ':'🔔 ')+lab+'</button>';
+  };
+  let h='<div style="margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+  h+= btn('all','訂閱全部池金叉') + btn('custom','只訂閱我的股池金叉');
+  if(on) h+= '<button class="btn" onclick="disablePush()">🔕 關閉</button>';
+  h+= '<span class="dim" style="font-size:12px;width:100%;margin-top:2px">'+
+      (on? ('已開啟:'+(sc==='custom'?'只在<b>我的股池(持股分析)</b>出現金叉時推播':'<b>全部池(全市場)</b>任一股金叉就推播')+'。點上面另一顆可切換範圍;收盤後推播,關著也收得到。')
+         : '選擇收盤後要推播哪種金叉:<b>全部池</b>=全市場任一股;<b>我的股池</b>=只通知持股分析裡的股票。(iPhone 需先「加入主畫面」)')+
+      '</span></div>';
+  return h;
 }
-async function enablePush(){
+async function enablePush(scope){
+  scope = (scope==="custom")?"custom":"all";
   try{
     if(!("serviceWorker" in navigator) || !("PushManager" in window)){ alert("此裝置/瀏覽器不支援推播。iPhone 請先用 Safari 開網站→分享→「加入主畫面」,再到 App 內開啟。"); return; }
     const perm=await Notification.requestPermission();
@@ -920,9 +933,13 @@ async function enablePush(){
     const reg=await navigator.serviceWorker.ready;
     let sub=await reg.pushManager.getSubscription();
     if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_urlB64ToU8(VAPID_PUBLIC)});
-    const r=await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes(), ua:navigator.userAgent})});
+    const r=await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes(), ua:navigator.userAgent, scope:scope})});
     const j=await r.json().catch(()=>({}));
-    if(r.ok){ try{localStorage.setItem("pushOn","1");}catch(e){} alert("✅ 已開啟金叉通知,追蹤 "+(j.n||0)+" 檔。每交易日收盤後,自訂股池若出現黃金交叉就會推播。"); renderCrossCustom(); }
+    if(r.ok){
+      try{localStorage.setItem("pushOn","1"); localStorage.setItem("pushScope",scope);}catch(e){}
+      alert("✅ 已開啟金叉通知("+(scope==="custom"?"只我的股池,追蹤 "+(j.n||0)+" 檔":"全部池 / 全市場")+")。每交易日收盤後出現黃金交叉就會推播。");
+      _refreshPushBar();
+    }
     else if(j.error==="push_not_configured") alert("⚠️ 推播後端尚未啟用(需先在 Cloudflare 綁定 KV)。請稍後再試。");
     else alert("訂閱失敗:"+(j.error||r.status));
   }catch(e){ alert("開啟通知失敗:"+(e&&e.message||e)); }
@@ -933,15 +950,15 @@ async function disablePush(){
     const sub=await reg.pushManager.getSubscription();
     if(sub){ try{ await fetch("/api/push/unsubscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub})}); }catch(e){} await sub.unsubscribe(); }
     try{localStorage.removeItem("pushOn");}catch(e){}
-    alert("已關閉金叉通知。"); renderCrossCustom();
+    alert("已關閉金叉通知。"); _refreshPushBar();
   }catch(e){ alert(e&&e.message||e); }
 }
-async function _updatePushWatchlist(){   // 自訂清單變動 → 無聲同步到伺服器(維持訂閱不變)
+async function _updatePushWatchlist(){   // 自訂清單變動 → 無聲同步 watchlist+scope 到伺服器(維持訂閱不變)
   try{
     if(!("serviceWorker" in navigator)) return;
     const reg=await navigator.serviceWorker.ready;
     const sub=await reg.pushManager.getSubscription(); if(!sub) return;
-    await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes(), ua:navigator.userAgent})});
+    await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes(), ua:navigator.userAgent, scope:_pushScope()})});
   }catch(e){}
 }
 

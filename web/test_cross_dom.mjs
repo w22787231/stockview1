@@ -40,6 +40,8 @@ const src = stub +
   "let CROSS_MODE='pool';\n" +
   extract("crossModeBar") + "\n" +
   extract("_pushOn") + "\n" +
+  extract("_pushScope") + "\n" +
+  extract("pushBarInner") + "\n" +
   extract("pushBar") + "\n" +
   extract("sortCrossRows") + "\n" +
   extract("freshCrosses") + "\n" +

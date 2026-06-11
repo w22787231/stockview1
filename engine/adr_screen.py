@@ -261,6 +261,25 @@ def _ma_cross_status(sub, short_n=20, long_n=60, lookback=120):
     return state, days_since
 
 
+def _ma_buy_days(sub, short_n=20, long_n=60, lookback=120):
+    """ChartArt Buy:距最近一次「短均線上穿長均線且該根收盤>前一根收盤」的交易日數;
+    lookback 內無則 None。與 _ma_cross_status 同口徑(EMA20/60、上穿方向)。"""
+    closes = list(sub["Close"])
+    n = len(closes)
+    if n < long_n + 2:
+        return None
+    se = _ema(closes, short_n); le = _ema(closes, long_n)
+    start = max(long_n, n - lookback)
+    for i in range(n - 1, start - 1, -1):
+        ps, pl, cs, cl = se[i - 1], le[i - 1], se[i], le[i]
+        if None in (ps, pl, cs, cl):
+            continue
+        up_cross = (ps - pl) <= 0 and (cs - cl) > 0
+        if up_cross and closes[i] > closes[i - 1]:
+            return (n - 1) - i
+    return None
+
+
 def compute_trend(symbols):
     """趨勢效率 = N日漲幅/(ADRN%xN)，看單向性。依 eff20 由高到低排。"""
     rows, failed = [], []
@@ -293,6 +312,7 @@ def compute_trend(symbols):
                          "dv": dv, "dv1": dv1, "volr": volr, "score": score,
                          "cross_state": cross_state, "cross_days": cross_days,
                          "close": float(sub["Close"].iloc[-1]),
+                         "buy_days": _ma_buy_days(sub),
                          "cur": "TWD" if is_tw(sym) else "USD"})
         except Exception as e:
             failed.append((sym, repr(e)[:40]))

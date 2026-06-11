@@ -15,15 +15,15 @@ import export_json as ej
 DATA_DIR = os.path.join(HERE, "..", "data")
 
 PRESETS = {
-    "us5000": {"label": "5000股",     "min_price": 5.0, "min_dolvol": 5e6, "cur": "USD"},
-    "tw_all": {"label": "台股全市場", "min_price": 0.0, "min_dolvol": 0.0, "cur": "TWD"},
+    "us5000": {"label": "5000股",     "min_price": 5.0, "min_dolvol": 5e6, "cur": "USD", "buy_within": 5},
+    "tw_all": {"label": "台股全市場", "min_price": 0.0, "min_dolvol": 0.0, "cur": "TWD", "buy_within": 5},
 }
 
 def _offline(syms):
     raise RuntimeError("lite pool: no 5y backtest")
 
 def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
-                  symbols=None, compute=None, out_dir=None, batch=300):
+                  buy_within=0, symbols=None, compute=None, out_dir=None, batch=300):
     compute = compute or eng.compute_trend
     if symbols is None:
         symbols = eng.load_pool(pool)
@@ -37,12 +37,15 @@ def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
         print(f"[lite:{pool}] {min(i + batch, len(symbols))}/{len(symbols)}", flush=True)
     rows = [r for r in rows
             if r.get("close", 1e18) >= min_price and r.get("dv", 0.0) >= min_dolvol]
+    if buy_within:   # 整池只留近 buy_within 天有 ChartArt Buy(交叉當根+收紅)
+        rows = [r for r in rows
+                if r.get("buy_days") is not None and r["buy_days"] <= buy_within]
     cs = ej.build_cross_signals(rows, downloader=_offline)   # offline → 無 bt_ 欄
     payload = {
-        "pool": pool, "pool_label": label, "lite": True,
+        "pool": pool, "pool_label": label, "lite": True, "buy_within": buy_within,
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "yfinance (daily 1y, no backtest)",
+        "source": "yfinance (daily 1y, ChartArt Buy<=%dd, no backtest)" % buy_within if buy_within else "yfinance (daily 1y, no backtest)",
         "n_list": len(symbols), "n_ok": len(rows),
         "currencies": sorted(set(r["cur"] for r in rows)) or [default_cur],
         "cross_signals": cs,
@@ -63,7 +66,8 @@ def main():
         raise SystemExit(1)
     pool = sys.argv[1]
     p = PRESETS[pool]
-    run_lite_pool(pool, p["label"], p["min_price"], p["min_dolvol"], p["cur"])
+    run_lite_pool(pool, p["label"], p["min_price"], p["min_dolvol"], p["cur"],
+                  buy_within=p["buy_within"])
 
 if __name__ == "__main__":
     main()

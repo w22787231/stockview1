@@ -37,5 +37,22 @@ def test_tw_all_no_filter():
     assert gold == {"HI","LOWP","LOWV"}, gold     # 不過濾,三檔金叉全留
     assert pl["pool_label"] == "台股全市場"
 
+
+def _fake_compute_buy(syms):
+    d = {"BUY2": _row("BUY2","golden",2,100.0,5e7),
+         "BUY7": _row("BUY7","golden",7,100.0,5e7),
+         "NOBUY":_row("NOBUY","golden",1,100.0,5e7)}
+    d["BUY2"]["buy_days"]=2; d["BUY7"]["buy_days"]=7; d["NOBUY"]["buy_days"]=None
+    return [d[x] for x in syms if x in d], []
+
+def test_buy_within_keeps_only_recent_buy():
+    tmp = tempfile.mkdtemp()
+    pl = L.run_lite_pool("us5000","5000股",0.0,0.0,"USD",buy_within=5,
+                         symbols=["BUY2","BUY7","NOBUY"],
+                         compute=_fake_compute_buy, out_dir=tmp)
+    gold = set(r["sym"] for r in pl["cross_signals"]["golden"])
+    assert gold == {"BUY2"}, gold          # 只留 buy_days<=5
+    assert pl["buy_within"] == 5
+
 if __name__ == "__main__":
-    test_us5000_filters_and_lite(); test_tw_all_no_filter(); print("OK")
+    test_us5000_filters_and_lite(); test_tw_all_no_filter(); test_buy_within_keeps_only_recent_buy(); print("OK")

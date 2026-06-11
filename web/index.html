@@ -822,7 +822,7 @@ function renderCross(d){
       '<div class="tg-gname">🔥 最近剛觸發（≤'+fd+' 天）　<span class="dim" style="font-weight:400">金叉 '+freshGold+' ・ 死叉 '+freshDeath+'</span></div>'+
       freshBlock+
 
-      '<details style="margin-top:14px" open><summary class="tg-gname" style="cursor:pointer">▼ 全部金叉（'+cs.n_golden+' 檔）　<span class="dim" style="font-weight:400">附 5 年回測:勝率/平均賺/平均賠/賺賠比/評分</span></summary>'+
+      '<details style="margin-top:14px" open><summary class="tg-gname" style="cursor:pointer">'+(d.lite?'▼ Buy 訊號（'+cs.n_golden+' 檔）　<span class="dim" style="font-weight:400">EMA20 上穿 EMA60 且當天收紅, 近 '+(d.buy_within||5)+' 日</span>':'▼ 全部金叉（'+cs.n_golden+' 檔）　<span class="dim" style="font-weight:400">附 5 年回測:勝率/平均賺/平均賠/賺賠比/評分</span>')+'</summary>'+
         '<div style="margin-top:8px">'+crossSignalTable("t-cross-gold", sortCrossRows(cs.golden), "（本池目前無金叉）", !d.lite)+'</div>'+
       '</details>'+
 

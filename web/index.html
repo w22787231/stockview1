@@ -1986,8 +1986,8 @@ function drawChart(d){
     const buys=[],sells=[];
     for(let i=1;i<cdl.length;i++){ const ps=sLine[i-1],pl=lLine[i-1],cs=sLine[i],cl=lLine[i];
       if(ps==null||pl==null||cs==null||cl==null) continue;
-      if(ps<=pl&&cs>cl && cdl[i].c>cdl[i-1].c) buys.push(i);
-      else if(ps>=pl&&cs<cl && cdl[i].c<cdl[i-1].c) sells.push(i);
+      if(ps<=pl&&cs>cl) buys.push(i);          // 黃金交叉=Buy(不再用收盤確認過濾,避免漏進場點)
+      else if(ps>=pl&&cs<cl) sells.push(i);    // 死亡交叉=Sell
     }
     markPts=[].concat(
       buys.map(i=>({coord:[dates[i],cdl[i].l],symbol:"arrow",symbolSize:11,itemStyle:{color:"#16a34a"},

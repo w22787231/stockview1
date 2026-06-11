@@ -67,3 +67,27 @@ self.addEventListener("fetch", (e) => {
   // 同源靜態與資料 JSON:stale-while-revalidate
   e.respondWith(staleWhileRevalidate(req, STATIC));
 });
+
+// ── Web Push:收盤後伺服器偵測到自訂股池金叉 → 推播通知(App 關著也會跳)──
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : "" }; }
+  const title = d.title || "股觀觀股 · 金叉提醒";
+  const opts = {
+    body: d.body || "你的自訂股池出現黃金交叉",
+    icon: "/icon-192.png", badge: "/icon-192.png",
+    tag: d.tag || "golden-cross", renotify: true,
+    data: { url: d.url || "/?src=push#cross" },
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "/";
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => {
+      for (const c of cs) { if ("focus" in c) { c.navigate(url); return c.focus(); } }
+      return self.clients.openWindow(url);
+    })
+  );
+});

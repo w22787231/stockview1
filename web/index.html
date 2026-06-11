@@ -839,6 +839,7 @@ function renderCrossCustom(){
       '<div class="sec-head"><h2>交叉訊號</h2><span class="tag">自訂股池 · EMA20×EMA60</span>'+
         '<span class="hint">沿用「持股分析」的股池(同一份,兩邊同步);顯示每檔金叉/死叉與 5 年回測評分</span></div>'+
       crossModeBar()+
+      pushBar()+
       '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
         '⚠️ <b>歷史/回測統計,非未來保證、非買賣建議。</b>Buy(金叉)＝EMA20 上穿 EMA60、Sell(死叉)＝下穿(與技術線圖同口徑)。即時抓近 5 年資料計算,首次載入較久。'+
       '</div>'+
@@ -895,6 +896,52 @@ async function fetchAndRenderCrossCustom(pid){
     crossSignalTable("t-crossx-"+pid, ok, "（此股池查無可用資料）", true);
   if(miss.length) html+='<div class="legend">查無報價:'+miss.map(esc).join("、")+'</div>';
   box.innerHTML=html;
+  if(_pushOn()) _updatePushWatchlist();   // 已訂閱 → 把最新自訂清單同步到伺服器(背景,無聲)
+}
+
+// ── Web Push:黃金交叉 App 通知(收盤後伺服器偵測自訂股池金叉 → 推播)──
+const VAPID_PUBLIC="BM5TgvH445Xw_vCg4bBXfesMmdUEqqeWcfH5Y5k_CI1qMfea4vBwaD9Proc5r9QfHJ6QnF-CQeM0jPR05g2lOWA";
+function _pushOn(){ try{ return localStorage.getItem("pushOn")==="1"; }catch(e){ return false; } }
+function _urlB64ToU8(b64){ const pad="=".repeat((4-b64.length%4)%4); const s=(b64+pad).replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(s); const u=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i); return u; }
+function _allWatchCodes(){ const set=new Set(); holdPools().list.forEach(p=>holdCodes(p.id).forEach(c=>set.add(String(c)))); return [...set]; }
+function pushBar(){
+  return '<div style="margin:0 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+    (_pushOn()
+      ? '<button class="btn" onclick="disablePush()">🔕 關閉金叉通知</button><span class="dim" style="font-size:12px">已開啟:收盤後自訂股池出現黃金交叉時,App 會推播(關著也收得到)</span>'
+      : '<button class="btn" style="background:#2563eb;color:#fff;border:none;font-weight:600" onclick="enablePush()">🔔 開啟金叉通知</button><span class="dim" style="font-size:12px">收盤後自訂股池出現黃金交叉 → App 推播提醒(iPhone 需先「加入主畫面」)</span>')+
+  '</div>';
+}
+async function enablePush(){
+  try{
+    if(!("serviceWorker" in navigator) || !("PushManager" in window)){ alert("此裝置/瀏覽器不支援推播。iPhone 請先用 Safari 開網站→分享→「加入主畫面」,再到 App 內開啟。"); return; }
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted"){ alert("未授權通知,無法開啟。可到系統/瀏覽器設定重新允許。"); return; }
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_urlB64ToU8(VAPID_PUBLIC)});
+    const r=await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes()})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok){ try{localStorage.setItem("pushOn","1");}catch(e){} alert("✅ 已開啟金叉通知,追蹤 "+(j.n||0)+" 檔。每交易日收盤後,自訂股池若出現黃金交叉就會推播。"); renderCrossCustom(); }
+    else if(j.error==="push_not_configured") alert("⚠️ 推播後端尚未啟用(需先在 Cloudflare 綁定 KV)。請稍後再試。");
+    else alert("訂閱失敗:"+(j.error||r.status));
+  }catch(e){ alert("開啟通知失敗:"+(e&&e.message||e)); }
+}
+async function disablePush(){
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){ try{ await fetch("/api/push/unsubscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub})}); }catch(e){} await sub.unsubscribe(); }
+    try{localStorage.removeItem("pushOn");}catch(e){}
+    alert("已關閉金叉通知。"); renderCrossCustom();
+  }catch(e){ alert(e&&e.message||e); }
+}
+async function _updatePushWatchlist(){   // 自訂清單變動 → 無聲同步到伺服器(維持訂閱不變)
+  try{
+    if(!("serviceWorker" in navigator)) return;
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription(); if(!sub) return;
+    await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes()})});
+  }catch(e){}
 }
 
 function abTable(rows,kind){

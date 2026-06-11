@@ -426,6 +426,32 @@ async function handleStockFull(request) {
   return resp;
 }
 
+// ── Web Push 訂閱:存入 KV(env.PUSH_SUBS);寫入靠綁定,不需 API token ──
+async function _sha256hex(s) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+function _pjson(o, status) {
+  return new Response(JSON.stringify(o), {
+    status: status || 200,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" },
+  });
+}
+async function handlePush(request, env, action) {
+  if (request.method === "OPTIONS")
+    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" } });
+  if (request.method !== "POST") return _pjson({ error: "POST only" }, 405);
+  if (!env || !env.PUSH_SUBS) return _pjson({ error: "push_not_configured", hint: "尚未綁定 PUSH_SUBS KV" }, 503);
+  let body; try { body = await request.json(); } catch (e) { return _pjson({ error: "bad_json" }, 400); }
+  const sub = body && body.subscription;
+  if (!sub || !sub.endpoint) return _pjson({ error: "no_subscription" }, 400);
+  const key = "sub:" + (await _sha256hex(sub.endpoint));
+  if (action === "unsubscribe") { await env.PUSH_SUBS.delete(key); return _pjson({ ok: true, removed: true }); }
+  const watchlist = Array.isArray(body.watchlist) ? [...new Set(body.watchlist.map(String))].slice(0, 500) : [];
+  await env.PUSH_SUBS.put(key, JSON.stringify({ subscription: sub, watchlist, ts: new Date().toISOString() }));
+  return _pjson({ ok: true, n: watchlist.length });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -435,6 +461,8 @@ export default {
     if (url.pathname === "/api/options") return handleOptions(request);
     if (url.pathname === "/api/intraday") return handleIntraday(request);
     if (url.pathname === "/api/stockfull") return handleStockFull(request);
+    if (url.pathname === "/api/push/subscribe") return handlePush(request, env, "subscribe");
+    if (url.pathname === "/api/push/unsubscribe") return handlePush(request, env, "unsubscribe");
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },
 };

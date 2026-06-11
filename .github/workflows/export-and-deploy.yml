@@ -238,3 +238,19 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
+
+      - name: Push golden-cross alerts (Web Push, 自訂股池)
+        # 收盤後偵測訂閱者自訂股池的當日新金叉 → 發推播。
+        # 缺 PUSH_KV_ID / VAPID_* secret 時腳本自動 no-op,不影響部署。
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        continue-on-error: true
+        working-directory: engine
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PUSH_KV_ID: ${{ secrets.PUSH_KV_ID }}
+          VAPID_PRIVATE_PEM: ${{ secrets.VAPID_PRIVATE_PEM }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: |
+          pip install pywebpush requests >/dev/null 2>&1 || true
+          python push_golden_cross.py || echo "[push] 步驟失敗(略過)"

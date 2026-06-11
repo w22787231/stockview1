@@ -138,7 +138,7 @@ async function handleNews(request, env) {
 
 // ── 即時報價:代理 Yahoo chart API(任意代號,不限預生的 1700 檔)──
 async function fetchQuote(sym, withKline) {
-  const range = withKline ? "6mo" : "1d";
+  const range = withKline ? "1y" : "1d";   // 1y:讓持股均線交叉欄的 EMA20/60 收斂(6mo 會假交叉)
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 6000);
   try {

@@ -266,8 +266,8 @@ def compute_trend(symbols):
     rows, failed = [], []
     if not symbols:
         return rows, failed
-    # 6mo：MA50 交叉狀態需要較長歷史(3mo 不夠 50 日均線穩定)。
-    df = _download(symbols, period="6mo")
+    # 1y:EMA60 交叉狀態需足夠歷史才收斂(與技術線圖 2 年的 EMA20/60 對齊;6mo 會讓 EMA60 受種子影響、交叉日偏移)。
+    df = _download(symbols, period="1y")
     for sym in symbols:
         try:
             sub = _sub(df, symbols, sym)

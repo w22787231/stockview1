@@ -759,10 +759,10 @@ function renderCross(d){
 
   $("#content").innerHTML =
     '<section>'+
-      '<div class="sec-head"><h2>交叉訊號</h2><span class="tag">MA10×MA50 · 本池 '+esc(d.pool_label)+'</span>'+
+      '<div class="sec-head"><h2>交叉訊號</h2><span class="tag">EMA20×EMA60 · 本池 '+esc(d.pool_label)+'</span>'+
         '<span class="hint">本池 '+d.n_ok+' 檔，每日快照</span></div>'+
       '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
-        '⚠️ <b>歷史/快照統計，非未來保證、非買賣建議。</b>金叉＝短均線(MA10)上穿長均線(MA50)、死叉＝下穿；「幾天前」＝距最近一次交叉的交易日數，0＝今日觸發。'+
+        '⚠️ <b>歷史/快照統計，非未來保證、非買賣建議。</b>Buy(金叉)＝EMA20 上穿 EMA60、Sell(死叉)＝下穿(與技術線圖 Buy/Sell 同口徑);「幾天前」＝距最近一次交叉的交易日數，0＝今日觸發。'+
       '</div>'+
 
       '<div class="tg-gname">🔥 最近剛觸發（≤'+fd+' 天）　<span class="dim" style="font-weight:400">金叉 '+freshGold+' ・ 死叉 '+freshDeath+'</span></div>'+
@@ -776,7 +776,7 @@ function renderCross(d){
         '<div style="margin-top:8px">'+crossSignalTable("t-cross-death", sortCrossRows(cs.death), "（本池目前無死叉）")+'</div>'+
       '</details>'+
 
-      '<div class="legend">金叉＝MA10 上穿 MA50（偏多）、死叉＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序，點欄頭可改排序。<b>🔥剛觸發</b>那幾檔附該股近5年金叉完整波段回測：<b>金叉勝率</b>＝歷史金叉後抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均報酬、<b>樣本</b>＝幾次金叉(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
+      '<div class="legend">Buy(金叉)＝EMA20 上穿 EMA60（偏多）、Sell(死叉)＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序,點欄頭可改排序。<b>🔥剛觸發</b>那幾檔附該股近5年完整波段回測:<b>金叉勝率</b>＝歷史金叉後抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均報酬、<b>樣本</b>＝幾次金叉(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
     '</section>';
 }
 
@@ -887,7 +887,7 @@ function btRankTable(rows,kind){
 function backtestRankBlock(br){
   if(!br || !br.by_win_rate || !br.by_win_rate.length) return '';
   return '<section>'+
-    '<div class="sec-head"><h2>金叉回測排行</h2><span class="tag">MA10×MA50 金叉進死叉出 · 近5年</span>'+
+    '<div class="sec-head"><h2>金叉回測排行</h2><span class="tag">EMA20×EMA60 金叉進死叉出 · 近5年</span>'+
       '<span class="hint">僅本池主表股('+(br.n_tested||0)+'檔)，金叉進場、死叉出場的完整波段</span></div>'+
     '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 10px">'+
       '⚠️ <b>歷史統計，非未來保證、非買賣建議。</b>口徑：金叉隔日收盤進場、下次死叉隔日收盤出場(完整波段，避免未來函數)；未含手續費。樣本<10 者參考價值有限，務必看「最差」欄。'+
@@ -1744,7 +1744,7 @@ function renderStock(d){
         ["5","20","60","120","250"].map(n=>'<button class="tw-tg chip-lb'+(CHIP_LB==+n?" on":"")+'" data-n="'+n+'">'+n+'日</button>').join("")+
         '<span id="chipSummary" class="cap-sub2" style="margin:0 0 0 8px"></span></div></section>';
     })()+
-    signalsBlock(d.signals,(d.ma&&d.ma.short_n)||10,(d.ma&&d.ma.long_n)||50)+
+    signalsBlock(_emaSignals(d.candles),20,60)+
     backtestBlock(_emaBacktest(d.candles))+
     notesBlock+
     '<section><div class="sec-head"><h2>財務三表</h2><span class="tag">最近數期</span></div>'+
@@ -1875,10 +1875,22 @@ function backtestBlock(bt){
     '<div class="legend"><b>完整波段</b>＝抱到死叉才出場(不是固定持有N天)，能反映「順勢抱一波」的真實報酬。<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>平均抱</b>＝每波平均持有天數。MA5死叉快，平均抱通常不長。</div></section>';
 }
 
+// 客戶端 EMA20×EMA60 交叉序列(與技術圖 Buy/Sell 同口徑;近2年)
+function _emaSignals(candles){
+  const cdl=(candles||[]).filter(c=>c.c!=null), cl=cdl.map(c=>c.c);
+  if(cl.length<62) return [];
+  const s=_maCalc(cl,20,"ema"), l=_maCalc(cl,60,"ema"), out=[];
+  const cut=cdl.length>504?cdl.length-504:0;   // 約近2年
+  for(let i=1;i<cdl.length;i++){ const ps=s[i-1],pl=l[i-1],cs=s[i],ll=l[i]; if(ps==null||pl==null||cs==null||ll==null) continue;
+    if(i<cut) continue;
+    if(ps<=pl&&cs>ll) out.push({t:cdl[i].t,price:cdl[i].c,type:"golden"});
+    else if(ps>=pl&&cs<ll) out.push({t:cdl[i].t,price:cdl[i].c,type:"death"}); }
+  return out;
+}
 function signalsBlock(signals,sn,ln){
   if(!signals||!signals.length)
-    return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+'</span></div>'+
-      '<div class="legend">近2年內無 MA'+sn+'/MA'+ln+' 交叉訊號。</div></section>';
+    return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">EMA'+sn+'×EMA'+ln+'</span></div>'+
+      '<div class="legend">近2年內無 EMA'+sn+'/EMA'+ln+' 交叉訊號。</div></section>';
   // 由新到舊
   const list=signals.slice().sort((a,b)=>a.t<b.t?1:-1);
   const last=list[0];
@@ -1894,13 +1906,13 @@ function signalsBlock(signals,sn,ln){
   const moreBtn = list.length>10
     ? '<button class="btn" id="sigToggle" style="margin-top:10px" data-open="0">顯示其餘 '+(list.length-10)+' 個 ▼</button>'
     : '';
-  return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">MA'+sn+'×MA'+ln+' · 近2年 · 共'+list.length+'個</span>'+
-      '<span class="hint">短均線上穿長=金叉、下穿=死叉(預設顯最近10個)</span></div>'+
+  return '<section><div class="sec-head"><h2>均線交叉訊號</h2><span class="tag">EMA'+sn+'×EMA'+ln+' · 近2年 · 共'+list.length+'個</span>'+
+      '<span class="hint">短均線上穿長=金叉(Buy)、下穿=死叉(Sell)(預設顯最近10個)</span></div>'+
     '<div class="legend" style="margin-top:0;margin-bottom:8px;border:none">'+lastTxt+'</div>'+
     '<div class="tbl-wrap"><table>'+head+'<tbody>'+shown+'</tbody>'+
       '<tbody id="sigHidden" style="display:none">'+hidden+'</tbody></table></div>'+
     moreBtn+
-    '<div class="legend">⚠️ MA'+sn+' 較短、訊號頻繁(易有雜訊/假交叉)，<b>僅供參考，非買賣建議</b>，務必配合趨勢與量能。短均線數字越小越敏感。</div></section>';
+    '<div class="legend">⚠️ 均線交叉訊號頻繁(盤整易有雜訊/假交叉)，<b>僅供參考，非買賣建議</b>，務必配合趨勢與量能。</div></section>';
 }
 
 function chipBlock(m, chipLinks){

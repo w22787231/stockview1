@@ -380,6 +380,7 @@ def build_cross_signals(rows, downloader=None):
         return {"sym": r["sym"], "name": _name(r["sym"]),
                 "cross_state": r.get("cross_state"),
                 "cross_days": r.get("cross_days"),
+                "buy_days": r.get("buy_days"),
                 "sc5": _round(r.get("sc5"), 0), "r5": _round(r.get("r5"), 1),
                 "score": _round(r.get("score"), 0),
                 "e5": _round(r.get("e5"), 2), "e20": _round(r.get("e20"), 2),

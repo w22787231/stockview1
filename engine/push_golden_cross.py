@@ -45,7 +45,11 @@ def _score(r):
 
 
 def _today_golden():
-    """掃所有池 JSON,回今日新金叉(cross_days==0)清單,依評分高→低、去重(同 sym 取最高分)。"""
+    """掃池 JSON,回今日新金叉/Buy 清單,依評分高→低、去重(同 sym 取最高分)。
+    PUSH_ONLY=池1,池2 只掃這些池;PUSH_SKIP=池1,池2 跳過;PUSH_SIGNAL=buy 用 buy_days==0(Buy 訊號)否則 cross_days==0。"""
+    only = {p for p in os.environ.get("PUSH_ONLY", "").replace(" ", "").split(",") if p}
+    skip = {p for p in os.environ.get("PUSH_SKIP", "").replace(" ", "").split(",") if p}
+    use_buy = os.environ.get("PUSH_SIGNAL", "").strip().lower() == "buy"
     best = {}
     for f in sorted(glob.glob(os.path.join(DATA, "*.json"))):
         try:
@@ -55,8 +59,12 @@ def _today_golden():
         cs = d.get("cross_signals")
         if not cs:
             continue
+        pool = d.get("pool")
+        if (only and pool not in only) or (pool in skip):
+            continue
         for r in cs.get("golden", []):
-            if r.get("cross_days") != 0:        # 只要今日剛觸發
+            today = (r.get("buy_days") == 0) if use_buy else (r.get("cross_days") == 0)
+            if not today:                       # 只要今日剛觸發
                 continue
             sym = r.get("sym")
             if not sym:
@@ -188,8 +196,13 @@ def main():
     if os.environ.get("PUSH_TEST", "").strip() in ("1", "true", "yes"):
         _test_mode(cfg); return
 
+    _PUSH_LABEL = os.environ.get("PUSH_LABEL", "").strip()
+    _use_buy = os.environ.get("PUSH_SIGNAL", "").strip().lower() == "buy"
+    _SIGNAL_NOUN = "Buy" if _use_buy else "金叉"
+    _SIGNAL_WORD = "Buy 訊號" if _use_buy else "黃金交叉"
+
     golden = _today_golden()
-    print(f"[push] 今日全市場新金叉:{len(golden)} 檔")
+    print(f"[push] 今日{_PUSH_LABEL or '全市場'}新{_SIGNAL_NOUN}:{len(golden)} 檔")
     if not golden:
         print("[push] 今日無新金叉,不推播。"); return
 
@@ -230,10 +243,10 @@ def main():
         top = fresh[:6]
         names = "、".join(f"{nm}({_short(s)})" for s, sc, nm in top)
         more = f" 等 {len(fresh)} 檔" if len(fresh) > len(top) else ""
-        scope_lab = "我的股池" if scope == "custom" else "全市場"
-        title = f"股觀觀股 · {scope_lab}金叉"
-        body = (f"{scope_lab}今日 {len(fresh)} 檔黃金交叉:{names}{more}"
-                if len(fresh) > 1 else f"{top[0][2]}({_short(top[0][0])}) 出現黃金交叉")
+        scope_lab = _PUSH_LABEL or ("我的股池" if scope == "custom" else "全市場")
+        title = f"股觀觀股 · {scope_lab}{_SIGNAL_NOUN}"
+        body = (f"{scope_lab}今日 {len(fresh)} 檔{_SIGNAL_WORD}:{names}{more}"
+                if len(fresh) > 1 else f"{top[0][2]}({_short(top[0][0])}) 出現{_SIGNAL_WORD}")
         payload = json.dumps({"title": title, "body": body, "url": "/?src=push#cross"})
         try:
             webpush(subscription_info=sub, data=payload,

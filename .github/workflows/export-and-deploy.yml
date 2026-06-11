@@ -259,6 +259,7 @@ jobs:
           PUSH_KV_ID: ${{ secrets.PUSH_KV_ID }}
           VAPID_PRIVATE_PEM: ${{ secrets.VAPID_PRIVATE_PEM }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          PUSH_SKIP: "us5000,tw_all"   # lite 池由各自 workflow 推 Buy,主流程不重複
         run: |
           pip install pywebpush requests >/dev/null 2>&1 || true
           python push_golden_cross.py || echo "[push] 步驟失敗(略過)"

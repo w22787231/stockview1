@@ -1,6 +1,6 @@
 {
-  "name": "StockView · 趨勢效率動能榜",
-  "short_name": "StockView",
+  "name": "股觀觀股 · 趨勢效率動能榜",
+  "short_name": "股觀觀股",
   "description": "台股 / 美股趨勢動能、籌碼、資金流向與財報行事曆一站式看盤工具",
   "lang": "zh-Hant",
   "start_url": "/?src=pwa",

@@ -71,7 +71,7 @@ def _bfi(day=""):
     if day:
         url += "&dayDate=" + day
     try:
-        j = json.loads(_get(url))
+        j = json.loads(_get(url, timeout=12))
     except Exception:
         return None
     if j.get("stat") != "OK" or not j.get("data"):
@@ -91,14 +91,21 @@ def _bfi(day=""):
             "dealer": round(dealer, 1), "total": round(foreign + trust + dealer, 1)}
 
 
-def fetch_inst_hist(now, n=60):
-    """回補近 n 交易日大盤三大法人(往前掃 ~95 日,略過假日)。"""
-    out, d, tries = [], now.date(), 0
+def fetch_inst_hist(now, n=60, budget=70):
+    """回補近 n 交易日大盤三大法人(往前掃 ~95 日,略過假日)。
+    限流保護:總時間上限 budget 秒、連續失敗 12 次即中止(改靠 merge 累積)。"""
+    out, d, tries, miss = [], now.date(), 0, 0
+    t0 = time.time()
     while len(out) < n and tries < 95:
+        if time.time() - t0 > budget or miss >= 12:
+            break
         r = _bfi(d.strftime("%Y%m%d"))
         if r and r.get("date"):
+            miss = 0
             out.append({"date": r["date"], "foreign": r["foreign"],
                         "trust": r["trust"], "dealer": r["dealer"], "total": r["total"]})
+        else:
+            miss += 1
         d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.25)
     return out
 
@@ -153,7 +160,7 @@ def fetch_t86_ranks(t86, names, topn=20):
 # ── 融資融券大盤(MI_MARGN,Big5;位置解析:row0=融資張 row1=融券張 row2=融資金額仟元)──
 def _margin_one(ds):
     try:
-        j = json.loads(_get("https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=%s&selectType=MS&response=json" % ds))
+        j = json.loads(_get("https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=%s&selectType=MS&response=json" % ds, timeout=12))
     except Exception:
         return None
     if j.get("stat") != "OK":
@@ -182,12 +189,18 @@ def fetch_margin(now):
     return None
 
 
-def fetch_margin_hist(now, n=60):
-    out, d, tries = [], now.date(), 0
+def fetch_margin_hist(now, n=60, budget=70):
+    out, d, tries, miss = [], now.date(), 0, 0
+    t0 = time.time()
     while len(out) < n and tries < 95:
+        if time.time() - t0 > budget or miss >= 12:
+            break
         r = _margin_one(d.strftime("%Y%m%d"))
         if r:
+            miss = 0
             out.append({"date": r["date"], "margin_bal": r["margin_bal"], "short_bal": r["short_bal"]})
+        else:
+            miss += 1
         d -= datetime.timedelta(days=1); tries += 1; time.sleep(0.3)
     return out
 
@@ -312,7 +325,7 @@ def fetch_borrow(now):
     for _ in range(6):
         ds = d.strftime("%Y%m%d")
         try:
-            j = json.loads(_get("https://www.twse.com.tw/rwd/zh/marginTrading/TWT93U?date=%s&response=json" % ds))
+            j = json.loads(_get("https://www.twse.com.tw/rwd/zh/marginTrading/TWT93U?date=%s&response=json" % ds, timeout=12))
             if j.get("stat") == "OK" and j.get("data"):
                 tot = 0.0
                 for r in j["data"]:

@@ -239,8 +239,8 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
 
-      - name: Push golden-cross alerts (Web Push, 自訂股池)
-        # 收盤後偵測訂閱者自訂股池的當日新金叉 → 發推播。
+      - name: Push golden-cross alerts (Web Push, 全市場)
+        # 收盤後偵測全市場(各池)當日新金叉 → 發摘要推播給所有訂閱者。
         # 缺 PUSH_KV_ID / VAPID_* secret 時腳本自動 no-op,不影響部署。
         if: ${{ github.event.inputs.web_only != 'true' }}
         continue-on-error: true

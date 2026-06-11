@@ -127,6 +127,40 @@ def _short(sym):
     return sym.replace(".TW", "").replace(".TWO", "")
 
 
+def _host(url):
+    try:
+        return url.split("/")[2]
+    except Exception:
+        return "?"
+
+
+def _test_mode(cfg):
+    """PUSH_TEST=1:不偵測金叉,直接發測試推播給所有訂閱者,印出服務商+狀態碼診斷。"""
+    import requests
+    from pywebpush import webpush, WebPushException
+    sess = requests.Session()
+    keys = _kv_list(cfg, sess)
+    print(f"[push-test] 訂閱數:{len(keys)}")
+    payload = json.dumps({"title": "股觀觀股 · 測試通知", "body": "這是一則測試推播,有收到代表推播設定成功 ✅", "url": "/?src=push#cross"})
+    ok = 0
+    for key in keys:
+        rec = _kv_get(cfg, sess, key)
+        sub = rec.get("subscription") if isinstance(rec, dict) else None
+        if not sub:
+            print(f"[push-test] {key}: 無 subscription,略過"); continue
+        host = _host(sub.get("endpoint", ""))
+        try:
+            r = webpush(subscription_info=sub, data=payload,
+                        vapid_private_key=_pem_file(cfg["pem"]), vapid_claims={"sub": cfg["subj"]})
+            print(f"[push-test] {host}: 狀態 {getattr(r,'status_code','?')} ✅"); ok += 1
+        except WebPushException as e:
+            sc = getattr(getattr(e, "response", None), "status_code", None)
+            print(f"[push-test] {host}: 失敗 狀態={sc} {e}")
+            if sc in (404, 410):
+                _kv_del(cfg, sess, key); print(f"[push-test]   → 訂閱失效,已刪除")
+    print(f"[push-test] 完成:成功送出 {ok}/{len(keys)}。(送出成功仍可能因裝置/SW/權限而沒跳)")
+
+
 def main():
     cfg = _need()
     if not cfg:
@@ -136,6 +170,9 @@ def main():
         from pywebpush import webpush, WebPushException
     except Exception as e:
         print("[push] 缺 pywebpush,跳過:", e); return
+
+    if os.environ.get("PUSH_TEST", "").strip() in ("1", "true", "yes"):
+        _test_mode(cfg); return
 
     golden = _today_golden()
     print(f"[push] 今日全市場新金叉:{len(golden)} 檔")

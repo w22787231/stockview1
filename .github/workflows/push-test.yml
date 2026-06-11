@@ -1,0 +1,25 @@
+name: push-test
+# 手動觸發:對所有訂閱者發一則「測試通知」,診斷推播鏈路(印服務商+狀態碼)。
+on:
+  workflow_dispatch:
+
+jobs:
+  push-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Send test push
+        working-directory: engine
+        env:
+          PUSH_TEST: "1"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PUSH_KV_ID: ${{ secrets.PUSH_KV_ID }}
+          VAPID_PRIVATE_PEM: ${{ secrets.VAPID_PRIVATE_PEM }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: |
+          pip install pywebpush requests >/dev/null 2>&1 || true
+          python push_golden_cross.py

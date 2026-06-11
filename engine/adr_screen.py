@@ -292,6 +292,7 @@ def compute_trend(symbols):
                          "a5": a5, "a10": a10, "a20": a20, "ad520": a5 - a20,
                          "dv": dv, "dv1": dv1, "volr": volr, "score": score,
                          "cross_state": cross_state, "cross_days": cross_days,
+                         "close": float(sub["Close"].iloc[-1]),
                          "cur": "TWD" if is_tw(sym) else "USD"})
         except Exception as e:
             failed.append((sym, repr(e)[:40]))

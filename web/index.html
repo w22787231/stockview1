@@ -2572,7 +2572,7 @@ async function load(silent){
   if(!silent){
     // 切池/手動 → 清掉排序狀態並顯示載入畫面。自動刷新(silent)則保留排序、不閃。
     for(const k in SORT_STATE) delete SORT_STATE[k];
-    $("#content").innerHTML = '<div class="loading-screen">載入 '+current.toUpperCase()+' …</div>';
+    $("#content").innerHTML = '<div class="loading-screen">載入 '+(POOL_LABELS[current]||current.toUpperCase())+' …</div>';
   }
   try{
     const res = await fetch("data/"+current+".json?t="+Date.now(),{cache:"no-store"});

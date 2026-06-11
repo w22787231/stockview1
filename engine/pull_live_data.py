@@ -16,7 +16,8 @@ UNIV = os.path.join(HERE, "universe")
 
 # 前端會抓的頂層資料檔 + 5 個池(supply_chain 在 repo 內,不需抓)
 TOP = ["macro", "capital", "calendar", "etf", "sentiment", "industry_pe",
-       "tw_chain", "tw_themes", "index", "tw150", "ndx100", "sp500", "sp400", "sp600"]
+       "tw_chain", "tw_themes", "index", "tw150", "ndx100", "sp500", "sp400", "sp600",
+       "us5000", "tw_all"]
 
 
 def _get(path, timeout=30):

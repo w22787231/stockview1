@@ -532,7 +532,10 @@ const GH_REPO  = "stockview1";    // repo 名稱
 const GH_DISPATCH_TOKEN = "";
 //                          ▲▲▲ 例: "github_pat_11ABC...xyz" ▲▲▲
 
-const POOLS = ["tw150","ndx100","sp500","sp400","sp600"];
+const POOLS = ["tw150","ndx100","sp500","sp400","sp600","us5000","tw_all"];
+const POOL_LABELS = {us5000:"5000股", tw_all:"台股全市場"};
+
+
 let current = location.hash.replace("#","") || "tw150";
 if(!POOLS.includes(current)) current = "tw150";
 
@@ -591,7 +594,7 @@ function renderTabs(idx){
   const map={}; (idx&&idx.pools||[]).forEach(p=>map[p.pool]=p);
   $("#tabs").innerHTML = POOLS.map(p=>{
     const info=map[p]; const cur=info?(info.currencies||[]).join("/"):"";
-    return '<button class="tab '+(p===current?"active":"")+'" data-pool="'+p+'">'+p.toUpperCase()+(cur?'<span class="cur">'+cur+'</span>':'')+'</button>';
+    return '<button class="tab '+(p===current?"active":"")+'" data-pool="'+p+'">'+(POOL_LABELS[p]||p.toUpperCase())+(cur?'<span class="cur">'+cur+'</span>':'')+'</button>';
   }).join("");
   document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
     current=t.dataset.pool; location.hash=current;
@@ -803,7 +806,7 @@ function renderCross(d){
   const freshDeath = fresh.length - freshGold;
 
   const freshBlock = fresh.length
-    ? crossSignalTable("t-cross-fresh", fresh, "近 "+fd+" 日無新交叉觸發。", true)
+    ? crossSignalTable("t-cross-fresh", fresh, "近 "+fd+" 日無新交叉觸發。", !d.lite)
     : '<div class="note">近 '+fd+' 日無新交叉觸發。</div>';
 
   $("#content").innerHTML =
@@ -820,7 +823,7 @@ function renderCross(d){
       freshBlock+
 
       '<details style="margin-top:14px" open><summary class="tg-gname" style="cursor:pointer">▼ 全部金叉（'+cs.n_golden+' 檔）　<span class="dim" style="font-weight:400">附 5 年回測:勝率/平均賺/平均賠/賺賠比/評分</span></summary>'+
-        '<div style="margin-top:8px">'+crossSignalTable("t-cross-gold", sortCrossRows(cs.golden), "（本池目前無金叉）", true)+'</div>'+
+        '<div style="margin-top:8px">'+crossSignalTable("t-cross-gold", sortCrossRows(cs.golden), "（本池目前無金叉）", !d.lite)+'</div>'+
       '</details>'+
 
       '<details style="margin-top:10px"><summary class="tg-gname" style="cursor:pointer">▼ 全部死叉（'+cs.n_death+' 檔）</summary>'+
@@ -2584,7 +2587,7 @@ async function load(silent){
     $("#poolNote").innerHTML = (d.currencies||[]).length>1
       ? '⚠️ 本池含多幣別，Score / avg$Vol 跨幣別不可直接比（TWD 金額天生大於 USD）。'
       : '本池幣別 '+esc(cur)+'。Score 同幣別內比較有意義。';
-    if(TREND_SUB==="cross") renderCross(d); else render(d);
+    if(TREND_SUB==="cross"||d.lite) renderCross(d); else render(d);
     if(silent) flashUpdated();
   }catch(e){
     if(!silent) $("#content").innerHTML = '<div class="loading-screen">⚠️ 載入 data/'+current+'.json 失敗（'+esc(e.message)+'）。<br>'+

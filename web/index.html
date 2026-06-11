@@ -1745,7 +1745,7 @@ function renderStock(d){
         '<span id="chipSummary" class="cap-sub2" style="margin:0 0 0 8px"></span></div></section>';
     })()+
     signalsBlock(d.signals,(d.ma&&d.ma.short_n)||10,(d.ma&&d.ma.long_n)||50)+
-    backtestBlock(d.backtest)+
+    backtestBlock(_emaBacktest(d.candles))+
     notesBlock+
     '<section><div class="sec-head"><h2>財務三表</h2><span class="tag">最近數期</span></div>'+
       '<div class="fin-grid">'+
@@ -1813,12 +1813,37 @@ function _chipCompute(candles, lookback){
   const total=chips.reduce((a,b)=>a+b,0)||1;
   return {chips,prices,total};
 }
+// 客戶端 EMA20×EMA60 黃金交叉進/死亡交叉出 完整波段回測(與技術圖 Buy/Sell 同口徑;pre-gen 與即時生成股一致)
+function _emaBacktest(candles){
+  const cl=(candles||[]).filter(c=>c.c!=null).map(c=>c.c), n=cl.length;
+  if(n<85) return null;
+  const se=_maCalc(cl,20,"ema"), le=_maCalc(cl,60,"ema");
+  const crosses=[];
+  for(let i=1;i<n;i++){ const ps=se[i-1],pl=le[i-1],cs=se[i],ll=le[i]; if(ps==null||pl==null||cs==null||ll==null) continue;
+    if((ps-pl)<=0&&(cs-ll)>0) crosses.push([i,"g"]); else if((ps-pl)>=0&&(cs-ll)<0) crosses.push([i,"d"]); }
+  const rets=[],hold=[]; let inPos=false,entryI=null,open_trade=null;
+  for(const cr of crosses){ const idx=cr[0],typ=cr[1];
+    if(typ==="g"&&!inPos){ entryI=idx+1; if(entryI<n) inPos=true; }
+    else if(typ==="d"&&inPos){ const x=idx+1; if(x<n){ const e=cl[entryI],xc=cl[x]; if(e&&xc){ rets.push((xc/e-1)*100); hold.push(x-entryI); } } inPos=false; entryI=null; } }
+  if(inPos&&entryI!=null&&entryI<n){ const e=cl[entryI],last=cl[n-1]; if(e&&last) open_trade={entry_ret:(last/e-1)*100, days:(n-1)-entryI}; }
+  if(rets.length<3) return null;
+  const rs=rets.slice().sort((a,b)=>a-b);
+  const wins=rets.filter(r=>r>0), losses=rets.filter(r=>r<=0);
+  const sum=a=>a.reduce((x,y)=>x+y,0);
+  const avg_win=wins.length?sum(wins)/wins.length:null, avg_loss=losses.length?sum(losses)/losses.length:null;
+  const stat={n:rets.length, win_rate:wins.length/rets.length*100, avg:sum(rets)/rets.length,
+    median:rs[Math.floor(rs.length/2)], avg_win, avg_loss,
+    pl_ratio:(avg_win!=null&&avg_loss)?Math.abs(avg_win/avg_loss):null,
+    best:Math.max.apply(null,rets), worst:Math.min.apply(null,rets), avg_hold:sum(hold)/hold.length};
+  return {signal:"EMA20×EMA60", years:Math.max(1,Math.round(n/252)), open_trade, stat};
+}
 function backtestBlock(bt){
   const st = bt && bt.stat;
   if(!st) return '';
   const small = st.n < 10;
   const plFmt=v=>v==null?"–":Number(v).toFixed(2);
   const plCls=v=>v==null?"dim":(v>=1?"pos":"neg");
+  bt.signal=bt.signal||"EMA20×EMA60";
   // 進行中(未平倉)那筆
   const ot = bt.open_trade;
   const otHtml = ot ? '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 10px">'+
@@ -2601,8 +2626,8 @@ const HOLD_COLS=[
   {k:"name",lab:"名稱",a:"left",sort:true},
   {k:"price",lab:"現價",a:"right",sort:true},
   {k:"below",lab:"🔴",a:"center",sort:true},      // 跌破成本閃燈;點此把跌破列排到最上
-  {k:"buy",lab:"購買價①",a:"right",sort:false},   // 輸入框,不排序
-  {k:"buy2",lab:"購買價②",a:"right",sort:false},
+  {k:"buy",lab:"購買價",a:"right",sort:false},   // 輸入框,不排序
+  {k:"cross",lab:"均線交叉",a:"center",sort:true},   // EMA20/60 金叉/死叉 + 幾日(同技術圖)
   {k:"tgt",lab:"分析師目標價",a:"right",sort:true},
   {k:"avg20",lab:"20日均成本",a:"right",sort:true},   // 近20日量價加權均價(籌碼平均成本)
   {k:"today",lab:"今日",a:"center",sort:false},   // 今日盤中分時小圖(置於 1日 左側)
@@ -2630,6 +2655,18 @@ function _miniSpark(pts, prev){
   return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="vertical-align:middle" title="今日盤中分時(虛線=昨收)">'+
     baseLine+'<path d="'+dline+'" fill="none" stroke="'+col+'" stroke-width="1.3"/></svg>';
 }
+// EMA20/60 交叉狀態:golden(金叉)/death(死叉)+ 距今幾日(與技術線圖同口徑)。
+function _holdCross(cl){
+  if(!cl || cl.length < 62) return {state:null, days:null};
+  const s=_maCalc(cl,20,"ema"), l=_maCalc(cl,60,"ema"), n=cl.length;
+  if(s[n-1]==null || l[n-1]==null) return {state:null, days:null};
+  const state=s[n-1]>=l[n-1] ? "golden" : "death";
+  let days=null;
+  for(let i=n-1;i>0;i--){ const ps=s[i-1],pl=l[i-1],cs=s[i],ll=l[i];
+    if(ps==null||pl==null||cs==null||ll==null) break;
+    if(((ps-pl)<=0&&(cs-ll)>0)||((ps-pl)>=0&&(cs-ll)<0)){ days=(n-1)-i; break; } }
+  return {state, days};
+}
 // 近 n 日量價加權平均價(VWAP)=籌碼平均成本估算(以收盤×量)。
 function _vwap(cl, vl, n){
   if(!cl || !vl || !cl.length) return null;
@@ -2641,24 +2678,26 @@ function _vwap(cl, vl, n){
 // 把 rows+基本面+同業PE 整理成可排序的資料模型,存 window._HOLD[pid],再 drawHoldTable(pid)。
 function renderHoldings(rows, FUND, INDPE, TWNAMES, pid, INTRA){
   FUND=FUND||{}; INDPE=INDPE||{}; TWNAMES=TWNAMES||{}; INTRA=INTRA||{};
-  const buys=buyPrices(1,pid), buys2=buyPrices(2,pid);
+  const buys=buyPrices(1,pid);
   const twName=u=>(u&&/\.(TW|TWO)$/i.test(u))?(TWNAMES[u.toUpperCase()]||null):null;   // 台股優先繁中名
   const data=rows.map(({code,qt,used})=>{
-    if(!qt) return {code,used,name:"",hasQt:false,below:0,intra:null,buy:buys[code]!=null?buys[code]:null,buy2:buys2[code]!=null?buys2[code]:null};
+    if(!qt) return {code,used,name:"",hasQt:false,below:0,intra:null,buy:buys[code]!=null?buys[code]:null};
     const cl=qt.closes||[], vl=qt.volumes||[];
     const f=FUND[used]||{};
     const indPe=(f.industry && INDPE[f.industry])?INDPE[f.industry].pe_med:null;
     const tgt=f.target, price=qt.price;
-    const buy=buys[code]!=null?buys[code]:null, buy2=buys2[code]!=null?buys2[code]:null;
-    const bs=[buy,buy2].filter(v=>v!=null);
-    const below=(price!=null && bs.length && price<Math.max.apply(null,bs))?1:0;   // 跌破任一成本 → 1
+    const buy=buys[code]!=null?buys[code]:null;
+    const below=(price!=null && buy!=null && price<buy)?1:0;   // 跌破購買價 → 1
     const avg20=_vwap(cl,vl,20);
+    const cx=_holdCross(cl);   // EMA20/60 金叉/死叉
     return {code,used,hasQt:true,name:twName(used)||f.name||qt.name||"",
       price, below, intra:INTRA[used]||null, r1:_retN(cl,1), r5:_retN(cl,5), r20:_retN(cl,20), volr:_volr(cl,vl),
       fwdEps:f.fwdEps, fwdPe:f.fwdPe, indPe, peg:f.peg, tgt,
       tgtUp:(tgt!=null&&price)?(tgt/price-1)*100:null,
       avg20, avgUp:(avg20!=null&&price)?(price/avg20-1)*100:null,
-      buy:buy, buy2:buy2};
+      cross_state:cx.state, cross_days:cx.days,
+      cross:(cx.state==null?null:((cx.state==="golden"?1:-1)*(1000-Math.min(cx.days==null?999:cx.days,999)))),
+      buy:buy};
   });
   window._HOLD[pid]={data};
   drawHoldTable(pid);
@@ -2682,21 +2721,26 @@ function drawHoldTable(pid){
       return dir*(x-y);
     });
   }
-  const buyCell=(r,slot)=>{ const v=slot===2?r.buy2:r.buy;
+  const buyCell=(r,slot)=>{ const v=r.buy;
     return '<td style="text-align:right"><input class="buy-in" type="text" inputmode="text" '+
       'data-code="'+esc(r.code)+'" data-slot="'+slot+'" value="'+(v!=null?v:"")+'" placeholder="如 50*2" title="可輸入算式,例 50*2 → 100"></td>'; };
+  const crossCellH=r=>{ if(r.cross_state==null) return '<td class="dim" style="text-align:center">–</td>';
+    const days=r.cross_days!=null?' '+r.cross_days+'日':'';
+    return r.cross_state==="golden"
+      ? '<td style="text-align:center"><span class="pos">▲金叉</span><span style="font-size:10px;color:var(--ink3)">'+days+'</span></td>'
+      : '<td style="text-align:center"><span class="neg">▼死叉</span><span style="font-size:10px;color:var(--ink3)">'+days+'</span></td>'; };
   const trs=data.map(r=>{
     const symTd='<td class="sym clk" data-code="'+esc(r.code)+'" data-used="'+esc(r.used||"")+'" title="點擊看個股分析">'+esc(r.used||r.code)+'</td>';
     const del='<td><button class="hold-del" data-code="'+esc(r.code)+'" title="刪除">✕</button></td>';
-    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="3" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+buyCell(r,2)+'<td colspan="11" class="dim"></td>'+del+'</tr>';
-    const below=!!r.below;                                      // 跌破任一成本價 → 閃爍燈
+    if(!r.hasQt) return '<tr>'+symTd+'<td class="dim" colspan="3" style="text-align:left">查無即時報價(代號可能不存在)</td>'+buyCell(r,1)+'<td class="dim" style="text-align:center">–</td>'+'<td colspan="11" class="dim"></td>'+del+'</tr>';
+    const below=!!r.below;                                      // 跌破成本價 → 閃爍燈
     const priceTd='<td class="'+(below?"below-buy":"")+'">'+fmt(r.price)+'</td>';
     const todayTd='<td style="text-align:center">'+_miniSpark((r.intra||{}).closes,(r.intra||{}).prev)+'</td>';
     const dotTd='<td style="text-align:center">'+(below?'<span class="blink-dot" title="現價已跌破購買價"></span>':'')+'</td>';
     const pegCls=r.peg==null?"dim":(r.peg<1?"pos":(r.peg>2?"neg":""));
     return '<tr>'+symTd+
       '<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</td>'+
-      priceTd+dotTd+buyCell(r,1)+buyCell(r,2)+
+      priceTd+dotTd+buyCell(r,1)+crossCellH(r)+
       '<td>'+(r.tgt!=null?fmt(r.tgt)+(r.tgtUp!=null?' <span class="'+c(r.tgtUp)+'" style="font-size:11px">('+sg(r.tgtUp)+r.tgtUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
       '<td>'+(r.avg20!=null?fmt(r.avg20)+(r.avgUp!=null?' <span class="'+c(r.avgUp)+'" style="font-size:11px">('+sg(r.avgUp)+r.avgUp.toFixed(0)+'%)</span>':''):"–")+'</td>'+
       todayTd+pctTd(r.r1)+pctTd(r.r5)+pctTd(r.r20)+
@@ -2714,7 +2758,7 @@ function drawHoldTable(pid){
     return '<th class="sortable" data-k="'+col.k+'"'+al+'>'+col.lab+'<span class="sar">'+ar+'</span></th>';
   }).join("")+'<th></th></tr>';
   box.innerHTML='<div class="tbl-wrap"><table><thead>'+head+'</thead><tbody>'+trs+'</tbody></table></div>'+
-    '<div class="legend">點<b>欄位標題</b>排序、點<b>代號</b>看個股分析、在<b>購買價①/②</b>填成本價(可填兩個,支援算式如 50*2):現價跌破任一成本價會亮<span class="blink-dot" style="position:relative;top:1px"></span>紅色閃爍燈(點<b>🔴</b>欄標題可把跌破列排到最上)。fwd EPS/PE=分析師預估;同業PE=同產業中位數;PEG(<span class="pos">&lt;1 偏低估</span>、<span class="neg">&gt;2 偏高估</span>);目標價括號=較現價空間。<b>20日均成本</b>=近20日量價加權均價(估算近期籌碼成本),括號=現價較均成本的帳面損益%(<span class="pos">綠=均成本下、賺</span>)。基本面來源 Yahoo,即時報價可能延遲約15分。</div>';
+    '<div class="legend">點<b>欄位標題</b>排序、點<b>代號</b>看個股分析、在<b>購買價</b>填成本價(支援算式如 50*2):現價跌破成本價會亮<span class="blink-dot" style="position:relative;top:1px"></span>紅色閃爍燈(點<b>🔴</b>欄標題可把跌破列排到最上)。<b>均線交叉</b>=EMA20/60 ▲金叉(多)/▼死叉(空)+ 距今幾日,與技術線圖 Buy/Sell 同口徑。fwd EPS/PE=分析師預估;同業PE=同產業中位數;PEG(<span class="pos">&lt;1 偏低估</span>、<span class="neg">&gt;2 偏高估</span>);目標價括號=較現價空間。<b>20日均成本</b>=近20日量價加權均價(估算近期籌碼成本),括號=現價較均成本的帳面損益%(<span class="pos">綠=均成本下、賺</span>)。基本面來源 Yahoo,即時報價可能延遲約15分。</div>';
   // 事件:刪除、表頭排序、購買價輸入、點代號進個股(皆限本池 box 內)。
   box.querySelectorAll(".hold-del").forEach(b=>b.onclick=()=>removeHoldCode(b.dataset.code, pid));
   box.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{

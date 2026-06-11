@@ -1594,6 +1594,44 @@ function etfSnapshotTables(d, fE){
   }
   return h||'<div class="note">目前無持股快照資料。</div>';
 }
+// 📌 近 7 天「新增/出清」紀錄:從逐日 history 聚合最高訊號事件(忽略加/減碼),依 ETF 分組。
+// 只受 ETF 篩選影響(動作篩選不套用,這是專屬摘要)。即使某檔幾天前新增後沒再變,仍會留在 7 天內。
+function etfRecentAddDrop(d, fE){
+  if(!d.history || !d.history.length) return "";
+  const latest=d.history[0].date;
+  const cut=new Date(latest+"T00:00:00Z"); cut.setUTCDate(cut.getUTCDate()-6);  // 含當日共 7 天
+  const cutStr=cut.toISOString().slice(0,10);
+  const byEtf={};
+  for(const day of d.history){           // history 為新到舊
+    if(day.date<cutStr) break;
+    for(const c of day.changes){
+      if(c.action!=="新增"&&c.action!=="出清") continue;
+      if(fE!=="all"&&c.etf!==fE) continue;
+      (byEtf[c.etf]=byEtf[c.etf]||[]).push(Object.assign({date:day.date}, c));
+    }
+  }
+  const order=(d.order||[]).filter(e=>fE==="all"||e===fE);
+  let h="";
+  for(const etf of order){
+    const recs=byEtf[etf]; if(!recs||!recs.length) continue;
+    const nNew=recs.filter(r=>r.action==="新增").length, nOut=recs.filter(r=>r.action==="出清").length;
+    h+='<div class="tg-gname" style="margin:10px 0 6px">▎'+esc(etf)+' '+esc((d.etfs[etf]||{}).name||etf)+
+       '　<span class="dim" style="font-weight:400">🆕新增 '+nNew+' ・ ❌出清 '+nOut+'</span></div>'+
+       '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>動作</th><th style="text-align:left">代碼/名稱</th><th>權重%</th><th>張數</th></tr></thead><tbody>'+
+       recs.map(r=>'<tr'+(r.code?' data-sym="'+esc(r.code)+'"':'')+'>'+
+         '<td class="dim">'+esc(r.date)+'</td>'+
+         '<td class="'+(ETF_ACTION_CLS[r.action]||"dim")+'" style="font-weight:700">'+(ETF_ACTION_ICON[r.action]||esc(r.action))+'</td>'+
+         symCell(r.code,r.name)+
+         '<td>'+(r.action==="出清"?'<span class="dim">'+fmtNum(Math.abs(r.dweight),2)+'→0</span>':fmtNum(r.weight,2))+'</td>'+
+         '<td class="dim">'+fmtNum(Math.abs(r.dqty))+'</td></tr>').join("")+
+       '</tbody></table></div>';
+  }
+  if(!h) h='<div class="note">近 7 天無 新增/出清 紀錄（僅加減碼或無變動）。</div>';
+  return '<details class="etf-7d" open style="margin:6px 0 4px"><summary class="tg-gname" style="cursor:pointer;font-size:14px">📌 近 7 天 新增・出清紀錄'+
+         (fE==="all"?'（全部 ETF）':'（'+esc(fE)+'）')+'　<span class="dim" style="font-weight:400">資料保存 30 天,此處顯示最近 7 天</span></summary>'+
+         '<div style="margin-top:8px">'+h+'</div></details>';
+}
+
 function renderEtf(){
   const d=ETF_DATA;
   if(!d || !d.history){ $("#content").innerHTML='<section><div class="sec-head"><h2>ETF 持股異動</h2></div><div class="note">ETF 資料尚未產生，請待下次更新。</div></section>'; return; }
@@ -1609,7 +1647,7 @@ function renderEtf(){
       '<span class="hint">資料日 '+esc(latest)+'</span></div>'+
     '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
       '⚠️ 資料來源各 ETF 發行商官網（統一/群益/元大）。週末/假日持股不變動屬正常，故當日不列。'+
-    '</div>'+ etfFilterBar(d);
+    '</div>'+ etfFilterBar(d) + etfRecentAddDrop(d, fE);
 
   if(!days.length){
     html+='<div class="note">'+(d.history.length?'目前篩選條件下無變動紀錄。':'尚無逐日異動紀錄（異動需累積≥2天比對,剛啟用時先顯示目前持股）。')+'</div>';

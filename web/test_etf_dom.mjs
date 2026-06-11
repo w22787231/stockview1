@@ -38,6 +38,8 @@ const src = stub + "\n" +
   extractConst("ETF_ACTION_ICON") + "\n" +
   extract("etfFilterBar") + "\n" +
   extract("etfChangeTable") + "\n" +
+  extract("etfSnapshotTables") + "\n" +
+  extract("etfRecentAddDrop") + "\n" +
   extract("renderEtf") + "\n" +
   "return { renderEtf, setData:(d,f)=>{ETF_DATA=d; if(f)ETF_FILTER=f;}, get:()=>CAPTURED };";
 const m = new Function(src)();
@@ -58,17 +60,27 @@ const DATA = {
   ],
 };
 
-// 1) 正常渲染:兩個日期、00981A 排在 00982A 前(依 order)
+// daily：每日明細區(7 天摘要 details 之後),用來測「日期/篩選/順序」而不受 7 天區塊干擾
+const dailyPart = o => { const i=o.indexOf("</details>"); return i<0?o:o.slice(i); };
+
+// 1) 正常渲染:兩個日期、每日明細區 00981A 排在 00982A 前(依 order)
 m.setData(DATA, {etf:"all",action:"all"});
 m.renderEtf();
 let out = m.get();
 assert(out.includes("2026-06-06"), "缺最新日期");
 assert(out.includes("2026-06-05"), "缺次日");
 assert(out.includes("（最新）"), "缺最新標記");
-const i81 = out.indexOf("00981A 統一台股增長"), i82 = out.indexOf("00982A 群益台灣精選強棒");
+const dly = dailyPart(out);
+const i81 = dly.indexOf("00981A 統一台股增長"), i82 = dly.indexOf("00982A 群益台灣精選強棒");
 assert(i81>0 && i82>0 && i81<i82, "ETF 分組順序應依 order(00981A 在前)");
 assert(out.includes("台積電") && out.includes("緯創"), "缺個股");
 console.log("PASS render + 分組順序");
+
+// 1b) 近 7 天 新增/出清 區塊:含標題 + 緯創(新增,不受動作篩選影響)
+assert(out.includes("近 7 天 新增・出清紀錄"), "缺 7 天區塊標題");
+const recPart = out.slice(0, out.indexOf("</details>"));
+assert(recPart.includes("緯創") && recPart.includes("🆕新增"), "7 天區塊缺新增事件");
+console.log("PASS 近 7 天 新增/出清 區塊");
 
 // 2) ETF 篩選:只看 00982A → 不該出現 00981A 的台積電
 m.setData(DATA, {etf:"00982A",action:"all"});
@@ -76,16 +88,16 @@ m.renderEtf(); out = m.get();
 assert(out.includes("緯創") && !out.includes("台積電"), "ETF 篩選失效");
 console.log("PASS ETF 篩選");
 
-// 3) 動作篩選:只看 減碼 → 只剩鴻海那筆(2026-06-05)
+// 3) 動作篩選:只看 減碼 → 每日明細區只剩鴻海(緯創新增僅在 7 天摘要,不算違規)
 m.setData(DATA, {etf:"all",action:"減碼"});
 m.renderEtf(); out = m.get();
-assert(out.includes("鴻海") && !out.includes("緯創"), "動作篩選失效");
+assert(dailyPart(out).includes("鴻海") && !dailyPart(out).includes("緯創"), "動作篩選失效");
 console.log("PASS 動作篩選");
 
 // 4) 空 history → fallback
 m.setData({order:[],etfs:{},history:[]}, {etf:"all",action:"all"});
 m.renderEtf(); out = m.get();
-assert(out.includes("尚無變動紀錄"), "缺空狀態文案");
+assert(out.includes("尚無逐日異動紀錄"), "缺空狀態文案");
 console.log("PASS 空狀態");
 
 console.log("\nAll ETF DOM tests passed");

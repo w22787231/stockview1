@@ -137,8 +137,8 @@ async function handleNews(request, env) {
 }
 
 // ── 即時報價:代理 Yahoo chart API(任意代號,不限預生的 1700 檔)──
-async function fetchQuote(sym, withKline) {
-  const range = withKline ? "1y" : "1d";   // 1y:讓持股均線交叉欄的 EMA20/60 收斂(6mo 會假交叉)
+async function fetchQuote(sym, withKline, klRange) {
+  const range = withKline ? (klRange || "1y") : "1d";   // 1y:讓持股均線交叉欄的 EMA20/60 收斂(6mo 會假交叉);自訂交叉頁帶 kr=5y 抓 5 年算評分
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 6000);
   try {
@@ -179,9 +179,10 @@ async function fetchQuote(sym, withKline) {
 async function handleQuotes(request) {
   const url = new URL(request.url);
   const withKline = url.searchParams.get("kline") === "1";
+  const klRange = url.searchParams.get("kr") || "1y";   // kline 範圍:1y(預設)/5y(自訂交叉頁回測)
   let syms = (url.searchParams.get("syms") || "").split(",").map(s => s.trim()).filter(Boolean);
   syms = syms.slice(0, withKline ? 5 : 40);
-  const arr = await Promise.all(syms.map(s => fetchQuote(s, withKline)));
+  const arr = await Promise.all(syms.map(s => fetchQuote(s, withKline, klRange)));
   const quotes = {};
   syms.forEach((s, i) => { if (arr[i]) quotes[s] = arr[i]; });
   return new Response(JSON.stringify({ quotes, ts: new Date().toISOString() }), {

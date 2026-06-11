@@ -781,6 +781,14 @@ function crossSignalTable(tableId, rows, emptyMsg, withBacktest){
   return buildTable(tableId, rows, cols, {empty:emptyMsg});
 }
 
+// 交叉訊號頂部:本池 / 自訂 切換列
+function crossModeBar(){
+  return '<div class="etf-filters" style="margin:0 0 12px">'+
+    '<button class="etf-fb'+(CROSS_MODE==="pool"?" on":"")+'" onclick="setCrossMode(\'pool\')">📊 本池金叉</button>'+
+    '<button class="etf-fb'+(CROSS_MODE==="custom"?" on":"")+'" onclick="setCrossMode(\'custom\')">⭐ 自訂金叉（我的股池）</button>'+
+  '</div>';
+}
+
 // 交叉訊號分頁：🔥近 N 日剛觸發(展開) + 全部金叉(收起) + 全部死叉(收起)。
 function renderCross(d){
   const cs = d.cross_signals;
@@ -802,6 +810,7 @@ function renderCross(d){
     '<section>'+
       '<div class="sec-head"><h2>交叉訊號</h2><span class="tag">EMA20×EMA60 · 本池 '+esc(d.pool_label)+'</span>'+
         '<span class="hint">本池 '+d.n_ok+' 檔，每日快照</span></div>'+
+      crossModeBar()+
       '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
         '⚠️ <b>歷史/快照統計，非未來保證、非買賣建議。</b>Buy(金叉)＝EMA20 上穿 EMA60、Sell(死叉)＝下穿(與技術線圖 Buy/Sell 同口徑);「幾天前」＝距最近一次交叉的交易日數，0＝今日觸發。'+
       '</div>'+
@@ -819,6 +828,73 @@ function renderCross(d){
 
       '<div class="legend">Buy(金叉)＝EMA20 上穿 EMA60（偏多）、Sell(死叉)＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序,點欄頭可改排序(點「金叉評分」可挑歷史品質最佳的金叉)。<br><b>🔥剛觸發</b>與<b>全部金叉</b>附該股近5年完整波段回測:<b>金叉勝率</b>＝金叉抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均(期望值)、<b>平均賺/平均賠</b>＝賺/賠波段各自平均、<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>最差</b>＝單筆最慘波段報酬(尾端風險,≤-25% 標紅)。<b>金叉評分</b>(0~100)＝勝率30%＋賺賠比30%＋平均賺15%＋平均賠(典型下檔)10%＋最差(尾端風險)15%,再依樣本數打信心折扣(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
     '</section>';
+}
+
+// ── 交叉訊號 · 自訂(沿用持股池):每檔算 EMA20/60 交叉狀態 + 5 年回測評分,重用 crossSignalTable ──
+function renderCrossCustom(){
+  $("#meta").innerHTML='<div><b>交叉訊號 · 自訂</b></div><div>沿用持股池 · EMA20/60 金叉/死叉 + 5 年回測評分</div>';
+  $("#poolNote").innerHTML="";
+  $("#content").innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>交叉訊號</h2><span class="tag">自訂股池 · EMA20×EMA60</span>'+
+        '<span class="hint">沿用「持股分析」的股池(同一份,兩邊同步);顯示每檔金叉/死叉與 5 年回測評分</span></div>'+
+      crossModeBar()+
+      '<div class="banner show" style="display:block;background:#fff8e6;border-color:#f0d488;color:#8a6400;margin:0 0 12px">'+
+        '⚠️ <b>歷史/回測統計,非未來保證、非買賣建議。</b>Buy(金叉)＝EMA20 上穿 EMA60、Sell(死叉)＝下穿(與技術線圖同口徑)。即時抓近 5 年資料計算,首次載入較久。'+
+      '</div>'+
+      '<div id="holdPools"></div>'+
+      '<button class="pool-add" id="poolAdd">+ 新增股池</button>'+
+      '<div class="legend">每檔附近 5 年完整波段回測:<b>金叉勝率/平均報酬/平均賺/平均賠/賺賠比/最差/金叉評分</b>(與「本池金叉」「個股詳情」同一套公式)。預設金叉優先、評分高→前,點欄頭可改排序。股票/股池與「持股分析」共用,任一邊增刪兩邊同步。</div>'+
+    '</section>';
+  const pa=$("#poolAdd"); if(pa) pa.onclick=addPool;
+  renderAllPoolsCross();
+}
+function renderAllPoolsCross(){
+  POOL_RENDER=(pid)=>fetchAndRenderCrossCustom(pid);
+  POOL_RENDER_ALL=renderAllPoolsCross;
+  const wrap=$("#holdPools"); if(!wrap) return;
+  const m=holdPools();
+  wrap.innerHTML=m.list.map(poolSectionHtml).join("");
+  m.list.forEach(p=>{ bindPoolSection(p.id); fetchAndRenderCrossCustom(p.id); });
+}
+async function fetchAndRenderCrossCustom(pid){
+  let codes=holdCodes(pid); const box=_pq(pid,"holdResult");
+  if(!box) return;
+  if(codes.some(c=>/[一-鿿]/.test(c))){                       // 中文名就地轉代號(同持股)
+    const ni=await loadNames().catch(()=>null); let changed=false;
+    codes=codes.map(c=>{ if(/[一-鿿]/.test(c)&&ni){ const r=lookupByName(ni,c); const sym=r.exact||(r.matches[0]&&r.matches[0].sym); if(sym){changed=true;return sym.toUpperCase();} } return c; });
+    codes=[...new Set(codes)]; if(changed) saveHoldCodes(codes,pid);
+  }
+  if(!codes.length){ box.innerHTML='<div class="legend">此股池尚未加入股票。上方輸入代號/繁中名按「+ 新增」即可。</div>'; return; }
+  const cands=[...new Set(codes.flatMap(_holdCand))], batches=[];
+  for(let i=0;i<cands.length;i+=5) batches.push(cands.slice(i,i+5));   // kline 模式上限 5 檔/批
+  box.innerHTML='<div class="loading-screen">查詢 '+codes.length+' 檔近 5 年資料並計算金叉評分 …</div>';
+  const Q={};
+  const fetchBatch=async b=>{ for(let i=0;i<3;i++){ try{ const d=await (await fetch("/api/quotes?kline=1&kr=5y&syms="+encodeURIComponent(b.join(","))+"&t="+Date.now()+"_"+i,{cache:"no-store"})).json(); if(d&&d.quotes&&Object.keys(d.quotes).length) return d.quotes; }catch(e){} } return {}; };
+  try{ const results=await Promise.all(batches.map(fetchBatch)); results.forEach(q=>Object.assign(Q,q||{})); }
+  catch(e){ box.innerHTML='<div class="loading-screen">查詢失敗:'+esc(e.message)+'(需部署後 /api/quotes 才可用)</div>'; return; }
+  const NI=await loadNames().catch(()=>null); const bySym=(NI&&NI.bySym)||{};
+  const rows=codes.map(code=>{
+    let qt=null,used=null; for(const c of _holdCand(code)){ if(Q[c]){qt=Q[c];used=c;break;} }
+    if(!qt) return {sym:code, name:"", _miss:true};
+    const cl=qt.closes||[];
+    const cx=_holdCross(cl);
+    const bt=_emaBacktest(cl.map(v=>({c:v}))); const st=bt&&bt.stat;
+    const twNm=(/\.(TW|TWO)$/i.test(used)?bySym[used.toUpperCase()]:null);
+    const row={ sym:used, name:twNm||qt.name||"", cross_state:cx.state, cross_days:cx.days,
+      r5:(cl.length>5)?(cl[cl.length-1]/cl[cl.length-6]-1)*100:null, sc5:null, score:null };
+    if(st){ row.bt_win_rate=st.win_rate; row.bt_avg=st.avg; row.bt_avg_win=st.avg_win;
+      row.bt_avg_loss=st.avg_loss; row.bt_pl_ratio=st.pl_ratio; row.bt_worst=st.worst; row.bt_n=st.n; }
+    return row;
+  });
+  const ok=rows.filter(r=>!r._miss), miss=rows.filter(r=>r._miss).map(r=>r.sym);
+  ok.sort((a,b)=>{ const sa=a.cross_state==="golden"?1:0, sb=b.cross_state==="golden"?1:0; if(sa!==sb) return sb-sa;
+    const xa=_crossBtScore(a), xb=_crossBtScore(b); return (xb==null?-1:xb)-(xa==null?-1:xa); });
+  const ng=ok.filter(r=>r.cross_state==="golden").length, nd=ok.filter(r=>r.cross_state==="death").length;
+  let html='<div class="legend" style="margin:2px 0 8px">本池 '+ok.length+' 檔 · 🟢金叉 '+ng+' ・ 🔴死叉 '+nd+'。</div>'+
+    crossSignalTable("t-crossx-"+pid, ok, "（此股池查無可用資料）", true);
+  if(miss.length) html+='<div class="legend">查無報價:'+miss.map(esc).join("、")+'</div>';
+  box.innerHTML=html;
 }
 
 function abTable(rows,kind){
@@ -2233,6 +2309,9 @@ async function openStock(sym){
 // ── 主分頁切換 ──
 let TREND_SUB = "trend";  // 趨勢分頁群內目前子頁："trend" 或 "cross"，共用同一份 pool JSON
 let VIEW = "trend";
+let CROSS_MODE = "pool";  // 交叉訊號子模式："pool"(本池) 或 "custom"(自訂股池,沿用持股池)
+try{ const cm=localStorage.getItem("crossMode"); if(cm==="pool"||cm==="custom") CROSS_MODE=cm; }catch(e){}
+function setCrossMode(m){ CROSS_MODE=m; try{ localStorage.setItem("crossMode",m); }catch(e){} load(); }
 // ── 詳情頁返回:除了「← 返回」鈕,也支援瀏覽器上一頁 / 手機左滑(popstate)──
 let _detailReturn=null;
 function enterDetail(){ if(_detailReturn==null) _detailReturn=VIEW; try{ history.pushState({detail:1},""); }catch(e){} }
@@ -2421,6 +2500,7 @@ function loadNewsFeed(){
 }
 
 async function load(silent){
+  if(TREND_SUB==="cross" && CROSS_MODE==="custom"){ if(silent) return; renderCrossCustom(); return; }   // 自訂交叉:不抓池 JSON,改用持股池;自動刷新不重抓(避免每5分重拉5年)
   if(!silent){
     // 切池/手動 → 清掉排序狀態並顯示載入畫面。自動刷新(silent)則保留排序、不閃。
     for(const k in SORT_STATE) delete SORT_STATE[k];
@@ -2514,7 +2594,13 @@ function loadHoldings(){
   const pa=$("#poolAdd"); if(pa) pa.onclick=addPool;
   renderAllPools();
 }
+// 池操作(加股票/清空/EBK/重整/刪股)後要呼叫哪個渲染器:持股分析=fetchAndRenderHold、自訂交叉=fetchAndRenderCrossCustom。
+// POOL_RENDER=單池重繪、POOL_RENDER_ALL=整頁重繪(新增/刪除股池後)。依當前所在頁切換。
+let POOL_RENDER = (pid)=>fetchAndRenderHold(pid);
+let POOL_RENDER_ALL = ()=>renderAllPools();
 function renderAllPools(){
+  POOL_RENDER=(pid)=>fetchAndRenderHold(pid);
+  POOL_RENDER_ALL=renderAllPools;
   const wrap=$("#holdPools"); if(!wrap) return;
   const m=holdPools();
   wrap.innerHTML=m.list.map(poolSectionHtml).join("");
@@ -2542,9 +2628,9 @@ function bindPoolSection(pid){
   const inp=_pq(pid,"holdInput");
   if(inp) inp.addEventListener("keydown",e=>{ if(e.key==="Enter" && !e.isComposing && e.keyCode!==229){ e.preventDefault(); addHoldCode(inp.value, pid); } });
   const add=_pq(pid,"holdAdd"); if(add) add.onclick=()=>addHoldCode((_pq(pid,"holdInput")||{}).value, pid);
-  const rf=_pq(pid,"holdRefresh"); if(rf) rf.onclick=()=>fetchAndRenderHold(pid);
+  const rf=_pq(pid,"holdRefresh"); if(rf) rf.onclick=()=>POOL_RENDER(pid);
   const ebk=_pq(pid,"holdEbk"); if(ebk) ebk.onchange=e=>{ importEbk(e.target.files[0], pid); e.target.value=""; };
-  const clr=_pq(pid,"holdClear"); if(clr) clr.onclick=()=>{ if(holdCodes(pid).length && !confirm("清空此持股池所有股票?")) return; saveHoldCodes([],pid); const mg=_pq(pid,"holdMsg"); if(mg) mg.innerHTML=""; fetchAndRenderHold(pid); };
+  const clr=_pq(pid,"holdClear"); if(clr) clr.onclick=()=>{ if(holdCodes(pid).length && !confirm("清空此持股池所有股票?")) return; saveHoldCodes([],pid); const mg=_pq(pid,"holdMsg"); if(mg) mg.innerHTML=""; POOL_RENDER(pid); };
   const nm=_pq(pid,"pool-name"); if(nm) nm.onchange=()=>renamePool(pid, nm.value);
   const del=_pq(pid,"pool-del"); if(del) del.onclick=()=>deletePool(pid);
 }
@@ -2553,7 +2639,7 @@ function addPool(){
   const name=(prompt("新持股池名稱:", "持股池"+(m.list.length+1))||"").trim();
   if(!name) return;
   m.list.push({id:_newPoolId(), name:name}); saveHoldPools(m);
-  renderAllPools();
+  POOL_RENDER_ALL();
 }
 function renamePool(pid, name){ name=(name||"").trim(); if(!name) return; const m=holdPools(); const p=m.list.find(x=>x.id===pid); if(p){ p.name=name; saveHoldPools(m); } }
 function deletePool(pid){
@@ -2564,7 +2650,7 @@ function deletePool(pid){
   m.list=m.list.filter(x=>x.id!==pid); saveHoldPools(m);
   try{ localStorage.removeItem("holdings_codes__"+pid); localStorage.removeItem("holdings_buy__"+pid); localStorage.removeItem("holdings_buy2__"+pid); }catch(e){}
   if(HOLD_SORT[pid]) delete HOLD_SORT[pid]; if(window._HOLD[pid]) delete window._HOLD[pid];
-  renderAllPools();
+  POOL_RENDER_ALL();
 }
 // 解析 EBK / 自選股文字 → 代號陣列。容錯:Big5/UTF-8、TSE./OTC. 前綴、.TW/.TWO 後綴、裸代號、美股代號。
 function parseEbk(text){
@@ -2599,7 +2685,7 @@ function importEbk(file, pid){
     codes.forEach(c=>{ if(!cur.includes(c)){ cur.push(c); added++; } });
     saveHoldCodes(cur, pid);
     msg("📂 已從 EBK 載入 "+codes.length+" 檔(新增 "+added+" 檔、重複略過 "+(codes.length-added)+" 檔)。");
-    fetchAndRenderHold(pid);
+    POOL_RENDER(pid);
   };
   r.onerror=()=>msg("⚠️ 讀檔失敗。");
   r.readAsArrayBuffer(file);
@@ -2633,9 +2719,9 @@ async function addHoldCode(raw, pid){
   codes.push(code); saveHoldCodes(codes, pid);
   if(inp){ inp.value=""; inp.focus(); }
   msg("");
-  fetchAndRenderHold(pid);
+  POOL_RENDER(pid);
 }
-function removeHoldCode(code, pid){ saveHoldCodes(holdCodes(pid).filter(c=>c!==code), pid); fetchAndRenderHold(pid); }
+function removeHoldCode(code, pid){ saveHoldCodes(holdCodes(pid).filter(c=>c!==code), pid); POOL_RENDER(pid); }
 // 購買價:localStorage("holdings_buy") = {CODE:number}。現價低於購買價→該列紅色閃爍燈。
 // 把輸入字串當算式求值(只允許數字與四則運算,如「50*2」→100)。回正數或 null。
 function evalNum(s){

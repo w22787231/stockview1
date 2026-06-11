@@ -93,10 +93,9 @@ MA_LONG = 50
 
 
 def candles(tk):
-    """2年日K → list of {t,o,h,l,c,v} + MA短/MA長 + 均線交叉訊號。
-    (圖表用2年減重；金叉回測另在 backtest_golden 自抓5年。)
+    """5年日K → list of {t,o,h,l,c,v} + MA短/MA長 + 均線交叉訊號。
     交叉訊號(複刻 ChartArt MA Cross):短上穿長=黃金交叉(golden)、短下穿長=死亡交叉(death)。"""
-    h = tk.history(period="2y", interval="1d", auto_adjust=False)
+    h = tk.history(period="5y", interval="1d", auto_adjust=False)
     if h is None or h.empty:
         return [], {}, []
     closes = list(h["Close"])

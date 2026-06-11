@@ -324,7 +324,7 @@ async function fetchStockFull(sym, crumb, cookie) {
   // 1) K 線 OHLCV(2 年,公開)
   let candles = [];
   try {
-    const cr = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) + "?interval=1d&range=2y",
+    const cr = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) + "?interval=1d&range=5y",
       { headers: { "User-Agent": "Mozilla/5.0" }, cf: { cacheTtl: 600 } });
     const cj = await cr.json();
     const res = cj.chart && cj.chart.result && cj.chart.result[0];

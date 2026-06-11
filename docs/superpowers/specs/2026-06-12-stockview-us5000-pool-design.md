@@ -96,3 +96,26 @@ Nasdaq Trader 全清單 ──(借 skill gc_universe 抓取+過濾)──> engin
 - 改完直推 main(單人 repo)。
 - 首次：手動 `gh workflow run export-us5000.yml --ref main` 產生第一份 data/us5000.json 並部署，驗證「5000股」分頁出現。
 - 之後由 cron 美股收盤後自動更新。
+
+---
+
+## 9. 追加範圍 (2026-06-12)：台股全市場池(對稱 lite 池)
+使用者追加「台股的掃描」。新增第二個輕量金叉池，與 us5000 **對稱**，引擎**一般化**共用。
+
+### 9.1 決策
+- **範圍**：全上市(.TW)+上櫃(.TWO) ~1800 檔。
+- **Universe 來源**：`engine/universe/tw_names.json` 的 keys(已帶 .TW/.TWO 後綴；TWSE ISIN 產生)，濾掉 ETF(代號 00xx)/權證(6 位數),留 4 位數普通股 → 靜態快照 `engine/universe/tw_all.txt`。
+- **門檻**：**不過濾**(price/dolvol 皆 0)，全上市櫃都掃。
+- **幣別**：compute_trend 自動設 `cur="TWD"`(is_tw 判斷 .TW/.TWO)。
+- **更新**：**台股收盤後**獨立 workflow(cron `30 6 * * 1-5` = 14:30 台北)。與 us5000(美股收盤後)各自獨立。
+- **池 key / label**：`tw_all` / 「台股全市場」。位置 us5000 之後(SP600 右邊兩個新池)。
+
+### 9.2 引擎一般化
+原 `export_us5000.py` 改為通用 `engine/export_lite_pool.py`：
+`run_lite_pool(pool, label, min_price, min_dolvol, ...)`，CLI `python export_lite_pool.py <us5000|tw_all>`。
+PRESETS：`us5000`={label:"5000股", min_price:5, min_dolvol:5e6}；`tw_all`={label:"台股全市場", min_price:0, min_dolvol:0}。
+兩池都：批次 compute_trend(1年) → 套門檻 → build_cross_signals(offline,無回測) → data/<pool>.json(lite:true)。
+
+### 9.3 前端 / 部署
+- 前端 POOLS 加 `us5000` 與 `tw_all`；label map {us5000:"5000股", tw_all:"台股全市場"}。lite 渲染同 §5.3。
+- 兩個獨立 workflow：`export-us5000.yml`(美股收盤後)、`export-tw-all.yml`(台股收盤後)。各自 pull_live→export_lite_pool→deploy。現有 40 分流程不動。

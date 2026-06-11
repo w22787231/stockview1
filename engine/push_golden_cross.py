@@ -134,6 +134,19 @@ def _host(url):
         return "?"
 
 
+def _device(ua):
+    ua = ua or ""
+    if "Android" in ua:
+        return "Android"
+    if "iPhone" in ua or "iPad" in ua or "iOS" in ua:
+        return "iPhone/iPad"
+    if "Windows" in ua:
+        return "Windows"
+    if "Macintosh" in ua or "Mac OS" in ua:
+        return "Mac"
+    return "其他/未知"
+
+
 def _test_mode(cfg):
     """PUSH_TEST=1:不偵測金叉,直接發測試推播給所有訂閱者,印出服務商+狀態碼診斷。"""
     import requests
@@ -149,13 +162,14 @@ def _test_mode(cfg):
         if not sub:
             print(f"[push-test] {key}: 無 subscription,略過"); continue
         host = _host(sub.get("endpoint", ""))
+        dev = _device(rec.get("ua", "")) if isinstance(rec, dict) else "?"
         try:
             r = webpush(subscription_info=sub, data=payload,
                         vapid_private_key=_pem_file(cfg["pem"]), vapid_claims={"sub": cfg["subj"]})
-            print(f"[push-test] {host}: 狀態 {getattr(r,'status_code','?')} ✅"); ok += 1
+            print(f"[push-test] [{dev}] {host}: 狀態 {getattr(r,'status_code','?')} ✅"); ok += 1
         except WebPushException as e:
             sc = getattr(getattr(e, "response", None), "status_code", None)
-            print(f"[push-test] {host}: 失敗 狀態={sc} {e}")
+            print(f"[push-test] [{dev}] {host}: 失敗 狀態={sc} {e}")
             if sc in (404, 410):
                 _kv_del(cfg, sess, key); print(f"[push-test]   → 訂閱失效,已刪除")
     print(f"[push-test] 完成:成功送出 {ok}/{len(keys)}。(送出成功仍可能因裝置/SW/權限而沒跳)")

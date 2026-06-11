@@ -448,7 +448,8 @@ async function handlePush(request, env, action) {
   const key = "sub:" + (await _sha256hex(sub.endpoint));
   if (action === "unsubscribe") { await env.PUSH_SUBS.delete(key); return _pjson({ ok: true, removed: true }); }
   const watchlist = Array.isArray(body.watchlist) ? [...new Set(body.watchlist.map(String))].slice(0, 500) : [];
-  await env.PUSH_SUBS.put(key, JSON.stringify({ subscription: sub, watchlist, ts: new Date().toISOString() }));
+  const ua = (typeof body.ua === "string" ? body.ua : "").slice(0, 300);
+  await env.PUSH_SUBS.put(key, JSON.stringify({ subscription: sub, watchlist, ua, ts: new Date().toISOString() }));
   return _pjson({ ok: true, n: watchlist.length });
 }
 

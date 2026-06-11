@@ -920,7 +920,7 @@ async function enablePush(){
     const reg=await navigator.serviceWorker.ready;
     let sub=await reg.pushManager.getSubscription();
     if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_urlB64ToU8(VAPID_PUBLIC)});
-    const r=await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes()})});
+    const r=await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes(), ua:navigator.userAgent})});
     const j=await r.json().catch(()=>({}));
     if(r.ok){ try{localStorage.setItem("pushOn","1");}catch(e){} alert("✅ 已開啟金叉通知,追蹤 "+(j.n||0)+" 檔。每交易日收盤後,自訂股池若出現黃金交叉就會推播。"); renderCrossCustom(); }
     else if(j.error==="push_not_configured") alert("⚠️ 推播後端尚未啟用(需先在 Cloudflare 綁定 KV)。請稍後再試。");
@@ -941,7 +941,7 @@ async function _updatePushWatchlist(){   // 自訂清單變動 → 無聲同步�
     if(!("serviceWorker" in navigator)) return;
     const reg=await navigator.serviceWorker.ready;
     const sub=await reg.pushManager.getSubscription(); if(!sub) return;
-    await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes()})});
+    await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON?sub.toJSON():sub, watchlist:_allWatchCodes(), ua:navigator.userAgent})});
   }catch(e){}
 }
 

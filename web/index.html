@@ -1923,6 +1923,15 @@ function backtestBlock(bt){
   const plFmt=v=>v==null?"–":Number(v).toFixed(2);
   const plCls=v=>v==null?"dim":(v>=1?"pos":"neg");
   bt.signal=bt.signal||"EMA20×EMA60";
+  // 金叉評分(與「交叉訊號」分頁同一套公式 _crossBtScore)
+  const score=_crossBtScore({bt_n:st.n, bt_win_rate:st.win_rate, bt_pl_ratio:st.pl_ratio,
+    bt_avg_win:st.avg_win, bt_avg_loss:st.avg_loss, bt_worst:st.worst});
+  const sCol=score==null?"var(--ink2)":(score>=70?"var(--green)":(score>=45?"var(--amber)":"var(--ink2)"));
+  const sLab=score==null?"—":(score>=70?"優":(score>=45?"中等":"偏弱"));
+  const scoreHtml=score==null?"":'<div style="display:flex;align-items:center;gap:16px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:0 0 10px">'+
+    '<div style="font-size:32px;font-weight:800;line-height:1;color:'+sCol+'">'+score+'<span style="font-size:13px;color:var(--ink3);font-weight:600">/100</span></div>'+
+    '<div style="flex:1"><div style="font-weight:800;color:'+sCol+';font-size:14px">🎯 金叉評分 · '+sLab+'</div>'+
+    '<div class="dim" style="font-size:11.5px;margin-top:2px">勝率30%＋賺賠比30%＋平均賺15%＋平均賠10%＋最差(尾端風險)15%'+(small?'，樣本<10 已打信心折扣':'')+'</div></div></div>';
   // 進行中(未平倉)那筆
   const ot = bt.open_trade;
   const otHtml = ot ? '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 10px">'+
@@ -1950,8 +1959,8 @@ function backtestBlock(bt){
       '⚠️ <b>歷史統計，非未來保證、非買賣建議。</b>口徑：金叉隔日收盤進場、下次死叉隔日收盤出場(完整波段，避免未來函數)；未含手續費。'+
       (small?'<b>已平倉僅 '+st.n+' 筆，樣本偏少，參考有限。</b>':'已平倉 '+st.n+' 筆。')+
     '</div>'+
-    otHtml+stat+
-    '<div class="legend"><b>完整波段</b>＝抱到死叉才出場(不是固定持有N天)，能反映「順勢抱一波」的真實報酬。<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>平均抱</b>＝每波平均持有天數。MA5死叉快，平均抱通常不長。</div></section>';
+    scoreHtml+otHtml+stat+
+    '<div class="legend"><b>完整波段</b>＝抱到死叉才出場(不是固定持有N天)，能反映「順勢抱一波」的真實報酬。<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>平均抱</b>＝每波平均持有天數。<b>金叉評分</b>(0~100)＝與「交叉訊號」分頁同一套公式,可橫向比較不同股的金叉歷史品質。</div></section>';
 }
 
 // 客戶端 EMA20×EMA60 交叉序列(與技術圖 Buy/Sell 同口徑;近2年)

@@ -366,6 +366,7 @@ def _annotate_fresh_backtest(rows, downloader=None):
                 r["bt_avg_win"] = bt["avg_win"]
                 r["bt_avg_loss"] = bt["avg_loss"]
                 r["bt_pl_ratio"] = bt["pl_ratio"]
+                r["bt_worst"] = bt["worst"]
         except Exception:
             continue
 

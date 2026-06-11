@@ -90,10 +90,10 @@ console.log("empty pool OK");
 //    金叉勝率/平均報酬/平均賺/平均賠/賺賠比/金叉評分/樣本 表頭 + 數值;死叉表不帶。
 const freshRow = {sym:"ZZZ", name:null, cross_state:"golden", cross_days:1,
                   sc5:80, r5:5.0, score:1000, bt_win_rate:67, bt_avg:12.3, bt_n:9,
-                  bt_avg_win:18.0, bt_avg_loss:-4.0, bt_pl_ratio:4.5};
+                  bt_avg_win:18.0, bt_avg_loss:-4.0, bt_pl_ratio:4.5, bt_worst:-9.0};
 const oldRow  = {sym:"YYY", name:null, cross_state:"golden", cross_days:40,
                  sc5:50, r5:1.0, score:500, bt_win_rate:40, bt_avg:2.1, bt_n:12,
-                 bt_avg_win:10.0, bt_avg_loss:-3.0, bt_pl_ratio:3.33};
+                 bt_avg_win:10.0, bt_avg_loss:-3.0, bt_pl_ratio:3.33, bt_worst:-31.0};
 mod.renderCross({pool_label:"T", n_ok:2,
   cross_signals:{fresh_days:3, golden:[freshRow, oldRow], death:[], n_golden:2, n_death:0}});
 const bt = mod.getContent();
@@ -102,7 +102,9 @@ assert(bt.includes("平均報酬"), "缺 平均報酬 表頭");
 assert(bt.includes("平均賺"), "缺 平均賺 表頭");
 assert(bt.includes("平均賠"), "缺 平均賠 表頭");
 assert(bt.includes("賺賠比"), "缺 賺賠比 表頭");
+assert(bt.includes(">最差<"), "缺 最差 表頭");
 assert(bt.includes("金叉評分"), "缺 金叉評分 表頭");
+assert(bt.includes("-31.0%"), "缺 bt_worst 值");      // oldRow 最差 ≤-25% 應標紅
 assert(bt.includes(">樣本<"), "缺 樣本 表頭");
 assert(bt.includes("67%"), "缺 bt_win_rate 值");      // 67 -> "67%"
 assert(bt.includes("+12.3%"), "缺 bt_avg 值");        // sgn(12.3,1)

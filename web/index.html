@@ -714,8 +714,8 @@ function crossTable(rows){
   return buildTable("t-cross", rows, cols, {empty:"（全池無 5日評分≥80 者）"});
 }
 
-// 金叉綜合評分(0~100):把 5 年回測四指標標準化後加權,再乘樣本信心。
-// 權重:勝率30% + 賺賠比30% + 平均賺20% + 平均賠(下檔控制)20%;樣本<10 折扣。
+// 金叉綜合評分(0~100):把 5 年回測五指標標準化後加權,再乘樣本信心。
+// 權重:勝率30% + 賺賠比30% + 平均賺15% + 平均賠(典型下檔)10% + 最差(尾端風險)15%;樣本<10 折扣。
 function _crossBtScore(r){
   if(r.bt_n==null || r.bt_win_rate==null) return null;
   const clamp=(x)=>x<0?0:(x>1?1:x);
@@ -723,7 +723,8 @@ function _crossBtScore(r){
   const pl  = r.bt_pl_ratio==null?0:clamp((r.bt_pl_ratio-1)/2);   // 1.0→0、≥3.0→1
   const aw  = r.bt_avg_win==null?0:clamp(r.bt_avg_win/20);        // 0→0、≥+20%→1
   const al  = r.bt_avg_loss==null?0:clamp(1-Math.abs(r.bt_avg_loss)/10); // 0%→1、≥-10%→0
-  const raw = 0.30*win + 0.30*pl + 0.20*aw + 0.20*al;            // 0~1
+  const wo  = r.bt_worst==null?0:clamp(1-Math.abs(r.bt_worst)/30);// 單筆最差 0%→1、≤-30%→0(尾端風險)
+  const raw = 0.30*win + 0.30*pl + 0.15*aw + 0.10*al + 0.15*wo;  // 0~1
   const conf = 0.6 + 0.4*clamp((r.bt_n||0)/10);                  // 樣本<10 折扣到 0.6
   return Math.round(raw*conf*100);
 }
@@ -765,6 +766,10 @@ function crossSignalTable(tableId, rows, emptyMsg, withBacktest){
         sortVal:r=>r.bt_pl_ratio==null?-1:r.bt_pl_ratio,
         cell:r=>r.bt_pl_ratio==null?'<td class="dim">–</td>'
                :'<td class="'+(r.bt_pl_ratio>=2?"pos":(r.bt_pl_ratio>=1?"":"neg"))+'" style="font-weight:600">'+r.bt_pl_ratio.toFixed(2)+'</td>'},
+      {h:"最差", key:"bt_worst",
+        sortVal:r=>r.bt_worst==null?-1e9:r.bt_worst,
+        cell:r=>r.bt_worst==null?'<td class="dim">–</td>'
+               :'<td class="'+(r.bt_worst<=-25?"neg":"dim")+'" style="'+(r.bt_worst<=-25?"font-weight:700":"")+'">'+sgn(r.bt_worst,1)+'%</td>'},
       {h:"金叉評分", key:"bt_score", sortVal:r=>{const s=_crossBtScore(r);return s==null?-1:s;},
         cell:r=>{const s=_crossBtScore(r); return s==null?'<td class="dim">–</td>'
                :'<td style="font-weight:800;color:'+(s>=70?"var(--green)":(s>=45?"var(--amber)":"var(--ink2)"))+'">'+s+'</td>';}},
@@ -812,7 +817,7 @@ function renderCross(d){
         '<div style="margin-top:8px">'+crossSignalTable("t-cross-death", sortCrossRows(cs.death), "（本池目前無死叉）")+'</div>'+
       '</details>'+
 
-      '<div class="legend">Buy(金叉)＝EMA20 上穿 EMA60（偏多）、Sell(死叉)＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序,點欄頭可改排序(點「金叉評分」可挑歷史品質最佳的金叉)。<br><b>🔥剛觸發</b>與<b>全部金叉</b>附該股近5年完整波段回測:<b>金叉勝率</b>＝金叉抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均(期望值)、<b>平均賺/平均賠</b>＝賺/賠波段各自平均、<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>金叉評分</b>(0~100)＝勝率30%＋賺賠比30%＋平均賺20%＋平均賠(下檔控制)20%,再依樣本數打信心折扣(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
+      '<div class="legend">Buy(金叉)＝EMA20 上穿 EMA60（偏多）、Sell(死叉)＝下穿（偏空）。預設依「越新觸發越前、同天數 Score 大→前」排序,點欄頭可改排序(點「金叉評分」可挑歷史品質最佳的金叉)。<br><b>🔥剛觸發</b>與<b>全部金叉</b>附該股近5年完整波段回測:<b>金叉勝率</b>＝金叉抱到死叉的正報酬波段占比、<b>平均報酬</b>＝每波平均(期望值)、<b>平均賺/平均賠</b>＝賺/賠波段各自平均、<b>賺賠比</b>＝平均賺÷|平均賠|(風報比)。<b>最差</b>＝單筆最慘波段報酬(尾端風險,≤-25% 標紅)。<b>金叉評分</b>(0~100)＝勝率30%＋賺賠比30%＋平均賺15%＋平均賠(典型下檔)10%＋最差(尾端風險)15%,再依樣本數打信心折扣(樣本<10 參考有限)。代號可點進個股看完整波段回測。</div>'+
     '</section>';
 }
 

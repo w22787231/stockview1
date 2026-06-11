@@ -541,8 +541,8 @@ function crossCell(r){
   if(st==null) return '<td class="dim">–</td>';
   const fresh = (dd!=null && dd<=10) ? ' <span style="color:var(--amber)">★</span>' : '';
   const days = (dd!=null) ? '<span style="color:var(--ink3);font-size:10px"> '+dd+'天</span>' : '';
-  if(st==="golden") return '<td><span class="pos">▲金叉</span>'+days+fresh+'</td>';
-  return '<td><span class="neg">▼死叉</span>'+days+fresh+'</td>';
+  if(st==="golden") return '<td><span class="pos">▲Buy</span>'+days+fresh+'</td>';
+  return '<td><span class="neg">▼Sell</span>'+days+fresh+'</td>';
 }
 // 排序權重：金叉>死叉；同狀態下「剛交叉(天數小)」排前面
 function crossSortVal(r){
@@ -712,8 +712,8 @@ function crossSignalTable(tableId, rows, emptyMsg, withBacktest){
     {h:"#", key:null, rownum:true},
     {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
     {h:"狀態", key:"cross", sortVal:crossSortVal,
-      cell:r=>r.cross_state==="golden"?'<td><span class="pos">▲金叉</span></td>'
-                                     :'<td><span class="neg">▼死叉</span></td>'},
+      cell:r=>r.cross_state==="golden"?'<td><span class="pos">▲Buy</span></td>'
+                                     :'<td><span class="neg">▼Sell</span></td>'},
     {h:"幾天前", key:"days",
       sortVal:r=>r.cross_days==null?9e9:r.cross_days,
       cell:r=>r.cross_days==null?'<td class="dim">—</td>'

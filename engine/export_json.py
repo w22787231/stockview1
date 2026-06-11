@@ -20,20 +20,32 @@ import yfinance as yf
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 POOLS = ["tw150", "ndx100", "sp500", "sp400", "sp600"]
-MA_SHORT, MA_LONG = 10, 50
+MA_SHORT, MA_LONG = 20, 60   # 與技術線圖 ChartArt MA交叉指標一致(EMA20/60)
+
+
+def _ema_arr(closes, n):
+    out = [None] * len(closes)
+    if len(closes) < n:
+        return out
+    k = 2.0 / (n + 1)
+    e = sum(closes[:n]) / n
+    out[n - 1] = e
+    for i in range(n, len(closes)):
+        e = closes[i] * k + e * (1 - k)
+        out[i] = e
+    return out
 
 
 def _golden_backtest_swing(closes):
-    """MA10×MA50 金叉進、死叉出的完整波段回測(同個股口徑)。回傳統計 dict 或 None。
-    口徑：金叉隔日進場、下次死叉隔日出場(避免未來函數)；未平倉那筆另記。"""
+    """EMA20×EMA60 黃金交叉(Buy)進、死亡交叉(Sell)出的完整波段回測。回傳統計 dict 或 None。
+    口徑：交叉隔日進場、下次反向交叉隔日出場(避免未來函數)；未平倉那筆另記。"""
     n = len(closes)
     if n < MA_LONG + 25:
         return None
+    se = _ema_arr(closes, MA_SHORT); le = _ema_arr(closes, MA_LONG)
 
     def ma(i, w):
-        if i + 1 < w:
-            return None
-        return sum(closes[i + 1 - w:i + 1]) / w
+        return se[i] if w == MA_SHORT else le[i]
 
     crosses = []
     for i in range(1, n):

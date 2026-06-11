@@ -222,27 +222,36 @@ def _score5(r5, e5, e5_minus_e20):
     s_acc = clamp((e5_minus_e20 + 0.1) / 0.4)  # 加速: -0.1~+0.3 映到 0~1
     return (0.40 * s_ret + 0.35 * s_eff + 0.25 * s_acc) * 100.0
 
-def _ma_cross_status(sub, short_n=10, long_n=50, lookback=120):
-    """回傳 (state, days_since)。state: 'golden'(短>長,多頭) / 'death'(短<長,空頭)。
-    days_since: 最近一次交叉是幾天前(None=回看範圍內無交叉)。資料不足回 (None,None)。"""
+def _ema(closes, n):
+    """EMA(以前 n 筆 SMA 起算),回與 closes 等長陣列(前段 None)。"""
+    out = [None] * len(closes)
+    if len(closes) < n:
+        return out
+    k = 2.0 / (n + 1)
+    e = sum(closes[:n]) / n
+    out[n - 1] = e
+    for i in range(n, len(closes)):
+        e = closes[i] * k + e * (1 - k)
+        out[i] = e
+    return out
+
+
+def _ma_cross_status(sub, short_n=20, long_n=60, lookback=120):
+    """回傳 (state, days_since)。state: 'golden'(短>長,多頭=Buy) / 'death'(短<長,空頭=Sell)。
+    與技術線圖的 ChartArt MA交叉指標一致:EMA20×EMA60。資料不足回 (None,None)。"""
     closes = list(sub["Close"])
     if len(closes) < long_n + 2:
         return None, None
-    def ma(i, w):
-        if i + 1 < w:
-            return None
-        return sum(closes[i + 1 - w:i + 1]) / w
+    se = _ema(closes, short_n); le = _ema(closes, long_n)
     n = len(closes)
-    s_last, l_last = ma(n - 1, short_n), ma(n - 1, long_n)
-    if s_last is None or l_last is None:
+    if se[n - 1] is None or le[n - 1] is None:
         return None, None
-    state = "golden" if s_last >= l_last else "death"
+    state = "golden" if se[n - 1] >= le[n - 1] else "death"
     # 往回找最近一次交叉
     days_since = None
     start = max(long_n, n - lookback)
     for i in range(n - 1, start, -1):
-        ps, pl = ma(i - 1, short_n), ma(i - 1, long_n)
-        cs, cl = ma(i, short_n), ma(i, long_n)
+        ps, pl, cs, cl = se[i - 1], le[i - 1], se[i], le[i]
         if None in (ps, pl, cs, cl):
             break
         crossed = ((ps - pl) <= 0 and (cs - cl) > 0) or ((ps - pl) >= 0 and (cs - cl) < 0)

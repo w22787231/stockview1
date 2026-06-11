@@ -1,0 +1,49 @@
+name: export-us5000
+# 全美股 ~3000(門檻過濾)輕量金叉池。美股收盤後一天一次,解耦於 40 分主流程。
+on:
+  schedule:
+    - cron: "30 21 * * 1-5"    # 美東收盤後(對齊既有美股那檔)
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: lite-pool-deploy
+  cancel-in-progress: false
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas
+      - name: Pull existing live data
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: cd engine && python pull_live_data.py || true
+      - name: Keep sibling lite pool (tw_all)
+        run: curl -fsS "https://stockview1.pages.dev/data/tw_all.json" -o data/tw_all.json || echo "tw_all 尚無(首次)"
+      - name: Export us5000 lite pool
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"
+        run: cd engine && python export_lite_pool.py us5000
+      - name: Stage web output
+        run: |
+          mkdir -p public && cp -r web/* public/
+          mkdir -p public/data && cp data/*.json public/data/
+          cp engine/universe/tw_names.json public/data/tw_names.json || true
+          if [ -d data/stock ]; then mkdir -p public/data/stock && cp data/stock/*.json public/data/stock/ || true; fi
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main

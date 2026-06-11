@@ -116,8 +116,8 @@ def test_annotate_fresh_backtest_download_fail_safe():
     assert "bt_win_rate" not in fresh[0]
 
 
-def test_build_cross_signals_only_fresh_get_bt():
-    """只有 cross_days<=fresh_days 的列跑回測；較舊交叉的列不帶 bt 欄位。"""
+def test_build_cross_signals_all_golden_get_bt():
+    """全部金叉都跑回測（對齊 build_cross_signals 現行行為:「全部金叉都標」）；死叉僅剛觸發。"""
     import pandas as pd
     closes = _gen_closes()
     captured = {"syms": None}
@@ -130,9 +130,9 @@ def test_build_cross_signals_only_fresh_get_bt():
     rows = [_row("FRESH", "golden", 0), _row("OLD", "golden", 40)]
     cs = ej.build_cross_signals(rows, downloader=dl)
     g = {r["sym"]: r for r in cs["golden"]}
-    assert captured["syms"] == ["FRESH"], captured["syms"]  # 只下載剛觸發的
+    assert captured["syms"] == ["FRESH", "OLD"], captured["syms"]  # 全部金叉都下載回測
     assert "bt_win_rate" in g["FRESH"], g["FRESH"]
-    assert "bt_win_rate" not in g["OLD"], g["OLD"]
+    assert "bt_win_rate" in g["OLD"], g["OLD"]
 
 
 if __name__ == "__main__":

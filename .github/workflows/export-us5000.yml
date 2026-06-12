@@ -35,6 +35,19 @@ jobs:
           PYTHONIOENCODING: "utf-8"
           NO_COLOR: "1"
         run: cd engine && python export_lite_pool.py us5000
+      - name: Per-stock detail for this pool's Buy stocks
+        # 對本池 Buy 股(~60-90)產生個股詳情(K線/財報/回測),併入 _index → 可搜尋/點進詳情。
+        continue-on-error: true
+        working-directory: engine
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          STOCK_TRANSLATE: "0"
+          STOCK_INFO_RETRIES: "2"
+          NO_COLOR: "1"
+        run: |
+          syms=$(python -c "import json,io; d=json.load(io.open('../data/us5000.json',encoding='utf-8')); cs=d['cross_signals']; print(' '.join(r['sym'] for r in cs['golden']+cs['death']))")
+          if [ -n "$syms" ]; then python export_stock.py $syms || true; else echo "本池無 Buy 股"; fi
       - name: Stage web output
         run: |
           mkdir -p public && cp -r web/* public/

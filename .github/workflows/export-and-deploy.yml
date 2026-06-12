@@ -211,6 +211,11 @@ jobs:
           for p in us5000 tw_all; do
             curl -fsS "https://stockview1.pages.dev/data/$p.json" -o "data/$p.json" || echo "[lite] $p 尚無(略過)"
           done
+      - name: Preserve lite pools' per-stock detail from live
+        # us5000/tw_all 的 Buy 股詳情由各自 workflow 產生;主流程全快照須沿用,否則搜尋/點擊壞。
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        working-directory: engine
+        run: python preserve_lite_stock.py || true
       - name: Stage web output
         run: |
           mkdir -p public

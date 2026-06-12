@@ -2597,15 +2597,14 @@ async function load(silent){
 }
 
 // ── 搜尋代號：高亮主表該檔並捲動過去 ──
-// 把代號（去後綴）解析回完整 sym：精確 > 加台股後綴 > 開頭符合。找不到回 null。
+// 把代號（去後綴）解析回完整 sym：精確 > 加台股後綴。找不到回 null(改由呼叫端顯示即時報價，不再開頭撞號)。
 function resolveSymByCode(syms, code){
   const q = (code||"").toUpperCase();
   if(!q) return null;
   if(syms.includes(q)) return q;
   if(syms.includes(q+".TW")) return q+".TW";
   if(syms.includes(q+".TWO")) return q+".TWO";
-  const p = syms.find(s=>s.startsWith(q));
-  return p || null;
+  return null;   // 不再用「開頭符合」(避免 TTE 誤跳 TTEK);無詳情者由呼叫端 showLiveQuote 顯示即時報價
 }
 // 在當前榜單高亮某 sym（去後綴比對）；回傳是否命中。
 function highlightInList(symOrCode){

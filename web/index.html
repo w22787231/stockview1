@@ -3239,6 +3239,7 @@ function strongTable(rows){
   const cols=[
     {h:"#", key:null, rownum:true},
     {h:"代號", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"產業", key:"sector_zh", type:"str", cell:r=>'<td style="text-align:left;font-size:12px" class="dim">'+esc(r.sector_zh||"–")+'</td>'},
     {h:"現價", key:"close", cell:r=>'<td>'+fmtNum(r.close,2)+'</td>'},
     {h:"ADR%", key:"adr", cell:r=>'<td>'+fmtNum(r.adr,1)+'</td>'},
     {h:"距52週低", key:"pal", cell:r=>'<td class="pos">+'+fmtNum(r.pal,0)+'%</td>'},

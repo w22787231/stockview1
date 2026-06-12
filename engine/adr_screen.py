@@ -319,9 +319,13 @@ def compute_trend(symbols, extra=False):
             if extra:                       # 強勢股篩選欄位
                 closes = [float(x) for x in sub["Close"].tolist()]
                 low52 = float(sub["Low"].min())
+                med = float(sub["Close"].median())
                 last30 = sub.tail(30)
                 e8v, e21v, e60v = _ema(closes, 8), _ema(closes, 21), _ema(closes, 60)
+                row["bars"] = len(sub)
                 row["pal"] = (close / low52 - 1.0) * 100.0 if low52 > 0 else 0.0
+                # 分拆/新上市調整雜訊守門:52週低 < 中位價 10% 多為 yfinance 還原失真(低點近 0),pal/漲幅會爆量
+                row["lowok"] = bool(low52 >= 0.10 * med) if med > 0 else False
                 row["p3m"] = _ret_n(sub, 63) if len(sub) > 63 else None
                 row["p6m"] = _ret_n(sub, 126) if len(sub) > 126 else None
                 row["p1y"] = _ret_n(sub, min(250, len(sub) - 1))

@@ -24,26 +24,55 @@ def _offline(syms):
 
 # 強勢股篩選(對齊 TradingView Best-winners):價≥1、ADR≥4.5%、距52週低≥70%、
 # 3M/6M/1Y 漲幅>0、30日均日成交額>50M、當日成交額>20M、EMA8≥EMA21、價>EMA60。
+# 另:bars≥230(滿一年交易日,排除新上市/分拆不足一年)、lowok(52週低非調整雜訊)。
 STRONG = {"min_price": 1.0, "min_adr": 4.5, "min_pal": 70.0,
-          "min_dv30": 50e6, "min_dv1": 20e6}
+          "min_dv30": 50e6, "min_dv1": 20e6, "min_bars": 230}
 
 def _is_strong(r):
     return (r.get("close", 0) >= STRONG["min_price"]
             and r.get("a20", 0) >= STRONG["min_adr"]
             and r.get("pal", -1) >= STRONG["min_pal"]
+            and r.get("bars", 0) >= STRONG["min_bars"] and r.get("lowok")   # 修分拆/新上市雜訊
             and (r.get("p3m") or 0) > 0 and (r.get("p6m") or 0) > 0 and (r.get("p1y") or 0) > 0
             and r.get("dv30", 0) > STRONG["min_dv30"] and r.get("dv1", 0) > STRONG["min_dv1"]
             and r.get("up821") and r.get("abv60"))
 
+def _fetch_sectors(syms):
+    """抓強勢股的產業(yfinance,平行)→中文。失敗則略過(產業選填)。"""
+    if not syms:
+        return {}
+    try:
+        import yfinance as yf
+        from concurrent.futures import ThreadPoolExecutor
+        from patch_lite_sector import SECTOR_ZH
+    except Exception:
+        return {}
+    out = {}
+    def _one(s):
+        try:
+            sec = (yf.Ticker(s).info or {}).get("sector")
+            return s, (SECTOR_ZH.get(sec, sec) if sec else None)
+        except Exception:
+            return s, None
+    try:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for s, z in ex.map(_one, syms):
+                if z:
+                    out[s] = z
+    except Exception:
+        pass
+    return out
+
 def _write_strong(rows, out_dir):
     sel = [r for r in rows if _is_strong(r)]
+    secs = _fetch_sectors([r["sym"] for r in sel])
     def _rs(r):  # 強度排序:3M+6M+1Y 漲幅合計
         return (r.get("p3m") or 0) + (r.get("p6m") or 0) + (r.get("p1y") or 0)
     sel.sort(key=_rs, reverse=True)
     out = []
     for r in sel:
         out.append({
-            "sym": r["sym"], "name": r.get("name"),
+            "sym": r["sym"], "name": r.get("name"), "sector_zh": secs.get(r["sym"]),
             "close": round(r["close"], 2), "adr": round(r.get("a20", 0), 1),
             "pal": round(r.get("pal", 0), 0),
             "p3m": round(r.get("p3m") or 0, 1), "p6m": round(r.get("p6m") or 0, 1),

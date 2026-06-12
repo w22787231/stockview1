@@ -582,8 +582,8 @@ function freshCrosses(cs){
 }
 const esc = s => (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 
-function symCell(sym,name){
-  return '<td class="sym clickable" data-stk="'+esc(sym)+'">'+esc(sym)+(name?'<span class="nm">'+esc(name)+'</span>':'')+'</td>';
+function symCell(sym,name,sector){
+  return '<td class="sym clickable" data-stk="'+esc(sym)+'">'+esc(sym)+(name?'<span class="nm">'+esc(name)+'</span>':'')+(sector?'<span class="nm" style="color:var(--ink3)">'+esc(sector)+'</span>':'')+'</td>';
 }
 function flagCell(f){
   const map={up:'<span class="up">▲加速</span>',down:'<span class="down">▼退溫</span>',flat:'<span class="flat">持平</span>'};
@@ -737,7 +737,7 @@ function _crossBtScore(r){
 function crossSignalTable(tableId, rows, emptyMsg, withBacktest){
   const cols=[
     {h:"#", key:null, rownum:true},
-    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name,r.sector_zh)},
     {h:"狀態", key:"cross", sortVal:crossSortVal,
       cell:r=>r.cross_state==="golden"?'<td><span class="pos">▲Buy</span></td>'
                                      :'<td><span class="neg">▼Sell</span></td>'},
@@ -793,6 +793,15 @@ function crossModeBar(){
 }
 
 // 交叉訊號分頁：🔥近 N 日剛觸發(展開) + 全部金叉(收起) + 全部死叉(收起)。
+function filterCrossTables(q){
+  q=(q||"").trim().toUpperCase();
+  ["t-cross-fresh","t-cross-gold","t-cross-death"].forEach(function(id){
+    var t=document.getElementById(id); if(!t) return;
+    t.querySelectorAll("tr[data-sym]").forEach(function(tr){
+      tr.style.display = (!q || tr.textContent.toUpperCase().indexOf(q)>=0) ? "" : "none";
+    });
+  });
+}
 function renderCross(d){
   const cs = d.cross_signals;
   if(!cs){
@@ -820,6 +829,7 @@ function renderCross(d){
         '⚠️ <b>歷史/快照統計，非未來保證、非買賣建議。</b>Buy(金叉)＝EMA20 上穿 EMA60、Sell(死叉)＝下穿(與技術線圖 Buy/Sell 同口徑);「幾天前」＝距最近一次交叉的交易日數，0＝今日觸發。'+
       '</div>'+
 
+      '<input id="crossFilter" type="text" oninput="filterCrossTables(this.value)" placeholder="🔍 篩選 代號／名稱／業務類別…" style="width:100%;max-width:380px;margin:0 0 12px;padding:7px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;background:var(--panel)">'+
       '<div class="tg-gname">🔥 最近剛觸發（≤'+fd+' 天）　<span class="dim" style="font-weight:400">金叉 '+freshGold+' ・ 死叉 '+freshDeath+'</span></div>'+
       freshBlock+
 

@@ -48,6 +48,14 @@ jobs:
         run: |
           syms=$(python -c "import json,io; d=json.load(io.open('../data/tw_all.json',encoding='utf-8')); cs=d['cross_signals']; print(' '.join(r['sym'] for r in cs['golden']+cs['death']))")
           if [ -n "$syms" ]; then python export_stock.py $syms || true; else echo "本池無 Buy 股"; fi
+      - name: Tag business sector (中文) into cross_signals
+        # 讀本池 Buy 股已產生的個股詳情 metrics.sector → 中文,寫進 cross_signals 列(代號旁顯示業務類別)。
+        continue-on-error: true
+        working-directory: engine
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: python patch_lite_sector.py tw_all || true
       - name: Stage web output
         run: |
           mkdir -p public && cp -r web/* public/

@@ -929,12 +929,13 @@ function pushBarInner(){
     const style=active?'background:#16a34a;color:#fff;border:none':(!on?'background:#2563eb;color:#fff;border:none':'');
     return '<button class="btn" style="font-weight:600;'+style+'" onclick="enablePush(\''+s+'\')">'+(active?'✓ ':'🔔 ')+lab+'</button>';
   };
+  const scLab={all:'全部池(全市場)任一股金叉就推播', custom:'只在<b>我的股池(持股分析)</b>出現金叉時推播', strong:'只在<b>強勢股</b>(通過強勢條件)出現金叉時推播'};
   let h='<div style="margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
-  h+= btn('all','訂閱全部池金叉') + btn('custom','只訂閱我的股池金叉');
+  h+= btn('all','全部池金叉') + btn('custom','我的股池金叉') + btn('strong','⭐強勢股金叉');
   if(on) h+= '<button class="btn" onclick="disablePush()">🔕 關閉</button>';
   h+= '<span class="dim" style="font-size:12px;width:100%;margin-top:2px">'+
-      (on? ('已開啟:'+(sc==='custom'?'只在<b>我的股池(持股分析)</b>出現金叉時推播':'<b>全部池(全市場)</b>任一股金叉就推播')+'。點上面另一顆可切換範圍;收盤後推播,關著也收得到。')
-         : '選擇收盤後要推播哪種金叉:<b>全部池</b>=全市場任一股;<b>我的股池</b>=只通知持股分析裡的股票。(iPhone 需先「加入主畫面」)')+
+      (on? ('已開啟:'+(scLab[sc]||scLab.all)+'。點上面另一顆可切換範圍;收盤後推播,關著也收得到。')
+         : '選擇收盤後要推播哪種金叉:<b>全部池</b>=全市場任一股;<b>我的股池</b>=持股分析裡的股;<b>強勢股</b>=通過強勢條件的股。(iPhone 需先「加入主畫面」)')+
       '</span></div>';
   return h;
 }
@@ -3319,6 +3320,7 @@ function renderStrong(){
     '<section><div class="sec-head"><h2>強勢股</h2><span class="tag">'+(mkt==="tw"?"台股":"美股")+'候選 '+(d.n||0)+' 檔</span>'+
       '<span class="hint">條件可自由調整/開關(存於本機);資料 '+esc(fmtTime(d.generated_at))+'</span></div>'+
     strongMktBar(mkt)+
+    pushBar()+
     '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 10px">'+
       '🎛️ 調整下方條件即時篩選。<b>距52週低填 0 = 不限</b>;勾選框取消=不套用該條件。$量單位:'+(mkt==="tw"?"億 TWD":"M USD")+'。<b>RS</b>=3M+6M+1Y 漲幅合計。'+
     '</div>'+

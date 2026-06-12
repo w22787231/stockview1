@@ -85,3 +85,18 @@ jobs:
         run: |
           pip install pywebpush requests >/dev/null 2>&1 || true
           python push_golden_cross.py || echo "[push] 失敗(略過)"
+      - name: Push strong-stock golden-cross alerts (scope=strong)
+        # 台股強勢股今日剛金叉 → 推播給 scope=strong 訂閱者。讀剛產好的 strong_tw.json。
+        continue-on-error: true
+        working-directory: engine
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PUSH_KV_ID: ${{ secrets.PUSH_KV_ID }}
+          VAPID_PRIVATE_PEM: ${{ secrets.VAPID_PRIVATE_PEM }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          PUSH_MODE: "strong"
+          PUSH_ONLY: "tw_all"
+        run: |
+          pip install pywebpush requests >/dev/null 2>&1 || true
+          python push_golden_cross.py || echo "[push-strong] 失敗(略過)"

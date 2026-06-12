@@ -449,7 +449,7 @@ async function handlePush(request, env, action) {
   if (action === "unsubscribe") { await env.PUSH_SUBS.delete(key); return _pjson({ ok: true, removed: true }); }
   const watchlist = Array.isArray(body.watchlist) ? [...new Set(body.watchlist.map(String))].slice(0, 500) : [];
   const ua = (typeof body.ua === "string" ? body.ua : "").slice(0, 300);
-  const scope = (body.scope === "custom") ? "custom" : "all";   // custom=只我的股池、all=全部池
+  const scope = (body.scope === "custom" || body.scope === "strong") ? body.scope : "all";   // custom=只我的股池、strong=強勢股、all=全部池
   await env.PUSH_SUBS.put(key, JSON.stringify({ subscription: sub, watchlist, ua, scope, ts: new Date().toISOString() }));
   return _pjson({ ok: true, n: watchlist.length });
 }

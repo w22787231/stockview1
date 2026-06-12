@@ -183,6 +183,80 @@ def _test_mode(cfg):
     print(f"[push-test] 完成:成功送出 {ok}/{len(keys)}。(送出成功仍可能因裝置/SW/權限而沒跳)")
 
 
+def _default_strong(rows, defs, unit):
+    """挑通過「預設強勢條件」的列(同前端預設;伺服器不知使用者自訂值,故用 defaults)。"""
+    out = []
+    for r in rows:
+        if (r.get("pal", 0) >= defs.get("pal", 70) and r.get("adr", 0) >= defs.get("adr", 4.5)
+                and r.get("dv30", 0) >= defs.get("dv30", 50) * unit and r.get("dv1", 0) >= defs.get("dv1", 20) * unit
+                and (r.get("p3m") or 0) > 0 and (r.get("p6m") or 0) > 0 and (r.get("p1y") or 0) > 0
+                and r.get("up821") and r.get("abv60")):
+            out.append(r)
+    return out
+
+
+def _strong_mode(cfg):
+    """PUSH_MODE=strong:讀 strong.json/strong_tw.json,挑「預設強勢 + 今日剛金叉(buy_days==0)」推播給 scope=strong 訂閱者。"""
+    import requests
+    from pywebpush import webpush, WebPushException
+    pool = os.environ.get("PUSH_ONLY", "").strip()
+    files = {"us5000": ["strong.json"], "tw_all": ["strong_tw.json"]}.get(pool, ["strong.json", "strong_tw.json"])
+    today = time.strftime("%Y-%m-%d")
+    crossed = []
+    for fn in files:
+        try:
+            d = json.load(open(os.path.join(DATA, fn), encoding="utf-8"))
+        except Exception:
+            continue
+        if d.get("generated_at", "")[:10] != today:    # 只用今天產的,避免重推昨日
+            print(f"[push-strong] {fn} 非今日({d.get('generated_at','')[:10]}),略過"); continue
+        defs, unit = d.get("defaults") or {}, d.get("dv_unit") or 1e6
+        for r in _default_strong(d.get("rows", []), defs, unit):
+            if r.get("buy_days") == 0:                  # 今天剛金叉(Buy)
+                crossed.append((r["sym"], r.get("rs", 0), r.get("name") or r["sym"]))
+    seen_s, uniq = set(), []
+    for t in sorted(crossed, key=lambda x: -x[1]):
+        if t[0] not in seen_s:
+            seen_s.add(t[0]); uniq.append(t)
+    print(f"[push-strong] 今日強勢股新金叉:{len(uniq)} 檔")
+    if not uniq:
+        return
+    sess = requests.Session()
+    keys = _kv_list(cfg, sess)
+    sent = 0
+    for key in keys:
+        rec = _kv_get(cfg, sess, key)
+        if not isinstance(rec, dict) or rec.get("scope") != "strong":
+            continue
+        sub = rec.get("subscription")
+        if not sub:
+            continue
+        mk = "pns:" + key[4:]
+        prev = _kv_get(cfg, sess, mk)
+        seen = set(prev.get("syms", [])) if isinstance(prev, dict) and prev.get("date") == today else set()
+        fresh = [t for t in uniq if t[0] not in seen]
+        if not fresh:
+            continue
+        top = fresh[:6]
+        names = "、".join(f"{nm}({_short(s)})" for s, sc, nm in top)
+        more = f" 等 {len(fresh)} 檔" if len(fresh) > len(top) else ""
+        body = (f"強勢股今日 {len(fresh)} 檔出現金叉:{names}{more}" if len(fresh) > 1
+                else f"{top[0][2]}({_short(top[0][0])}) 強勢股出現金叉")
+        payload = json.dumps({"title": "股觀觀股 · 強勢股金叉", "body": body, "url": "/?src=push#strong"})
+        try:
+            webpush(subscription_info=sub, data=payload,
+                    vapid_private_key=_pem_file(cfg["pem"]), vapid_claims={"sub": cfg["subj"]})
+            sent += 1
+            _kv_put(cfg, sess, mk, json.dumps({"date": today, "syms": list(seen | {t[0] for t in fresh})}))
+        except WebPushException as e:
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if code in (404, 410):
+                _kv_del(cfg, sess, key)
+            else:
+                print("[push-strong] 發送失敗:", e)
+    print(f"[push-strong] 已推播 {sent} 則。")
+
+
 def main():
     cfg = _need()
     if not cfg:
@@ -195,6 +269,8 @@ def main():
 
     if os.environ.get("PUSH_TEST", "").strip() in ("1", "true", "yes"):
         _test_mode(cfg); return
+    if os.environ.get("PUSH_MODE", "").strip() == "strong":
+        _strong_mode(cfg); return
 
     _PUSH_LABEL = os.environ.get("PUSH_LABEL", "").strip()
     _use_buy = os.environ.get("PUSH_SIGNAL", "").strip().lower() == "buy"

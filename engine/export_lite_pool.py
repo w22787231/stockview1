@@ -15,15 +15,15 @@ import export_json as ej
 DATA_DIR = os.path.join(HERE, "..", "data")
 
 PRESETS = {
-    "us5000": {"label": "5000股",     "min_price": 5.0, "min_dolvol": 5e6, "cur": "USD", "buy_within": 5},
-    "tw_all": {"label": "台股全市場", "min_price": 0.0, "min_dolvol": 0.0, "cur": "TWD", "buy_within": 5},
+    "us5000": {"label": "5000股",     "min_price": 5.0, "min_dolvol": 5e6, "cur": "USD", "buy_within": 5, "backtest": True},
+    "tw_all": {"label": "台股全市場", "min_price": 0.0, "min_dolvol": 0.0, "cur": "TWD", "buy_within": 5, "backtest": True},
 }
 
 def _offline(syms):
     raise RuntimeError("lite pool: no 5y backtest")
 
 def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
-                  buy_within=0, symbols=None, compute=None, out_dir=None, batch=300):
+                  buy_within=0, backtest=False, symbols=None, compute=None, out_dir=None, batch=300):
     compute = compute or eng.compute_trend
     if symbols is None:
         symbols = eng.load_pool(pool)
@@ -40,12 +40,12 @@ def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
     if buy_within:   # 整池只留近 buy_within 天有 ChartArt Buy(交叉當根+收紅)
         rows = [r for r in rows
                 if r.get("buy_days") is not None and r["buy_days"] <= buy_within]
-    cs = ej.build_cross_signals(rows, downloader=_offline)   # offline → 無 bt_ 欄
+    cs = ej.build_cross_signals(rows, downloader=(None if backtest else _offline))   # None=真下載跑5年回測; _offline=跳過
     payload = {
-        "pool": pool, "pool_label": label, "lite": True, "buy_within": buy_within,
+        "pool": pool, "pool_label": label, "lite": True, "buy_within": buy_within, "has_bt": bool(backtest),
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "yfinance (daily 1y, ChartArt Buy<=%dd, no backtest)" % buy_within if buy_within else "yfinance (daily 1y, no backtest)",
+        "source": ("yfinance (daily 1y" + (", ChartArt Buy<=%dd" % buy_within if buy_within else "") + ("" if backtest else ", no backtest") + ")"),
         "n_list": len(symbols), "n_ok": len(rows),
         "currencies": sorted(set(r["cur"] for r in rows)) or [default_cur],
         "cross_signals": cs,
@@ -67,7 +67,7 @@ def main():
     pool = sys.argv[1]
     p = PRESETS[pool]
     run_lite_pool(pool, p["label"], p["min_price"], p["min_dolvol"], p["cur"],
-                  buy_within=p["buy_within"])
+                  buy_within=p["buy_within"], backtest=p.get("backtest", False))
 
 if __name__ == "__main__":
     main()

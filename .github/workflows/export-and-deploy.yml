@@ -208,7 +208,7 @@ jobs:
         # 須從 live 沿用,否則部署會把它們抹掉(分頁 404)。strong=強勢股篩選(us5000 workflow 順便產)。
         if: ${{ github.event.inputs.web_only != 'true' }}
         run: |
-          for p in us5000 tw_all strong; do
+          for p in us5000 tw_all strong strong_tw; do
             curl -fsS "https://stockview1.pages.dev/data/$p.json" -o "data/$p.json" || echo "[lite] $p 尚無(略過)"
           done
       - name: Preserve lite pools' per-stock detail from live

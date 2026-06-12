@@ -3225,19 +3225,38 @@ async function fetchSupplyQuotes(theme){
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
 }
 
-// ── 強勢股:全美股候選池 + 前端可調整篩選(data/strong.json,由 us5000 流程順便產)──
-let STRONG_DATA=null;
-const STRONG_DEF={pal:70, adr:4.5, dv30:50, dv1:20, p3m:true, p6m:true, p1y:true, ema:true, e60:true, buy:false};
-function _strongF(){ try{ const s=JSON.parse(localStorage.getItem("strongF")); return Object.assign({},STRONG_DEF,s||{}); }catch(e){ return Object.assign({},STRONG_DEF); } }
-function strongSetF(k,v){ const f=_strongF(); f[k]=v; try{localStorage.setItem("strongF",JSON.stringify(f));}catch(e){} renderStrong(); }
-function strongReset(){ try{localStorage.removeItem("strongF");}catch(e){} renderStrong(); }
+// ── 強勢股:美股/台股候選池 + 前端可調整篩選(strong.json / strong_tw.json)──
+let STRONG_DATA=null, STRONG_CACHE={};
+function _strongMkt(){ try{ return localStorage.getItem("strongMkt")==="tw"?"tw":"us"; }catch(e){ return "us"; } }
+function strongSetMkt(m){ try{localStorage.setItem("strongMkt",m);}catch(e){} loadStrong(); }
+function _strongDef(){   // 預設值來自當前市場的 strong.json(美股 M USD / 台股 億 TWD)
+  const d=(STRONG_DATA&&STRONG_DATA.defaults)||{};
+  return {pal:d.pal!=null?d.pal:70, adr:d.adr!=null?d.adr:4.5, dv30:d.dv30!=null?d.dv30:50, dv1:d.dv1!=null?d.dv1:20,
+    p3m:d.p3m!==0, p6m:d.p6m!==0, p1y:d.p1y!==0, ema:d.ema!==0, e60:d.e60!==0, buy:!!d.buy};
+}
+function _strongFkey(){ return "strongF_"+_strongMkt(); }      // 每市場各自記住調整
+function _strongF(){ const def=_strongDef(); try{ const s=JSON.parse(localStorage.getItem(_strongFkey())); return Object.assign({},def,s||{}); }catch(e){ return def; } }
+function strongSetF(k,v){ const f=_strongF(); f[k]=v; try{localStorage.setItem(_strongFkey(),JSON.stringify(f));}catch(e){} renderStrong(); }
+function strongReset(){ try{localStorage.removeItem(_strongFkey());}catch(e){} renderStrong(); }
+function _dvUnit(){ return (STRONG_DATA&&STRONG_DATA.dv_unit)||1e6; }
+function _dvSuf(){ return (STRONG_DATA&&STRONG_DATA.dv_suffix)||"M"; }
+function strongMktBar(mkt){
+  return '<div class="etf-filters" style="margin:0 0 10px">'+
+    '<button class="etf-fb'+(mkt==="us"?" on":"")+'" onclick="strongSetMkt(\'us\')">🇺🇸 美股</button>'+
+    '<button class="etf-fb'+(mkt==="tw"?" on":"")+'" onclick="strongSetMkt(\'tw\')">🇹🇼 台股</button>'+
+  '</div>';
+}
 async function loadStrong(){
-  $("#meta").innerHTML='<div><b>強勢股</b> 全美股篩選</div><div>條件可在下方自由調整/開關</div>';
+  const mkt=_strongMkt();
+  $("#meta").innerHTML='<div><b>強勢股</b> '+(mkt==="tw"?"台股":"美股")+'全市場</div><div>條件可在下方自由調整/開關</div>';
   $("#poolNote").innerHTML="";
-  if(STRONG_DATA){ renderStrong(); return; }
-  $("#content").innerHTML='<div class="loading-screen">載入強勢股 …</div>';
-  try{ STRONG_DATA=await (await fetch("data/strong.json?t="+Date.now(),{cache:"no-store"})).json(); renderStrong(); }
-  catch(e){ $("#content").innerHTML='<section><div class="sec-head"><h2>強勢股</h2></div><div class="note">⚠️ 強勢股資料尚未產生(由美股收盤後 us5000 流程產生,首次需等一次排程)。</div></section>'; }
+  if(STRONG_CACHE[mkt]){ STRONG_DATA=STRONG_CACHE[mkt]; renderStrong(); return; }
+  $("#content").innerHTML='<div class="loading-screen">載入強勢股（'+(mkt==="tw"?"台股":"美股")+'）…</div>';
+  const file=mkt==="tw"?"data/strong_tw.json":"data/strong.json";
+  try{ const d=await (await fetch(file+"?t="+Date.now(),{cache:"no-store"})).json(); STRONG_CACHE[mkt]=d; STRONG_DATA=d; renderStrong(); }
+  catch(e){ STRONG_DATA=null;
+    $("#content").innerHTML='<section><div class="sec-head"><h2>強勢股</h2></div>'+strongMktBar(mkt)+
+      '<div class="note">⚠️ '+(mkt==="tw"?"台股":"美股")+'強勢股資料尚未產生(由收盤後 '+(mkt==="tw"?"tw_all":"us5000")+' 流程產生,首次需等一次排程)。</div></section>'; }
 }
 function strongTable(rows){
   const cols=[
@@ -3263,18 +3282,20 @@ function strongFilterBar(f){
   const num=(k,lab,suf)=>'<label style="display:inline-flex;align-items:center;gap:3px;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 8px">'+lab+' ≥ '+
     '<input type="number" value="'+f[k]+'" min="0" step="any" style="width:52px;border:1px solid var(--line);border-radius:5px;padding:2px 4px;font-size:12px;background:var(--panel)" onchange="strongSetF(\''+k+'\',parseFloat(this.value)||0)">'+(suf||'')+'</label>';
   const chk=(k,lab)=>'<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;cursor:pointer"><input type="checkbox" '+(f[k]?"checked":"")+' onchange="strongSetF(\''+k+'\',this.checked)">'+lab+'</label>';
+  const suf=_dvSuf();
   return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px">'+
-    num("pal","距52週低","%")+num("adr","ADR","%")+num("dv30","30日$量","M")+num("dv1","當日$量","M")+
+    num("pal","距52週低","%")+num("adr","ADR","%")+num("dv30","30日$量",suf)+num("dv1","當日$量",suf)+
     chk("p3m","3月漲>0")+chk("p6m","6月漲>0")+chk("p1y","1年漲>0")+chk("ema","EMA8≥21")+chk("e60","價>EMA60")+chk("buy","只看Buy金叉")+
     '<button class="btn" style="font-size:12px" onclick="strongReset()">↺ 重設預設</button>'+
   '</div>';
 }
 function strongApply(all,f){
+  const u=_dvUnit();
   return all.filter(r=>
     (f.pal<=0 || (r.pal||0)>=f.pal) &&
     ((r.adr||0)>=f.adr) &&
-    ((r.dv30||0)>=f.dv30*1e6) &&
-    ((r.dv1||0)>=f.dv1*1e6) &&
+    ((r.dv30||0)>=f.dv30*u) &&
+    ((r.dv1||0)>=f.dv1*u) &&
     (!f.p3m || (r.p3m||0)>0) &&
     (!f.p6m || (r.p6m||0)>0) &&
     (!f.p1y || (r.p1y||0)>0) &&
@@ -3285,13 +3306,15 @@ function strongApply(all,f){
 }
 function renderStrong(){
   const d=STRONG_DATA; if(!d) return;
+  const mkt=_strongMkt();
   const all=d.rows||[], f=_strongF();
   const rows=strongApply(all,f);
   $("#content").innerHTML=
-    '<section><div class="sec-head"><h2>強勢股</h2><span class="tag">全美股候選 '+(d.n||0)+' 檔</span>'+
+    '<section><div class="sec-head"><h2>強勢股</h2><span class="tag">'+(mkt==="tw"?"台股":"美股")+'候選 '+(d.n||0)+' 檔</span>'+
       '<span class="hint">條件可自由調整/開關(存於本機);資料 '+esc(fmtTime(d.generated_at))+'</span></div>'+
+    strongMktBar(mkt)+
     '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 10px">'+
-      '🎛️ 調整下方條件即時篩選。<b>距52週低填 0 = 不限</b>;勾選框取消=不套用該條件。預設值=你原本的 TradingView 設定。<b>RS</b>=3M+6M+1Y 漲幅合計。'+
+      '🎛️ 調整下方條件即時篩選。<b>距52週低填 0 = 不限</b>;勾選框取消=不套用該條件。$量單位:'+(mkt==="tw"?"億 TWD":"M USD")+'。<b>RS</b>=3M+6M+1Y 漲幅合計。'+
     '</div>'+
     strongFilterBar(f)+
     '<div class="dim" style="font-size:12.5px;margin:0 0 8px">符合 <b style="color:var(--ink);font-size:14px">'+rows.length+'</b> / '+all.length+' 檔候選'+(f.buy?'(僅金叉)':'')+'</div>'+

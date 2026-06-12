@@ -280,8 +280,9 @@ def _ma_buy_days(sub, short_n=20, long_n=60, lookback=120):
     return None
 
 
-def compute_trend(symbols):
-    """趨勢效率 = N日漲幅/(ADRN%xN)，看單向性。依 eff20 由高到低排。"""
+def compute_trend(symbols, extra=False):
+    """趨勢效率 = N日漲幅/(ADRN%xN)，看單向性。依 eff20 由高到低排。
+    extra=True(強勢股篩選用):每列再加 pal(距52週低%)/p3m/p6m/p1y(漲幅)/dv30/up821(EMA8≥21)/abv60(價>EMA60)。"""
     rows, failed = [], []
     if not symbols:
         return rows, failed
@@ -306,14 +307,28 @@ def compute_trend(symbols):
             dv1 = float(last20["Close"].iloc[-1] * last20["Volume"].iloc[-1])
             volr = (dv1 / dv) if dv > 0 else 0.0
             cross_state, cross_days = _ma_cross_status(sub)
-            rows.append({"sym": sym, "e3": e3, "e5": e5, "e10": e10, "e20": e20,
-                         "d520": e5 - e20, "r20": r20, "r5": r5, "sc5": sc5,
-                         "a5": a5, "a10": a10, "a20": a20, "ad520": a5 - a20,
-                         "dv": dv, "dv1": dv1, "volr": volr, "score": score,
-                         "cross_state": cross_state, "cross_days": cross_days,
-                         "close": float(sub["Close"].iloc[-1]),
-                         "buy_days": _ma_buy_days(sub),
-                         "cur": "TWD" if is_tw(sym) else "USD"})
+            close = float(sub["Close"].iloc[-1])
+            row = {"sym": sym, "e3": e3, "e5": e5, "e10": e10, "e20": e20,
+                   "d520": e5 - e20, "r20": r20, "r5": r5, "sc5": sc5,
+                   "a5": a5, "a10": a10, "a20": a20, "ad520": a5 - a20,
+                   "dv": dv, "dv1": dv1, "volr": volr, "score": score,
+                   "cross_state": cross_state, "cross_days": cross_days,
+                   "close": close,
+                   "buy_days": _ma_buy_days(sub),
+                   "cur": "TWD" if is_tw(sym) else "USD"}
+            if extra:                       # 強勢股篩選欄位
+                closes = [float(x) for x in sub["Close"].tolist()]
+                low52 = float(sub["Low"].min())
+                last30 = sub.tail(30)
+                e8v, e21v, e60v = _ema(closes, 8), _ema(closes, 21), _ema(closes, 60)
+                row["pal"] = (close / low52 - 1.0) * 100.0 if low52 > 0 else 0.0
+                row["p3m"] = _ret_n(sub, 63) if len(sub) > 63 else None
+                row["p6m"] = _ret_n(sub, 126) if len(sub) > 126 else None
+                row["p1y"] = _ret_n(sub, min(250, len(sub) - 1))
+                row["dv30"] = float((last30["Close"] * last30["Volume"]).mean())
+                row["up821"] = bool(e8v[-1] is not None and e21v[-1] is not None and e8v[-1] >= e21v[-1])
+                row["abv60"] = bool(e60v[-1] is not None and close > e60v[-1])
+            rows.append(row)
         except Exception as e:
             failed.append((sym, repr(e)[:40]))
     rows.sort(key=lambda r: r["sc5"], reverse=True)

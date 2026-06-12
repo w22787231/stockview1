@@ -2409,6 +2409,7 @@ function switchView(v){
   else if(v==="news") loadNewsFeed();
   else if(v==="chain") loadChain();
   else if(v==="supply") loadSupply();
+  else if(v==="strong") loadStrong();
   else if(v==="etf") loadEtf();
   else if(v==="holdings") loadHoldings();
   else if(v==="calendar") loadCalendar();
@@ -2423,6 +2424,7 @@ const NAV=[
   {view:"capital", label:"資金"},
   {view:"trend",   label:"趨勢動能榜"},
   {view:"cross",   label:"交叉訊號"},
+  {view:"strong",  label:"強勢股"},
   {view:"chain",   label:"產業鏈"},
   {view:"supply",  label:"供應鏈選股"},
   {view:"etf",     label:"ETF持股異動"},
@@ -3221,6 +3223,54 @@ async function fetchSupplyQuotes(theme){
   });
   box.innerHTML=html||'<div class="legend">此主題暫無個股。</div>';
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
+}
+
+// ── 強勢股:全美股 Best-winners 篩選(data/strong.json,由 us5000 流程順便產)──
+let STRONG_DATA=null, STRONG_BUYONLY=false;
+async function loadStrong(){
+  $("#meta").innerHTML='<div><b>強勢股</b> 全美股篩選</div><div>價≥1·ADR≥4.5%·距52週低≥70%·3M/6M/1Y漲·量能·EMA8≥21·價>EMA60</div>';
+  $("#poolNote").innerHTML="";
+  if(STRONG_DATA){ renderStrong(); return; }
+  $("#content").innerHTML='<div class="loading-screen">載入強勢股 …</div>';
+  try{ STRONG_DATA=await (await fetch("data/strong.json?t="+Date.now(),{cache:"no-store"})).json(); renderStrong(); }
+  catch(e){ $("#content").innerHTML='<section><div class="sec-head"><h2>強勢股</h2></div><div class="note">⚠️ 強勢股資料尚未產生(由美股收盤後 us5000 流程產生,首次需等一次排程)。</div></section>'; }
+}
+function strongTable(rows){
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"現價", key:"close", cell:r=>'<td>'+fmtNum(r.close,2)+'</td>'},
+    {h:"ADR%", key:"adr", cell:r=>'<td>'+fmtNum(r.adr,1)+'</td>'},
+    {h:"距52週低", key:"pal", cell:r=>'<td class="pos">+'+fmtNum(r.pal,0)+'%</td>'},
+    {h:"3月", key:"p3m", cell:r=>'<td class="'+cls(r.p3m)+'">'+sgn(r.p3m,1)+'%</td>'},
+    {h:"6月", key:"p6m", cell:r=>'<td class="'+cls(r.p6m)+'">'+sgn(r.p6m,1)+'%</td>'},
+    {h:"1年", key:"p1y", cell:r=>'<td class="'+cls(r.p1y)+'">'+sgn(r.p1y,1)+'%</td>'},
+    {h:"RS", key:"rs", cell:r=>'<td style="font-weight:700">'+fmtNum(r.rs,0)+'</td>'},
+    {h:"30日$量", key:"dv30", cell:r=>'<td class="dim">'+dvfmt(r.dv30)+'</td>'},
+    {h:"金叉Buy", key:"buy_days", sortVal:r=>r.cross_state==="golden"?(r.buy_days==null?9e8:-(1e6-r.buy_days)):9e9,
+      cell:r=>r.cross_state==="golden"
+        ? '<td><span class="pos">▲Buy</span>'+(r.buy_days!=null?'<span style="font-size:10px;color:var(--ink3)"> '+r.buy_days+'d</span>':'')+'</td>'
+        : '<td class="dim">–</td>'},
+  ];
+  return buildTable("t-strong", rows, cols, {empty:"(無符合條件者)"});
+}
+function renderStrong(){
+  const d=STRONG_DATA; if(!d) return;
+  let rows=(d.rows||[]).slice();
+  const nBuy=rows.filter(r=>r.cross_state==="golden").length;
+  if(STRONG_BUYONLY) rows=rows.filter(r=>r.cross_state==="golden");
+  $("#content").innerHTML=
+    '<section><div class="sec-head"><h2>強勢股</h2><span class="tag">全美股 · '+(d.n||0)+' 檔</span>'+
+      '<span class="hint">Best-winners 條件(同你的 TradingView 篩選);資料 '+esc(fmtTime(d.generated_at))+'</span></div>'+
+    '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 12px">'+
+      '✅ 條件:價≥1 · ADR≥4.5% · 距52週低≥70% · 3M/6M/1Y 漲幅>0 · 30日均$量>50M & 當日$量>20M · EMA8≥EMA21 · 價>EMA60。<b>RS</b>=3M+6M+1Y 漲幅合計(越高越強)。'+
+    '</div>'+
+    '<div class="etf-filters" style="margin:0 0 10px"><button class="etf-fb'+(STRONG_BUYONLY?" on":"")+'" id="strongBuyBtn">⭐ 只看 Buy(金叉)'+(STRONG_BUYONLY?" ✓":"")+'</button>'+
+      '<span class="dim" style="font-size:12px;margin-left:8px">勾選後只留目前 EMA20/60 金叉(多頭排列)者　·　目前金叉 '+nBuy+' 檔</span></div>'+
+    strongTable(rows)+
+    '<div class="legend">⚠️ 技術面篩選,非買賣建議。資料每美股收盤後更新(us5000 全市場掃描)。<b>金叉Buy</b>=EMA20 上穿 EMA60(與技術線圖 Buy 同口徑),Nd=距觸發天數。代號可點進個股。</div>'+
+    '</section>';
+  const bb=$("#strongBuyBtn"); if(bb) bb.onclick=()=>{ STRONG_BUYONLY=!STRONG_BUYONLY; renderStrong(); };
 }
 // ── 資金流向:台股法人/融資券(TWSE)+ 美股流動性/類股輪動(FRED+Yahoo)(data/capital.json)──
 let CAP_DATA=null, CAP_SUB="inst", INST_SORT="net";

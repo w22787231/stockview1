@@ -22,8 +22,51 @@ PRESETS = {
 def _offline(syms):
     raise RuntimeError("lite pool: no 5y backtest")
 
+# 強勢股篩選(對齊 TradingView Best-winners):價≥1、ADR≥4.5%、距52週低≥70%、
+# 3M/6M/1Y 漲幅>0、30日均日成交額>50M、當日成交額>20M、EMA8≥EMA21、價>EMA60。
+STRONG = {"min_price": 1.0, "min_adr": 4.5, "min_pal": 70.0,
+          "min_dv30": 50e6, "min_dv1": 20e6}
+
+def _is_strong(r):
+    return (r.get("close", 0) >= STRONG["min_price"]
+            and r.get("a20", 0) >= STRONG["min_adr"]
+            and r.get("pal", -1) >= STRONG["min_pal"]
+            and (r.get("p3m") or 0) > 0 and (r.get("p6m") or 0) > 0 and (r.get("p1y") or 0) > 0
+            and r.get("dv30", 0) > STRONG["min_dv30"] and r.get("dv1", 0) > STRONG["min_dv1"]
+            and r.get("up821") and r.get("abv60"))
+
+def _write_strong(rows, out_dir):
+    sel = [r for r in rows if _is_strong(r)]
+    def _rs(r):  # 強度排序:3M+6M+1Y 漲幅合計
+        return (r.get("p3m") or 0) + (r.get("p6m") or 0) + (r.get("p1y") or 0)
+    sel.sort(key=_rs, reverse=True)
+    out = []
+    for r in sel:
+        out.append({
+            "sym": r["sym"], "name": r.get("name"),
+            "close": round(r["close"], 2), "adr": round(r.get("a20", 0), 1),
+            "pal": round(r.get("pal", 0), 0),
+            "p3m": round(r.get("p3m") or 0, 1), "p6m": round(r.get("p6m") or 0, 1),
+            "p1y": round(r.get("p1y") or 0, 1),
+            "dv30": round(r.get("dv30", 0)), "dv1": round(r.get("dv1", 0)),
+            "rs": round(_rs(r), 1),
+            "cross_state": r.get("cross_state"), "buy_days": r.get("buy_days"),
+            "cur": r.get("cur", "USD"),
+        })
+    payload = {
+        "pool": "strong", "label": "強勢股", "lite": True,
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "filters": STRONG, "n": len(out), "rows": out,
+    }
+    os.makedirs(out_dir, exist_ok=True)
+    fp = os.path.join(out_dir, "strong.json")
+    with io.open(fp, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
+    print(f"[strong] -> {fp}  ({len(out)} 檔強勢股)", flush=True)
+
 def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
-                  buy_within=0, backtest=False, symbols=None, compute=None, out_dir=None, batch=300):
+                  buy_within=0, backtest=False, symbols=None, compute=None, out_dir=None, batch=300,
+                  strong=False):
     compute = compute or eng.compute_trend
     if symbols is None:
         symbols = eng.load_pool(pool)
@@ -31,12 +74,14 @@ def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
             raise SystemExit(f"找不到池清單: {pool}")
     rows, failed = [], []
     for i in range(0, len(symbols), batch):
-        r, f = compute(symbols[i:i + batch])
+        r, f = compute(symbols[i:i + batch], extra=strong) if strong else compute(symbols[i:i + batch])
         rows += r
         failed += f
         print(f"[lite:{pool}] {min(i + batch, len(symbols))}/{len(symbols)}", flush=True)
     rows = [r for r in rows
             if r.get("close", 1e18) >= min_price and r.get("dv", 0.0) >= min_dolvol]
+    if strong:       # 強勢股篩選(TradingView Best-winners 條件)→ 另寫 strong.json(不受 buy_within 限制)
+        _write_strong(rows, out_dir or DATA_DIR)
     if buy_within:   # 整池只留近 buy_within 天有 ChartArt Buy(交叉當根+收紅)
         rows = [r for r in rows
                 if r.get("buy_days") is not None and r["buy_days"] <= buy_within]
@@ -67,7 +112,8 @@ def main():
     pool = sys.argv[1]
     p = PRESETS[pool]
     run_lite_pool(pool, p["label"], p["min_price"], p["min_dolvol"], p["cur"],
-                  buy_within=p["buy_within"], backtest=p.get("backtest", False))
+                  buy_within=p["buy_within"], backtest=p.get("backtest", False),
+                  strong=(pool == "us5000"))   # 美股全市場順便產強勢股 strong.json
 
 if __name__ == "__main__":
     main()

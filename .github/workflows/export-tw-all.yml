@@ -43,7 +43,8 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
           STOCK_TRANSLATE: "0"
-          STOCK_INFO_RETRIES: "2"
+          STOCK_INFO_RETRIES: "3"
+          STOCK_INFO_SLEEP: "0.6"
           NO_COLOR: "1"
         run: |
           syms=$(python -c "import json,io; d=json.load(io.open('../data/tw_all.json',encoding='utf-8')); cs=d['cross_signals']; print(' '.join(r['sym'] for r in cs['golden']+cs['death']))")

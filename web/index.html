@@ -3166,10 +3166,21 @@ function renderSupply(){
       '<span class="hint">逆向拆鏈找卡脖子瓶頸→精選卡位股(可含美股);代號可點進個股。研究由 AI 維護、報價即時</span></div>'+
     '<div class="chain-nav">'+nav+'</div>'+
     '<div class="chain-intro"><b>🔑 瓶頸:</b>'+esc(t.bottleneck||"")+'<div style="margin-top:6px"><b>🎯 選股邏輯:</b>'+esc(t.note||"")+'</div></div>'+
+    (t.map ? '<div style="margin:10px 0">'+
+        '<button class="btn" id="supplyMapBtn" style="background:#0a0c0f;color:#00d4aa;border:1px solid #2a3340;font-weight:600">🗺️ '+esc(t.map_title||"全球原料拆解地圖")+'</button> '+
+        '<a class="btn" href="'+esc(t.map)+'" target="_blank" rel="noopener">↗ 新分頁全螢幕</a>'+
+        '<div id="supplyMapWrap" style="display:none;margin-top:10px;border:1px solid var(--border2,#2a3340);border-radius:10px;overflow:hidden;background:#0a0c0f">'+
+          '<iframe id="supplyMapFrame" title="'+esc(t.map_title||"原料地圖")+'" style="width:100%;height:82vh;border:0;display:block;background:#0a0c0f" loading="lazy"></iframe>'+
+        '</div></div>' : '')+
     '<div id="supplyResult"><div class="loading-screen">查詢 '+(t.stocks||[]).length+' 檔即時報價 …</div></div>'+
     '<div class="legend">'+esc(d.method||"")+' · 更新 '+esc(d.generated_at||"–")+'。瓶頸/選股由 AI 研究維護(非自動發掘),「定位」=該股卡位角色。</div>'+
     '</section>';
   document.querySelectorAll(".chain-pill").forEach(b=>b.onclick=()=>{ SUPPLY_CUR=parseInt(b.dataset.si,10)||0; renderSupply(); window.scrollTo({top:0,behavior:"smooth"}); });
+  const mb=document.getElementById("supplyMapBtn");
+  if(mb) mb.onclick=()=>{ const w=document.getElementById("supplyMapWrap"), fr=document.getElementById("supplyMapFrame");
+    if(!w) return; const open=w.style.display==="none";
+    if(open && fr && !fr.src) fr.src=t.map;       // 首次展開才載入(省流量)
+    w.style.display=open?"block":"none"; mb.textContent=(open?"🔼 收起地圖":"🗺️ "+(t.map_title||"全球原料拆解地圖")); };
   fetchSupplyQuotes(t);
 }
 // 依市場決定查詢候選:台股(數字)試 .TW/.TWO;美股/其他股用完整代號(如 NVDA、4062.T)。

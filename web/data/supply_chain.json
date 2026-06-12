@@ -8,31 +8,181 @@
       "bottleneck": "瓶頸=光耦合對準(<1μm 次微米)與『電/光/熱』四合一測試;2026 為商轉元年,台積電 COUPE 平台主導、Broadcom 推 CPO 交換機。",
       "note": "選股邏輯:台股卡 <1μm 對準+COUPE 生態(上詮)、電光熱測試龍頭(旺矽);美股看交換機/光元件主軸(AVGO/COHR/LITE);搭防禦緩衝(眾達/波若威)。",
       "stocks": [
-        {"code": "3363", "market": "tw", "name": "上詮", "role": "FAU 光纖對準·COUPE 深度夥伴(<1μm)", "tag": "核心卡位"},
-        {"code": "6223", "market": "tw", "name": "旺矽", "role": "電/光/熱測試·Thermal 全球 >50%", "tag": "測試龍頭"},
-        {"code": "6515", "market": "tw", "name": "穎崴", "role": "高階測試座·液冷(15kW 對策)", "tag": "測試+防禦"},
-        {"code": "7856", "market": "tw", "name": "漢測", "role": "矽光子薄膜探針卡·EIC/PIC 垂直測試", "tag": "測試"},
-        {"code": "6830", "market": "tw", "name": "汎銓", "role": "矽光子材料/失效分析·光損定位", "tag": "上游驗證"},
-        {"code": "2360", "market": "tw", "name": "致茂", "role": "光引擎 Burn-in/光學量測/AOI", "tag": "量產測試"},
-        {"code": "4908", "market": "tw", "name": "眾達-KY", "role": "外部雷射光源 ELSFP(64→128G FC 現金流)", "tag": "光源+防禦"},
-        {"code": "3163", "market": "tw", "name": "波若威", "role": "高密度光學互連 Fiber Kit(FTTH/PON 防禦)", "tag": "互連+防禦"},
-        {"code": "6443", "market": "tw", "name": "光聖", "role": "光通訊(美系資料中心·毛利 >60%)", "tag": "高彈性"},
-        {"code": "2301", "market": "tw", "name": "光寶科", "role": "矽光子收發模組(2027 實質成果)", "tag": "佈局中"},
-        {"code": "2330", "market": "tw", "name": "台積電", "role": "COUPE 先進封裝平台主導者", "tag": "平台核心"},
-        {"code": "AVGO", "market": "us", "name": "Broadcom", "role": "CPO 交換機商轉(2026)·Tomahawk", "tag": "平台核心"},
-        {"code": "NVDA", "market": "us", "name": "NVIDIA", "role": "導入 COUPE·光路互連(rack-to-board)", "tag": "終端拉貨"},
-        {"code": "COHR", "market": "us", "name": "Coherent", "role": "光元件/雷射/EML 光源", "tag": "光元件"},
-        {"code": "LITE", "market": "us", "name": "Lumentum", "role": "雷射/光晶片(EML/CW 光源)", "tag": "光元件"},
-        {"code": "MRVL", "market": "us", "name": "Marvell", "role": "光 DSP/連接·客製 ASIC", "tag": "連接晶片"},
-        {"code": "CRDO", "market": "us", "name": "Credo", "role": "高速連接/AEC·光連接受惠", "tag": "連接"},
-        {"code": "ANET", "market": "us", "name": "Arista", "role": "資料中心交換機(CPO 終端)", "tag": "交換機"},
-        {"code": "9432.T", "market": "other", "name": "NTT(日)", "role": "IOWN 光電融合·光電共封先驅", "tag": "光電融合"},
-        {"code": "5802.T", "market": "other", "name": "住友電工(日)", "role": "InP 化合物半導體/光元件/雷射", "tag": "光元件"},
-        {"code": "5801.T", "market": "other", "name": "古河電工(日)", "role": "光纖/雷射二極體/光元件", "tag": "光元件"},
-        {"code": "6702.T", "market": "other", "name": "Fujitsu(日)", "role": "光傳輸/光元件(Fujitsu Optical)", "tag": "光傳輸"},
-        {"code": "STMPA.PA", "market": "other", "name": "STMicro(歐)", "role": "矽光子製程/光引擎(CPO 合作)", "tag": "矽光子IDM"},
-        {"code": "SOI.PA", "market": "other", "name": "Soitec(歐)", "role": "光子 SOI 晶圓基板", "tag": "上游基板"},
-        {"code": "AMS.SW", "market": "other", "name": "AMS-OSRAM(歐)", "role": "雷射/VCSEL 光源", "tag": "光源"}
+        {
+          "code": "3363",
+          "market": "tw",
+          "name": "上詮",
+          "role": "FAU 光纖對準·COUPE 深度夥伴(<1μm)",
+          "tag": "核心卡位"
+        },
+        {
+          "code": "6223",
+          "market": "tw",
+          "name": "旺矽",
+          "role": "電/光/熱測試·Thermal 全球 >50%",
+          "tag": "測試龍頭"
+        },
+        {
+          "code": "6515",
+          "market": "tw",
+          "name": "穎崴",
+          "role": "高階測試座·液冷(15kW 對策)",
+          "tag": "測試+防禦"
+        },
+        {
+          "code": "7856",
+          "market": "tw",
+          "name": "漢測",
+          "role": "矽光子薄膜探針卡·EIC/PIC 垂直測試",
+          "tag": "測試"
+        },
+        {
+          "code": "6830",
+          "market": "tw",
+          "name": "汎銓",
+          "role": "矽光子材料/失效分析·光損定位",
+          "tag": "上游驗證"
+        },
+        {
+          "code": "2360",
+          "market": "tw",
+          "name": "致茂",
+          "role": "光引擎 Burn-in/光學量測/AOI",
+          "tag": "量產測試"
+        },
+        {
+          "code": "4908",
+          "market": "tw",
+          "name": "眾達-KY",
+          "role": "外部雷射光源 ELSFP(64→128G FC 現金流)",
+          "tag": "光源+防禦"
+        },
+        {
+          "code": "3163",
+          "market": "tw",
+          "name": "波若威",
+          "role": "高密度光學互連 Fiber Kit(FTTH/PON 防禦)",
+          "tag": "互連+防禦"
+        },
+        {
+          "code": "6443",
+          "market": "tw",
+          "name": "光聖",
+          "role": "光通訊(美系資料中心·毛利 >60%)",
+          "tag": "高彈性"
+        },
+        {
+          "code": "2301",
+          "market": "tw",
+          "name": "光寶科",
+          "role": "矽光子收發模組(2027 實質成果)",
+          "tag": "佈局中"
+        },
+        {
+          "code": "2330",
+          "market": "tw",
+          "name": "台積電",
+          "role": "COUPE 先進封裝平台主導者",
+          "tag": "平台核心"
+        },
+        {
+          "code": "AVGO",
+          "market": "us",
+          "name": "Broadcom",
+          "role": "CPO 交換機商轉(2026)·Tomahawk",
+          "tag": "平台核心"
+        },
+        {
+          "code": "NVDA",
+          "market": "us",
+          "name": "NVIDIA",
+          "role": "導入 COUPE·光路互連(rack-to-board)",
+          "tag": "終端拉貨"
+        },
+        {
+          "code": "COHR",
+          "market": "us",
+          "name": "Coherent",
+          "role": "光元件/雷射/EML 光源",
+          "tag": "光元件"
+        },
+        {
+          "code": "LITE",
+          "market": "us",
+          "name": "Lumentum",
+          "role": "雷射/光晶片(EML/CW 光源)",
+          "tag": "光元件"
+        },
+        {
+          "code": "MRVL",
+          "market": "us",
+          "name": "Marvell",
+          "role": "光 DSP/連接·客製 ASIC",
+          "tag": "連接晶片"
+        },
+        {
+          "code": "CRDO",
+          "market": "us",
+          "name": "Credo",
+          "role": "高速連接/AEC·光連接受惠",
+          "tag": "連接"
+        },
+        {
+          "code": "ANET",
+          "market": "us",
+          "name": "Arista",
+          "role": "資料中心交換機(CPO 終端)",
+          "tag": "交換機"
+        },
+        {
+          "code": "9432.T",
+          "market": "other",
+          "name": "NTT(日)",
+          "role": "IOWN 光電融合·光電共封先驅",
+          "tag": "光電融合"
+        },
+        {
+          "code": "5802.T",
+          "market": "other",
+          "name": "住友電工(日)",
+          "role": "InP 化合物半導體/光元件/雷射",
+          "tag": "光元件"
+        },
+        {
+          "code": "5801.T",
+          "market": "other",
+          "name": "古河電工(日)",
+          "role": "光纖/雷射二極體/光元件",
+          "tag": "光元件"
+        },
+        {
+          "code": "6702.T",
+          "market": "other",
+          "name": "Fujitsu(日)",
+          "role": "光傳輸/光元件(Fujitsu Optical)",
+          "tag": "光傳輸"
+        },
+        {
+          "code": "STMPA.PA",
+          "market": "other",
+          "name": "STMicro(歐)",
+          "role": "矽光子製程/光引擎(CPO 合作)",
+          "tag": "矽光子IDM"
+        },
+        {
+          "code": "SOI.PA",
+          "market": "other",
+          "name": "Soitec(歐)",
+          "role": "光子 SOI 晶圓基板",
+          "tag": "上游基板"
+        },
+        {
+          "code": "AMS.SW",
+          "market": "other",
+          "name": "AMS-OSRAM(歐)",
+          "role": "雷射/VCSEL 光源",
+          "tag": "光源"
+        }
       ]
     },
     {
@@ -41,19 +191,97 @@
       "bottleneck": "瓶頸=GPU/ASIC 機櫃功耗破 100kW,氣冷不敷,水冷板(cold plate)+ CDU + 快接頭成必需;NVIDIA GB 系列強制液冷。",
       "note": "選股邏輯:台股卡水冷板/均熱片(奇鋐、雙鴻)、CDU/快接頭壁壘(高力);美股看液冷系統龍頭 Vertiv 與液冷伺服器;其他股=日系散熱風扇(Sanyo Denki/Nidec)+歐系熱交換器(Alfa Laval/Munters)。優先有 NVIDIA/雲端認證、產能卡位者。",
       "stocks": [
-        {"code": "3017", "market": "tw", "name": "奇鋐", "role": "3D VC/均熱片/水冷板·散熱龍頭", "tag": "核心卡位"},
-        {"code": "3324", "market": "tw", "name": "雙鴻", "role": "水冷板/液冷模組·GB 系列供應", "tag": "核心卡位"},
-        {"code": "8996", "market": "tw", "name": "高力", "role": "CDU 冷卻液分配·熱交換器", "tag": "系統卡位"},
-        {"code": "6230", "market": "tw", "name": "尼得科超眾", "role": "熱導管/均熱片", "tag": "散熱"},
-        {"code": "4763", "market": "tw", "name": "材料-KY", "role": "導熱介面材料 TIM", "tag": "上游材料"},
-        {"code": "VRT", "market": "us", "name": "Vertiv", "role": "液冷/CDU/電力散熱系統龍頭", "tag": "系統龍頭"},
-        {"code": "SMCI", "market": "us", "name": "Supermicro", "role": "液冷 AI 伺服器整機", "tag": "整機拉貨"},
-        {"code": "NVT", "market": "us", "name": "nVent", "role": "液冷機櫃/熱管理", "tag": "系統"},
-        {"code": "MOD", "market": "us", "name": "Modine", "role": "資料中心熱管理/CDU", "tag": "系統"},
-        {"code": "6516.T", "market": "other", "name": "山洋電氣 Sanyo Denki(日)", "role": "San Ace 伺服器/AI 散熱風扇", "tag": "散熱風扇"},
-        {"code": "6594.T", "market": "other", "name": "Nidec 日本電產(日)", "role": "馬達/散熱風扇龍頭(超眾母公司)", "tag": "散熱風扇"},
-        {"code": "ALFA.ST", "market": "other", "name": "Alfa Laval(歐)", "role": "熱交換器(CDU/液冷核心)", "tag": "熱交換器"},
-        {"code": "MTRS.ST", "market": "other", "name": "Munters(歐)", "role": "資料中心冷卻/空調系統", "tag": "系統冷卻"}
+        {
+          "code": "3017",
+          "market": "tw",
+          "name": "奇鋐",
+          "role": "3D VC/均熱片/水冷板·散熱龍頭",
+          "tag": "核心卡位"
+        },
+        {
+          "code": "3324",
+          "market": "tw",
+          "name": "雙鴻",
+          "role": "水冷板/液冷模組·GB 系列供應",
+          "tag": "核心卡位"
+        },
+        {
+          "code": "8996",
+          "market": "tw",
+          "name": "高力",
+          "role": "CDU 冷卻液分配·熱交換器",
+          "tag": "系統卡位"
+        },
+        {
+          "code": "6230",
+          "market": "tw",
+          "name": "尼得科超眾",
+          "role": "熱導管/均熱片",
+          "tag": "散熱"
+        },
+        {
+          "code": "4763",
+          "market": "tw",
+          "name": "材料-KY",
+          "role": "導熱介面材料 TIM",
+          "tag": "上游材料"
+        },
+        {
+          "code": "VRT",
+          "market": "us",
+          "name": "Vertiv",
+          "role": "液冷/CDU/電力散熱系統龍頭",
+          "tag": "系統龍頭"
+        },
+        {
+          "code": "SMCI",
+          "market": "us",
+          "name": "Supermicro",
+          "role": "液冷 AI 伺服器整機",
+          "tag": "整機拉貨"
+        },
+        {
+          "code": "NVT",
+          "market": "us",
+          "name": "nVent",
+          "role": "液冷機櫃/熱管理",
+          "tag": "系統"
+        },
+        {
+          "code": "MOD",
+          "market": "us",
+          "name": "Modine",
+          "role": "資料中心熱管理/CDU",
+          "tag": "系統"
+        },
+        {
+          "code": "6516.T",
+          "market": "other",
+          "name": "山洋電氣 Sanyo Denki(日)",
+          "role": "San Ace 伺服器/AI 散熱風扇",
+          "tag": "散熱風扇"
+        },
+        {
+          "code": "6594.T",
+          "market": "other",
+          "name": "Nidec 日本電產(日)",
+          "role": "馬達/散熱風扇龍頭(超眾母公司)",
+          "tag": "散熱風扇"
+        },
+        {
+          "code": "ALFA.ST",
+          "market": "other",
+          "name": "Alfa Laval(歐)",
+          "role": "熱交換器(CDU/液冷核心)",
+          "tag": "熱交換器"
+        },
+        {
+          "code": "MTRS.ST",
+          "market": "other",
+          "name": "Munters(歐)",
+          "role": "資料中心冷卻/空調系統",
+          "tag": "系統冷卻"
+        }
       ]
     },
     {
@@ -62,21 +290,111 @@
       "bottleneck": "瓶頸=CoWoS 產能與 KGD(已知良品)測試;AI 晶片巨型化(15kW),測試/載板/中介層皆吃緊;ABF 載板由日廠寡占。",
       "note": "選股邏輯:台股卡 CoWoS 測試(京元電)、探針卡(旺矽)、ABF 載板(南電/欣興);美股看量測/測試設備(KLAC/TER);其他股=日本 ABF 載板/絕緣膜(Ibiden/味之素)+封裝設備(DISCO/Towa)+歐系混合鍵合龍頭(Besi)。",
       "stocks": [
-        {"code": "2449", "market": "tw", "name": "京元電", "role": "CoWoS/AI 晶片測試代工", "tag": "測試卡位"},
-        {"code": "6223", "market": "tw", "name": "旺矽", "role": "MEMS/垂直探針卡(與 CPO 共用)", "tag": "探針卡"},
-        {"code": "3711", "market": "tw", "name": "日月光投控", "role": "先進封裝/CoWoS 委外", "tag": "封裝"},
-        {"code": "8046", "market": "tw", "name": "南電", "role": "ABF 載板", "tag": "載板"},
-        {"code": "3037", "market": "tw", "name": "欣興", "role": "ABF 載板/類載板", "tag": "載板"},
-        {"code": "KLAC", "market": "us", "name": "KLA", "role": "製程量測/檢測設備龍頭", "tag": "量測設備"},
-        {"code": "TER", "market": "us", "name": "Teradyne", "role": "半導體測試設備", "tag": "測試設備"},
-        {"code": "ONTO", "market": "us", "name": "Onto Innovation", "role": "先進封裝量測/檢測", "tag": "封裝量測"},
-        {"code": "CAMT", "market": "us", "name": "Camtek", "role": "先進封裝光學檢測", "tag": "封裝檢測"},
-        {"code": "4062.T", "market": "other", "name": "Ibiden(日)", "role": "ABF 載板全球龍頭", "tag": "載板龍頭"},
-        {"code": "2802.T", "market": "other", "name": "味之素 Ajinomoto(日)", "role": "ABF 絕緣膜(ABF=Ajinomoto Build-up Film)全球獨家", "tag": "上游獨家"},
-        {"code": "6146.T", "market": "other", "name": "DISCO(日)", "role": "晶圓切割/研磨設備龍頭(先進封裝必需)", "tag": "封裝設備"},
-        {"code": "6315.T", "market": "other", "name": "Towa(日)", "role": "封裝模封(molding)設備龍頭", "tag": "封裝設備"},
-        {"code": "4004.T", "market": "other", "name": "Resonac 昭和電工(日)", "role": "先進封裝材料/CMP 研磨液/封裝膠", "tag": "上游材料"},
-        {"code": "BESI.AS", "market": "other", "name": "Besi(歐)", "role": "混合鍵合 hybrid bonding 設備龍頭(瓶頸核心)", "tag": "鍵合設備"}
+        {
+          "code": "2449",
+          "market": "tw",
+          "name": "京元電",
+          "role": "CoWoS/AI 晶片測試代工",
+          "tag": "測試卡位"
+        },
+        {
+          "code": "6223",
+          "market": "tw",
+          "name": "旺矽",
+          "role": "MEMS/垂直探針卡(與 CPO 共用)",
+          "tag": "探針卡"
+        },
+        {
+          "code": "3711",
+          "market": "tw",
+          "name": "日月光投控",
+          "role": "先進封裝/CoWoS 委外",
+          "tag": "封裝"
+        },
+        {
+          "code": "8046",
+          "market": "tw",
+          "name": "南電",
+          "role": "ABF 載板",
+          "tag": "載板"
+        },
+        {
+          "code": "3037",
+          "market": "tw",
+          "name": "欣興",
+          "role": "ABF 載板/類載板",
+          "tag": "載板"
+        },
+        {
+          "code": "KLAC",
+          "market": "us",
+          "name": "KLA",
+          "role": "製程量測/檢測設備龍頭",
+          "tag": "量測設備"
+        },
+        {
+          "code": "TER",
+          "market": "us",
+          "name": "Teradyne",
+          "role": "半導體測試設備",
+          "tag": "測試設備"
+        },
+        {
+          "code": "ONTO",
+          "market": "us",
+          "name": "Onto Innovation",
+          "role": "先進封裝量測/檢測",
+          "tag": "封裝量測"
+        },
+        {
+          "code": "CAMT",
+          "market": "us",
+          "name": "Camtek",
+          "role": "先進封裝光學檢測",
+          "tag": "封裝檢測"
+        },
+        {
+          "code": "4062.T",
+          "market": "other",
+          "name": "Ibiden(日)",
+          "role": "ABF 載板全球龍頭",
+          "tag": "載板龍頭"
+        },
+        {
+          "code": "2802.T",
+          "market": "other",
+          "name": "味之素 Ajinomoto(日)",
+          "role": "ABF 絕緣膜(ABF=Ajinomoto Build-up Film)全球獨家",
+          "tag": "上游獨家"
+        },
+        {
+          "code": "6146.T",
+          "market": "other",
+          "name": "DISCO(日)",
+          "role": "晶圓切割/研磨設備龍頭(先進封裝必需)",
+          "tag": "封裝設備"
+        },
+        {
+          "code": "6315.T",
+          "market": "other",
+          "name": "Towa(日)",
+          "role": "封裝模封(molding)設備龍頭",
+          "tag": "封裝設備"
+        },
+        {
+          "code": "4004.T",
+          "market": "other",
+          "name": "Resonac 昭和電工(日)",
+          "role": "先進封裝材料/CMP 研磨液/封裝膠",
+          "tag": "上游材料"
+        },
+        {
+          "code": "BESI.AS",
+          "market": "other",
+          "name": "Besi(歐)",
+          "role": "混合鍵合 hybrid bonding 設備龍頭(瓶頸核心)",
+          "tag": "鍵合設備"
+        }
       ]
     },
     {
@@ -85,20 +403,104 @@
       "bottleneck": "瓶頸=人形機器人的精密傳動(諧波/RV 減速器)、伺服馬達、力矩感測與邊緣 AI 算力;NVIDIA GR00T/Jetson Thor 供大腦,Tesla Optimus 帶量產,減速器由日廠寡占。",
       "note": "選股邏輯:卡關鍵零組件——減速器(日 Harmonic/Nabtesco 寡占)、線性傳動/螺桿(台上銀、日 THK)、伺服/平台(台達電、Yaskawa、NVDA);台股看傳動+視覺,美股看平台+整機,其他=日歐機器人四大家族。",
       "stocks": [
-        {"code": "2049", "market": "tw", "name": "上銀", "role": "滾珠螺桿/線性傳動/諧波減速機", "tag": "傳動核心"},
-        {"code": "2308", "market": "tw", "name": "台達電", "role": "伺服系統/機器人/電源", "tag": "伺服平台"},
-        {"code": "1597", "market": "tw", "name": "直得", "role": "微型線性滑軌/傳動元件", "tag": "線性傳動"},
-        {"code": "2359", "market": "tw", "name": "所羅門", "role": "3D 機器視覺/bin-picking 取放", "tag": "機器視覺"},
-        {"code": "1590", "market": "tw", "name": "亞德客-KY", "role": "氣動元件/夾爪(執行末端)", "tag": "末端執行"},
-        {"code": "NVDA", "market": "us", "name": "NVIDIA", "role": "GR00T/Jetson Thor 機器人大腦平台", "tag": "平台核心"},
-        {"code": "TSLA", "market": "us", "name": "Tesla", "role": "Optimus 人形機器人整機", "tag": "整機拉貨"},
-        {"code": "ROK", "market": "us", "name": "Rockwell", "role": "工業自動化/控制系統", "tag": "自動化"},
-        {"code": "6324.T", "market": "other", "name": "Harmonic Drive(日)", "role": "諧波減速器全球龍頭(核心瓶頸)", "tag": "減速器龍頭"},
-        {"code": "6268.T", "market": "other", "name": "Nabtesco(日)", "role": "RV 精密減速器全球龍頭", "tag": "減速器龍頭"},
-        {"code": "6506.T", "market": "other", "name": "安川電機 Yaskawa(日)", "role": "伺服馬達/機器人四大家族", "tag": "伺服+機器人"},
-        {"code": "6954.T", "market": "other", "name": "Fanuc(日)", "role": "工業機器人/CNC 四大家族", "tag": "機器人"},
-        {"code": "6481.T", "market": "other", "name": "THK(日)", "role": "線性導軌/滾珠螺桿", "tag": "線性傳動"},
-        {"code": "ABBN.SW", "market": "other", "name": "ABB(歐)", "role": "工業機器人四大家族", "tag": "機器人"}
+        {
+          "code": "2049",
+          "market": "tw",
+          "name": "上銀",
+          "role": "滾珠螺桿/線性傳動/諧波減速機",
+          "tag": "傳動核心"
+        },
+        {
+          "code": "2308",
+          "market": "tw",
+          "name": "台達電",
+          "role": "伺服系統/機器人/電源",
+          "tag": "伺服平台"
+        },
+        {
+          "code": "1597",
+          "market": "tw",
+          "name": "直得",
+          "role": "微型線性滑軌/傳動元件",
+          "tag": "線性傳動"
+        },
+        {
+          "code": "2359",
+          "market": "tw",
+          "name": "所羅門",
+          "role": "3D 機器視覺/bin-picking 取放",
+          "tag": "機器視覺"
+        },
+        {
+          "code": "1590",
+          "market": "tw",
+          "name": "亞德客-KY",
+          "role": "氣動元件/夾爪(執行末端)",
+          "tag": "末端執行"
+        },
+        {
+          "code": "NVDA",
+          "market": "us",
+          "name": "NVIDIA",
+          "role": "GR00T/Jetson Thor 機器人大腦平台",
+          "tag": "平台核心"
+        },
+        {
+          "code": "TSLA",
+          "market": "us",
+          "name": "Tesla",
+          "role": "Optimus 人形機器人整機",
+          "tag": "整機拉貨"
+        },
+        {
+          "code": "ROK",
+          "market": "us",
+          "name": "Rockwell",
+          "role": "工業自動化/控制系統",
+          "tag": "自動化"
+        },
+        {
+          "code": "6324.T",
+          "market": "other",
+          "name": "Harmonic Drive(日)",
+          "role": "諧波減速器全球龍頭(核心瓶頸)",
+          "tag": "減速器龍頭"
+        },
+        {
+          "code": "6268.T",
+          "market": "other",
+          "name": "Nabtesco(日)",
+          "role": "RV 精密減速器全球龍頭",
+          "tag": "減速器龍頭"
+        },
+        {
+          "code": "6506.T",
+          "market": "other",
+          "name": "安川電機 Yaskawa(日)",
+          "role": "伺服馬達/機器人四大家族",
+          "tag": "伺服+機器人"
+        },
+        {
+          "code": "6954.T",
+          "market": "other",
+          "name": "Fanuc(日)",
+          "role": "工業機器人/CNC 四大家族",
+          "tag": "機器人"
+        },
+        {
+          "code": "6481.T",
+          "market": "other",
+          "name": "THK(日)",
+          "role": "線性導軌/滾珠螺桿",
+          "tag": "線性傳動"
+        },
+        {
+          "code": "ABBN.SW",
+          "market": "other",
+          "name": "ABB(歐)",
+          "role": "工業機器人四大家族",
+          "tag": "機器人"
+        }
       ]
     },
     {
@@ -107,23 +509,125 @@
       "bottleneck": "瓶頸=高階MLCC(高容/車規)由村田/三星/太陽誘電寡占;更深瓶頸在上游材料——離型膜(日 Top5 佔 87%)、鎳超微粉(日近獨占)、鈦酸鋇瓷粉(日主導),台灣材料端僅信昌電(瓷粉自製)。AI 伺服器(單機櫃 45 萬顆)+車用引爆 2026 漲價循環。",
       "note": "選股邏輯:成品層(國巨/華新科/禾伸堂)已被定價、追高風險;前置 alpha 在上游材料 chokepoint——台灣唯一可投=信昌電(6173,瓷粉自製+2027 擴產 50%),勤凱(電極漿料+TIM)為次級受惠;最純瓶頸(離型膜/鎳粉/瓷粉)在日本(東麗/JFE/堺化學),台灣買不到。美股 Vishay/CTS 為 AI/車用+漲價受惠。",
       "stocks": [
-        {"code": "2327", "market": "tw", "name": "國巨", "role": "MLCC/被動元件龍頭(併 KEMET/普思)", "tag": "龍頭"},
-        {"code": "2492", "market": "tw", "name": "華新科", "role": "MLCC/晶片電阻", "tag": "MLCC"},
-        {"code": "3026", "market": "tw", "name": "禾伸堂", "role": "高階/利基型 MLCC", "tag": "利基"},
-        {"code": "VSH", "market": "us", "name": "Vishay", "role": "被動元件(電阻/電容/二極體)", "tag": "美系龍頭"},
-        {"code": "CTS", "market": "us", "name": "CTS Corp", "role": "石英晶振/壓電/感測元件", "tag": "利基"},
-        {"code": "6981.T", "market": "other", "name": "村田 Murata(日)", "role": "MLCC 全球龍頭(~40%)", "tag": "全球龍頭"},
-        {"code": "6762.T", "market": "other", "name": "TDK(日)", "role": "MLCC/電感/車用", "tag": "高階"},
-        {"code": "6976.T", "market": "other", "name": "太陽誘電 Taiyo Yuden(日)", "role": "高頻/車用 MLCC", "tag": "高階"},
-        {"code": "6971.T", "market": "other", "name": "京瓷 Kyocera(日)", "role": "MLCC/含 AVX", "tag": "高階"},
-        {"code": "6173", "market": "tw", "name": "信昌電", "role": "介電陶瓷粉(BaTiO3)自製·高壓MLCC｜台灣唯一上游瓷粉", "tag": "瓷粉★瓶頸"},
-        {"code": "4760", "market": "tw", "name": "勤凱", "role": "被動元件電極漿料(銀/銀鈀/銅漿)+CoWoS TIM 散熱膏", "tag": "電極漿料"},
-        {"code": "1303", "market": "tw", "name": "南亞", "role": "MLCC 離型膜(台灣唯一·占比小)", "tag": "離型膜"},
-        {"code": "4078.T", "market": "other", "name": "堺化學 Sakai(日)", "role": "鈦酸鋇介電粉龍頭", "tag": "瓷粉★瓶頸"},
-        {"code": "3402.T", "market": "other", "name": "東麗 Toray(日)", "role": "MLCC 離型膜(日 Top5 佔 87%)", "tag": "離型膜★瓶頸"},
-        {"code": "3101.T", "market": "other", "name": "東洋紡 Toyobo(日)", "role": "MLCC 離型膜(日 Top5)", "tag": "離型膜★瓶頸"},
-        {"code": "5411.T", "market": "other", "name": "JFE 控股(日)", "role": "MLCC 鎳超微粉(JFE Mineral·日近獨占)", "tag": "鎳粉★瓶頸"},
-        {"code": "009150.KS", "market": "other", "name": "三星電機 Samsung EM(韓)", "role": "韓系 MLCC 大廠", "tag": "製造"}
+        {
+          "code": "2327",
+          "market": "tw",
+          "name": "國巨",
+          "role": "MLCC/被動元件龍頭(併 KEMET/普思)",
+          "tag": "龍頭"
+        },
+        {
+          "code": "2492",
+          "market": "tw",
+          "name": "華新科",
+          "role": "MLCC/晶片電阻",
+          "tag": "MLCC"
+        },
+        {
+          "code": "3026",
+          "market": "tw",
+          "name": "禾伸堂",
+          "role": "高階/利基型 MLCC",
+          "tag": "利基"
+        },
+        {
+          "code": "VSH",
+          "market": "us",
+          "name": "Vishay",
+          "role": "被動元件(電阻/電容/二極體)",
+          "tag": "美系龍頭"
+        },
+        {
+          "code": "CTS",
+          "market": "us",
+          "name": "CTS Corp",
+          "role": "石英晶振/壓電/感測元件",
+          "tag": "利基"
+        },
+        {
+          "code": "6981.T",
+          "market": "other",
+          "name": "村田 Murata(日)",
+          "role": "MLCC 全球龍頭(~40%)",
+          "tag": "全球龍頭"
+        },
+        {
+          "code": "6762.T",
+          "market": "other",
+          "name": "TDK(日)",
+          "role": "MLCC/電感/車用",
+          "tag": "高階"
+        },
+        {
+          "code": "6976.T",
+          "market": "other",
+          "name": "太陽誘電 Taiyo Yuden(日)",
+          "role": "高頻/車用 MLCC",
+          "tag": "高階"
+        },
+        {
+          "code": "6971.T",
+          "market": "other",
+          "name": "京瓷 Kyocera(日)",
+          "role": "MLCC/含 AVX",
+          "tag": "高階"
+        },
+        {
+          "code": "6173",
+          "market": "tw",
+          "name": "信昌電",
+          "role": "介電陶瓷粉(BaTiO3)自製·高壓MLCC｜台灣唯一上游瓷粉",
+          "tag": "瓷粉★瓶頸"
+        },
+        {
+          "code": "4760",
+          "market": "tw",
+          "name": "勤凱",
+          "role": "被動元件電極漿料(銀/銀鈀/銅漿)+CoWoS TIM 散熱膏",
+          "tag": "電極漿料"
+        },
+        {
+          "code": "1303",
+          "market": "tw",
+          "name": "南亞",
+          "role": "MLCC 離型膜(台灣唯一·占比小)",
+          "tag": "離型膜"
+        },
+        {
+          "code": "4078.T",
+          "market": "other",
+          "name": "堺化學 Sakai(日)",
+          "role": "鈦酸鋇介電粉龍頭",
+          "tag": "瓷粉★瓶頸"
+        },
+        {
+          "code": "3402.T",
+          "market": "other",
+          "name": "東麗 Toray(日)",
+          "role": "MLCC 離型膜(日 Top5 佔 87%)",
+          "tag": "離型膜★瓶頸"
+        },
+        {
+          "code": "3101.T",
+          "market": "other",
+          "name": "東洋紡 Toyobo(日)",
+          "role": "MLCC 離型膜(日 Top5)",
+          "tag": "離型膜★瓶頸"
+        },
+        {
+          "code": "5411.T",
+          "market": "other",
+          "name": "JFE 控股(日)",
+          "role": "MLCC 鎳超微粉(JFE Mineral·日近獨占)",
+          "tag": "鎳粉★瓶頸"
+        },
+        {
+          "code": "009150.KS",
+          "market": "other",
+          "name": "三星電機 Samsung EM(韓)",
+          "role": "韓系 MLCC 大廠",
+          "tag": "製造"
+        }
       ]
     },
     {
@@ -132,16 +636,76 @@
       "bottleneck": "瓶頸=HBM3E/HBM4 由 SK 海力士/三星/美光三家寡占,TSV 製程、KGD 測試、base die 與封裝吃緊;測試設備(Advantest)+客製 base die IP 為卡位點。",
       "note": "選股邏輯:DRAM 三雄寡占(海力士/三星/美光),台股卡封測(力成)、測試座(穎崴)、客製記憶體/base die IP(愛普)、利基記憶體(華邦/群聯);其他=韓 DRAM 雙雄+日測試/設備龍頭(Advantest/東京威力)。",
       "stocks": [
-        {"code": "6531", "market": "tw", "name": "愛普", "role": "客製記憶體/HBM base die IP", "tag": "base die IP"},
-        {"code": "6239", "market": "tw", "name": "力成", "role": "記憶體封測/HBM 測試", "tag": "封測"},
-        {"code": "6515", "market": "tw", "name": "穎崴", "role": "HBM 高階測試座", "tag": "測試座"},
-        {"code": "2344", "market": "tw", "name": "華邦電", "role": "利基型 DRAM/Flash", "tag": "利基記憶體"},
-        {"code": "8299", "market": "tw", "name": "群聯", "role": "NAND 控制 IC/儲存方案", "tag": "控制IC"},
-        {"code": "MU", "market": "us", "name": "Micron", "role": "HBM3E/HBM4 三大原廠之一", "tag": "原廠"},
-        {"code": "000660.KS", "market": "other", "name": "SK 海力士(韓)", "role": "HBM 全球龍頭", "tag": "原廠龍頭"},
-        {"code": "005930.KS", "market": "other", "name": "三星電子(韓)", "role": "HBM/DRAM 原廠", "tag": "原廠"},
-        {"code": "6857.T", "market": "other", "name": "Advantest(日)", "role": "HBM/SoC 測試設備全球龍頭", "tag": "測試設備"},
-        {"code": "8035.T", "market": "other", "name": "東京威力 Tokyo Electron(日)", "role": "半導體前段/封裝設備", "tag": "設備"}
+        {
+          "code": "6531",
+          "market": "tw",
+          "name": "愛普",
+          "role": "客製記憶體/HBM base die IP",
+          "tag": "base die IP"
+        },
+        {
+          "code": "6239",
+          "market": "tw",
+          "name": "力成",
+          "role": "記憶體封測/HBM 測試",
+          "tag": "封測"
+        },
+        {
+          "code": "6515",
+          "market": "tw",
+          "name": "穎崴",
+          "role": "HBM 高階測試座",
+          "tag": "測試座"
+        },
+        {
+          "code": "2344",
+          "market": "tw",
+          "name": "華邦電",
+          "role": "利基型 DRAM/Flash",
+          "tag": "利基記憶體"
+        },
+        {
+          "code": "8299",
+          "market": "tw",
+          "name": "群聯",
+          "role": "NAND 控制 IC/儲存方案",
+          "tag": "控制IC"
+        },
+        {
+          "code": "MU",
+          "market": "us",
+          "name": "Micron",
+          "role": "HBM3E/HBM4 三大原廠之一",
+          "tag": "原廠"
+        },
+        {
+          "code": "000660.KS",
+          "market": "other",
+          "name": "SK 海力士(韓)",
+          "role": "HBM 全球龍頭",
+          "tag": "原廠龍頭"
+        },
+        {
+          "code": "005930.KS",
+          "market": "other",
+          "name": "三星電子(韓)",
+          "role": "HBM/DRAM 原廠",
+          "tag": "原廠"
+        },
+        {
+          "code": "6857.T",
+          "market": "other",
+          "name": "Advantest(日)",
+          "role": "HBM/SoC 測試設備全球龍頭",
+          "tag": "測試設備"
+        },
+        {
+          "code": "8035.T",
+          "market": "other",
+          "name": "東京威力 Tokyo Electron(日)",
+          "role": "半導體前段/封裝設備",
+          "tag": "設備"
+        }
       ]
     },
     {
@@ -150,16 +714,76 @@
       "bottleneck": "瓶頸=先進製程設計成本爆增,設計服務(ASIC)+介面/記憶體 IP+EDA 寡占;chiplet 時代 die-to-die 介面 IP 與客製 ASIC 為卡位點。",
       "note": "選股邏輯:ASIC 設計服務(創意/世芯)、介面 IP(譜瑞/M31)、記憶體/security IP(力旺)、EDA+IP 三巨頭(ARM/Synopsys/Cadence);台股看 AI ASIC 拉貨,其他=ARM 母公司軟銀。",
       "stocks": [
-        {"code": "3443", "market": "tw", "name": "創意", "role": "ASIC 設計服務(台積電子公司)", "tag": "ASIC"},
-        {"code": "3661", "market": "tw", "name": "世芯-KY", "role": "高階 ASIC 設計服務", "tag": "ASIC"},
-        {"code": "4966", "market": "tw", "name": "譜瑞-KY", "role": "高速介面 IC/IP", "tag": "介面IP"},
-        {"code": "6643", "market": "tw", "name": "M31", "role": "矽智財/介面 IP", "tag": "介面IP"},
-        {"code": "3529", "market": "tw", "name": "力旺", "role": "記憶體 IP/eFlash/security", "tag": "記憶體IP"},
-        {"code": "3035", "market": "tw", "name": "智原", "role": "ASIC/IP(聯電子公司)", "tag": "ASIC"},
-        {"code": "ARM", "market": "us", "name": "Arm", "role": "CPU 架構 IP 授權龍頭", "tag": "架構IP"},
-        {"code": "SNPS", "market": "us", "name": "Synopsys", "role": "EDA+IP 龍頭", "tag": "EDA+IP"},
-        {"code": "CDNS", "market": "us", "name": "Cadence", "role": "EDA+IP 龍頭", "tag": "EDA+IP"},
-        {"code": "9984.T", "market": "other", "name": "軟銀 SoftBank(日)", "role": "Arm 母公司/AI 投資", "tag": "ARM母公司"}
+        {
+          "code": "3443",
+          "market": "tw",
+          "name": "創意",
+          "role": "ASIC 設計服務(台積電子公司)",
+          "tag": "ASIC"
+        },
+        {
+          "code": "3661",
+          "market": "tw",
+          "name": "世芯-KY",
+          "role": "高階 ASIC 設計服務",
+          "tag": "ASIC"
+        },
+        {
+          "code": "4966",
+          "market": "tw",
+          "name": "譜瑞-KY",
+          "role": "高速介面 IC/IP",
+          "tag": "介面IP"
+        },
+        {
+          "code": "6643",
+          "market": "tw",
+          "name": "M31",
+          "role": "矽智財/介面 IP",
+          "tag": "介面IP"
+        },
+        {
+          "code": "3529",
+          "market": "tw",
+          "name": "力旺",
+          "role": "記憶體 IP/eFlash/security",
+          "tag": "記憶體IP"
+        },
+        {
+          "code": "3035",
+          "market": "tw",
+          "name": "智原",
+          "role": "ASIC/IP(聯電子公司)",
+          "tag": "ASIC"
+        },
+        {
+          "code": "ARM",
+          "market": "us",
+          "name": "Arm",
+          "role": "CPU 架構 IP 授權龍頭",
+          "tag": "架構IP"
+        },
+        {
+          "code": "SNPS",
+          "market": "us",
+          "name": "Synopsys",
+          "role": "EDA+IP 龍頭",
+          "tag": "EDA+IP"
+        },
+        {
+          "code": "CDNS",
+          "market": "us",
+          "name": "Cadence",
+          "role": "EDA+IP 龍頭",
+          "tag": "EDA+IP"
+        },
+        {
+          "code": "9984.T",
+          "market": "other",
+          "name": "軟銀 SoftBank(日)",
+          "role": "Arm 母公司/AI 投資",
+          "tag": "ARM母公司"
+        }
       ]
     },
     {
@@ -168,15 +792,69 @@
       "bottleneck": "瓶頸=衛星地面設備/相位陣列天線/PA、衛星製造與發射;Starlink 主導,台廠卡地面終端/PCB/微波元件。",
       "note": "選股邏輯:地面設備/終端(台揚/啟碁/中磊)、微波元件(昇達科)、衛星用 PCB(金像電);美股看衛星營運/製造(ASTS/Rocket Lab/Iridium),其他=歐系衛星營運(Eutelsat-OneWeb)。",
       "stocks": [
-        {"code": "2314", "market": "tw", "name": "台揚", "role": "衛星通訊地面設備/天線", "tag": "地面設備"},
-        {"code": "3491", "market": "tw", "name": "昇達科", "role": "衛星/微波被動元件", "tag": "微波元件"},
-        {"code": "6285", "market": "tw", "name": "啟碁", "role": "衛星地面終端/網通", "tag": "地面終端"},
-        {"code": "2368", "market": "tw", "name": "金像電", "role": "高階 PCB(衛星/AI 伺服器)", "tag": "PCB"},
-        {"code": "5388", "market": "tw", "name": "中磊", "role": "網通/衛星地面設備", "tag": "網通"},
-        {"code": "ASTS", "market": "us", "name": "AST SpaceMobile", "role": "衛星直連手機(D2C)", "tag": "衛星營運"},
-        {"code": "RKLB", "market": "us", "name": "Rocket Lab", "role": "火箭發射+衛星製造", "tag": "發射+製造"},
-        {"code": "IRDM", "market": "us", "name": "Iridium", "role": "低軌衛星通訊營運", "tag": "衛星營運"},
-        {"code": "ETL.PA", "market": "other", "name": "Eutelsat(歐)", "role": "衛星營運(整併 OneWeb)", "tag": "衛星營運"}
+        {
+          "code": "2314",
+          "market": "tw",
+          "name": "台揚",
+          "role": "衛星通訊地面設備/天線",
+          "tag": "地面設備"
+        },
+        {
+          "code": "3491",
+          "market": "tw",
+          "name": "昇達科",
+          "role": "衛星/微波被動元件",
+          "tag": "微波元件"
+        },
+        {
+          "code": "6285",
+          "market": "tw",
+          "name": "啟碁",
+          "role": "衛星地面終端/網通",
+          "tag": "地面終端"
+        },
+        {
+          "code": "2368",
+          "market": "tw",
+          "name": "金像電",
+          "role": "高階 PCB(衛星/AI 伺服器)",
+          "tag": "PCB"
+        },
+        {
+          "code": "5388",
+          "market": "tw",
+          "name": "中磊",
+          "role": "網通/衛星地面設備",
+          "tag": "網通"
+        },
+        {
+          "code": "ASTS",
+          "market": "us",
+          "name": "AST SpaceMobile",
+          "role": "衛星直連手機(D2C)",
+          "tag": "衛星營運"
+        },
+        {
+          "code": "RKLB",
+          "market": "us",
+          "name": "Rocket Lab",
+          "role": "火箭發射+衛星製造",
+          "tag": "發射+製造"
+        },
+        {
+          "code": "IRDM",
+          "market": "us",
+          "name": "Iridium",
+          "role": "低軌衛星通訊營運",
+          "tag": "衛星營運"
+        },
+        {
+          "code": "ETL.PA",
+          "market": "other",
+          "name": "Eutelsat(歐)",
+          "role": "衛星營運(整併 OneWeb)",
+          "tag": "衛星營運"
+        }
       ]
     },
     {
@@ -185,17 +863,79 @@
       "bottleneck": "瓶頸=AI 機櫃功耗破 MW,傳統 54V/415VAC 配電不敷,NVIDIA 推 800VDC 架構(2027 Rubin Ultra/Kyber);需固態變壓器、SiC 電源模組、母線與保護。",
       "note": "選股邏輯:電源系統龍頭(台達電/光寶/旭隼)、整流/UPS(群電/康舒);美股看電力管理+電源 IC(Eaton/Vertiv/MPWR),其他=歐系電力(Schneider)+日系功率電源(Fuji Electric)。",
       "stocks": [
-        {"code": "2308", "market": "tw", "name": "台達電", "role": "電源/固態變壓器/800V 架構", "tag": "電源龍頭"},
-        {"code": "2301", "market": "tw", "name": "光寶科", "role": "伺服器電源/電力轉換", "tag": "電源"},
-        {"code": "6409", "market": "tw", "name": "旭隼", "role": "UPS/工業電源", "tag": "UPS"},
-        {"code": "6412", "market": "tw", "name": "群電", "role": "伺服器/工業電源供應", "tag": "電源"},
-        {"code": "6282", "market": "tw", "name": "康舒", "role": "電源供應/電力轉換", "tag": "電源"},
-        {"code": "ETN", "market": "us", "name": "Eaton", "role": "電力管理/資料中心配電", "tag": "電力管理"},
-        {"code": "VRT", "market": "us", "name": "Vertiv", "role": "電力+散熱整合系統", "tag": "系統"},
-        {"code": "MPWR", "market": "us", "name": "Monolithic Power", "role": "高效電源管理 IC", "tag": "電源IC"},
-        {"code": "SU.PA", "market": "other", "name": "Schneider Electric(歐)", "role": "資料中心電力基建", "tag": "電力基建"},
-        {"code": "6504.T", "market": "other", "name": "富士電機 Fuji Electric(日)", "role": "功率半導體/電源系統", "tag": "功率電源"}
-      ]
+        {
+          "code": "2308",
+          "market": "tw",
+          "name": "台達電",
+          "role": "電源/固態變壓器/800V 架構",
+          "tag": "電源龍頭"
+        },
+        {
+          "code": "2301",
+          "market": "tw",
+          "name": "光寶科",
+          "role": "伺服器電源/電力轉換",
+          "tag": "電源"
+        },
+        {
+          "code": "6409",
+          "market": "tw",
+          "name": "旭隼",
+          "role": "UPS/工業電源",
+          "tag": "UPS"
+        },
+        {
+          "code": "6412",
+          "market": "tw",
+          "name": "群電",
+          "role": "伺服器/工業電源供應",
+          "tag": "電源"
+        },
+        {
+          "code": "6282",
+          "market": "tw",
+          "name": "康舒",
+          "role": "電源供應/電力轉換",
+          "tag": "電源"
+        },
+        {
+          "code": "ETN",
+          "market": "us",
+          "name": "Eaton",
+          "role": "電力管理/資料中心配電",
+          "tag": "電力管理"
+        },
+        {
+          "code": "VRT",
+          "market": "us",
+          "name": "Vertiv",
+          "role": "電力+散熱整合系統",
+          "tag": "系統"
+        },
+        {
+          "code": "MPWR",
+          "market": "us",
+          "name": "Monolithic Power",
+          "role": "高效電源管理 IC",
+          "tag": "電源IC"
+        },
+        {
+          "code": "SU.PA",
+          "market": "other",
+          "name": "Schneider Electric(歐)",
+          "role": "資料中心電力基建",
+          "tag": "電力基建"
+        },
+        {
+          "code": "6504.T",
+          "market": "other",
+          "name": "富士電機 Fuji Electric(日)",
+          "role": "功率半導體/電源系統",
+          "tag": "功率電源"
+        }
+      ],
+      "map": "/maps/800vdc.html",
+      "map_title": "800VDC/SST 全球原料拆解地圖（N-3 穿透版）"
     },
     {
       "key": "glass",
@@ -203,16 +943,76 @@
       "bottleneck": "瓶頸=ABF 載板的下一代,玻璃核心基板用於先進封裝(Intel/三星/台積電 2027+);需 TGV 玻璃穿孔、雷射鑽孔與玻璃材料,良率未成熟。",
       "note": "選股邏輯:載板廠卡製程轉換(欣興/南電)、封裝整合(日月光)、設備(均華/群翊);美股看玻璃材料+設備(Corning/AMAT),其他=日系玻璃/印刷大廠(AGC/Toppan)+韓 SKC(Absolics)。",
       "stocks": [
-        {"code": "3037", "market": "tw", "name": "欣興", "role": "載板/玻璃基板研發", "tag": "載板"},
-        {"code": "8046", "market": "tw", "name": "南電", "role": "ABF 載板/玻璃基板", "tag": "載板"},
-        {"code": "3711", "market": "tw", "name": "日月光投控", "role": "先進封裝/玻璃基板整合", "tag": "封裝"},
-        {"code": "6640", "market": "tw", "name": "均華", "role": "封裝/玻璃基板設備", "tag": "設備"},
-        {"code": "6664", "market": "tw", "name": "群翊", "role": "曝光/顯影製程設備", "tag": "設備"},
-        {"code": "GLW", "market": "us", "name": "Corning", "role": "玻璃材料全球龍頭", "tag": "材料龍頭"},
-        {"code": "AMAT", "market": "us", "name": "Applied Materials", "role": "玻璃基板製程設備", "tag": "設備"},
-        {"code": "5201.T", "market": "other", "name": "AGC 旭硝子(日)", "role": "電子玻璃/玻璃基板材料", "tag": "玻璃材料"},
-        {"code": "7911.T", "market": "other", "name": "凸版 Toppan(日)", "role": "玻璃基板/TGV 製程", "tag": "玻璃基板"},
-        {"code": "011790.KS", "market": "other", "name": "SKC(韓)", "role": "Absolics 玻璃基板子公司", "tag": "玻璃基板"}
+        {
+          "code": "3037",
+          "market": "tw",
+          "name": "欣興",
+          "role": "載板/玻璃基板研發",
+          "tag": "載板"
+        },
+        {
+          "code": "8046",
+          "market": "tw",
+          "name": "南電",
+          "role": "ABF 載板/玻璃基板",
+          "tag": "載板"
+        },
+        {
+          "code": "3711",
+          "market": "tw",
+          "name": "日月光投控",
+          "role": "先進封裝/玻璃基板整合",
+          "tag": "封裝"
+        },
+        {
+          "code": "6640",
+          "market": "tw",
+          "name": "均華",
+          "role": "封裝/玻璃基板設備",
+          "tag": "設備"
+        },
+        {
+          "code": "6664",
+          "market": "tw",
+          "name": "群翊",
+          "role": "曝光/顯影製程設備",
+          "tag": "設備"
+        },
+        {
+          "code": "GLW",
+          "market": "us",
+          "name": "Corning",
+          "role": "玻璃材料全球龍頭",
+          "tag": "材料龍頭"
+        },
+        {
+          "code": "AMAT",
+          "market": "us",
+          "name": "Applied Materials",
+          "role": "玻璃基板製程設備",
+          "tag": "設備"
+        },
+        {
+          "code": "5201.T",
+          "market": "other",
+          "name": "AGC 旭硝子(日)",
+          "role": "電子玻璃/玻璃基板材料",
+          "tag": "玻璃材料"
+        },
+        {
+          "code": "7911.T",
+          "market": "other",
+          "name": "凸版 Toppan(日)",
+          "role": "玻璃基板/TGV 製程",
+          "tag": "玻璃基板"
+        },
+        {
+          "code": "011790.KS",
+          "market": "other",
+          "name": "SKC(韓)",
+          "role": "Absolics 玻璃基板子公司",
+          "tag": "玻璃基板"
+        }
       ]
     },
     {
@@ -221,17 +1021,83 @@
       "bottleneck": "瓶頸=電動車/AI 電源/快充需 SiC MOSFET;8 吋晶圓良率+基板由 Wolfspeed/安森美/英飛凌寡占,中國衝產能、價格戰中卡技術與車規認證。",
       "note": "選股邏輯:SiC 基板/晶圓(環球晶)、磊晶/代工(漢磊/嘉晶)、功率元件(強茂/朋程);美股看 SiC IDM(onsemi/Wolfspeed/Navitas),其他=歐日功率龍頭(Infineon/Rohm/STMicro)。",
       "stocks": [
-        {"code": "6488", "market": "tw", "name": "環球晶", "role": "SiC 基板/矽晶圓", "tag": "基板"},
-        {"code": "3707", "market": "tw", "name": "漢磊", "role": "SiC/GaN 晶圓代工", "tag": "代工"},
-        {"code": "3016", "market": "tw", "name": "嘉晶", "role": "SiC/磊晶片", "tag": "磊晶"},
-        {"code": "2481", "market": "tw", "name": "強茂", "role": "功率二極體/SiC 元件", "tag": "功率元件"},
-        {"code": "8255", "market": "tw", "name": "朋程", "role": "車用整流二極體/功率", "tag": "車用功率"},
-        {"code": "ON", "market": "us", "name": "onsemi", "role": "SiC MOSFET/車用功率 IDM", "tag": "IDM"},
-        {"code": "WOLF", "market": "us", "name": "Wolfspeed", "role": "SiC 基板/元件龍頭(財務風險)", "tag": "SiC龍頭"},
-        {"code": "NVTS", "market": "us", "name": "Navitas", "role": "GaN/SiC 功率元件", "tag": "GaN/SiC"},
-        {"code": "IFX.DE", "market": "other", "name": "Infineon(歐)", "role": "功率半導體/SiC 全球龍頭", "tag": "功率龍頭"},
-        {"code": "6963.T", "market": "other", "name": "Rohm(日)", "role": "SiC MOSFET/功率元件", "tag": "SiC"},
-        {"code": "STMPA.PA", "market": "other", "name": "STMicro(歐)", "role": "SiC 功率(車用)", "tag": "SiC"}
+        {
+          "code": "6488",
+          "market": "tw",
+          "name": "環球晶",
+          "role": "SiC 基板/矽晶圓",
+          "tag": "基板"
+        },
+        {
+          "code": "3707",
+          "market": "tw",
+          "name": "漢磊",
+          "role": "SiC/GaN 晶圓代工",
+          "tag": "代工"
+        },
+        {
+          "code": "3016",
+          "market": "tw",
+          "name": "嘉晶",
+          "role": "SiC/磊晶片",
+          "tag": "磊晶"
+        },
+        {
+          "code": "2481",
+          "market": "tw",
+          "name": "強茂",
+          "role": "功率二極體/SiC 元件",
+          "tag": "功率元件"
+        },
+        {
+          "code": "8255",
+          "market": "tw",
+          "name": "朋程",
+          "role": "車用整流二極體/功率",
+          "tag": "車用功率"
+        },
+        {
+          "code": "ON",
+          "market": "us",
+          "name": "onsemi",
+          "role": "SiC MOSFET/車用功率 IDM",
+          "tag": "IDM"
+        },
+        {
+          "code": "WOLF",
+          "market": "us",
+          "name": "Wolfspeed",
+          "role": "SiC 基板/元件龍頭(財務風險)",
+          "tag": "SiC龍頭"
+        },
+        {
+          "code": "NVTS",
+          "market": "us",
+          "name": "Navitas",
+          "role": "GaN/SiC 功率元件",
+          "tag": "GaN/SiC"
+        },
+        {
+          "code": "IFX.DE",
+          "market": "other",
+          "name": "Infineon(歐)",
+          "role": "功率半導體/SiC 全球龍頭",
+          "tag": "功率龍頭"
+        },
+        {
+          "code": "6963.T",
+          "market": "other",
+          "name": "Rohm(日)",
+          "role": "SiC MOSFET/功率元件",
+          "tag": "SiC"
+        },
+        {
+          "code": "STMPA.PA",
+          "market": "other",
+          "name": "STMicro(歐)",
+          "role": "SiC 功率(車用)",
+          "tag": "SiC"
+        }
       ]
     }
   ]

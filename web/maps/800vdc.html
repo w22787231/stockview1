@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>800VDC/SST 全球原料拆解地圖 — N-3 穿透版</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300&display=swap');
+
+  :root {
+    --bg:        #0a0c0f;
+    --bg2:       #111418;
+    --bg3:       #181d23;
+    --border:    #1e2530;
+    --border2:   #2a3340;
+    --text:      #c8d4e0;
+    --text2:     #7a8fa0;
+    --text3:     #4a5a6a;
+    --accent:    #00d4aa;
+    --accent2:   #0099cc;
+    --warn:      #f0a020;
+    --danger:    #e04040;
+    --safe:      #30c060;
+    --locked:    #8855ff;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Header ─────────────────────────────────── */
+  .hdr {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .hdr-left h1 {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .hdr-left p {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+  }
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .leg-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text2);
+  }
+  .leg-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ─── Layer tabs ──────────────────────────────── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    padding: 0 32px;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 12px 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color .2s, border-color .2s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    letter-spacing: 0.05em;
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ─── Main grid ───────────────────────────────── */
+  .main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    min-height: calc(100vh - 130px);
+  }
+
+  /* ─── Left: Layer tree ────────────────────────── */
+  .tree-panel {
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    overflow-y: auto;
+    max-height: calc(100vh - 130px);
+    position: sticky;
+    top: 0;
+  }
+  .tree-section {
+    margin-bottom: 4px;
+  }
+  .tree-layer {
+    padding: 10px 16px 10px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-left: 3px solid transparent;
+    transition: background .15s, border-color .15s;
+  }
+  .tree-layer:hover { background: var(--bg2); }
+  .tree-layer.active {
+    background: var(--bg3);
+    border-left-color: var(--accent);
+  }
+  .layer-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    letter-spacing: 0.05em;
+  }
+  .layer-name {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text);
+    flex: 1;
+  }
+  .score-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+
+  /* sub-layers */
+  .tree-sub {
+    padding: 7px 16px 7px 46px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-left: 3px solid transparent;
+    transition: background .15s;
+  }
+  .tree-sub:hover { background: var(--bg2); }
+  .tree-sub.active {
+    background: var(--bg3);
+    border-left-color: var(--accent2);
+  }
+  .sub-name { font-size: 11px; color: var(--text2); flex: 1; }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 20px;
+  }
+
+  /* ─── Right: Detail panel ─────────────────────── */
+  .detail-panel {
+    padding: 28px 32px;
+    overflow-y: auto;
+    max-height: calc(100vh - 130px);
+  }
+
+  .detail-header {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-header h2 {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .detail-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 10px;
+  }
+  .meta-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid;
+    letter-spacing: 0.05em;
+  }
+
+  /* Score bar */
+  .score-section {
+    margin-bottom: 24px;
+  }
+  .score-grid {
+    display: grid;
+    grid-template-columns: 160px 1fr 40px;
+    gap: 8px 12px;
+    align-items: center;
+    margin-top: 12px;
+  }
+  .score-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    letter-spacing: 0.03em;
+  }
+  .score-bar-wrap {
+    height: 6px;
+    background: var(--bg3);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .6s ease;
+  }
+  .score-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-align: right;
+    color: var(--text);
+  }
+
+  /* Stocks table */
+  .section-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent2);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stocks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .stock-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .stock-card:hover {
+    border-color: var(--border2);
+    background: var(--bg3);
+  }
+  .stock-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 6px 0 0 6px;
+  }
+  .stock-card.pure::before { background: var(--accent); }
+  .stock-card.partial::before { background: var(--warn); }
+  .stock-card.locked::before { background: var(--locked); }
+  .stock-card.structural::before { background: var(--danger); }
+
+  .stock-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .stock-ticker {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .stock-exch {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    margin-top: 2px;
+    letter-spacing: 0.05em;
+  }
+  .stock-type {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .stock-name {
+    font-size: 11px;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  .stock-role {
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .stock-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .stag {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    letter-spacing: 0.03em;
+  }
+  .stag.warn { border-color: var(--warn); color: var(--warn); }
+  .stag.safe { border-color: var(--safe); color: var(--safe); }
+  .stag.locked { border-color: var(--locked); color: var(--locked); }
+  .stag.danger { border-color: var(--danger); color: var(--danger); }
+
+  /* Insight block */
+  .insight-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text2);
+  }
+  .insight-box strong { color: var(--text); font-weight: 600; }
+
+  /* Chokepoint chain */
+  .chain {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+  .chain-node {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s;
+  }
+  .chain-node:hover { border-color: var(--accent); }
+  .chain-node .cn-label { color: var(--text2); margin-bottom: 3px; }
+  .chain-node .cn-name { font-weight: 600; color: var(--text); }
+  .chain-node .cn-score { color: var(--warn); font-size: 9px; margin-top: 2px; }
+  .chain-arrow {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text3);
+    padding: 0 6px;
+    flex-shrink: 0;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    z-index: 999;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 11px;
+    color: var(--text2);
+    max-width: 260px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip h4 { font-family: var(--mono); font-size: 12px; color: var(--text); margin-bottom: 6px; }
+  .tooltip p { line-height: 1.6; }
+
+  /* IPO monitor */
+  .ipo-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-size: 11px;
+  }
+  .ipo-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+  .ipo-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+  }
+  .ipo-table tr:hover td { background: var(--bg2); }
+  .ipo-table td:first-child { font-family: var(--mono); color: var(--text); font-weight: 600; }
+
+  .falsify-list {
+    list-style: none;
+    margin-bottom: 20px;
+  }
+  .falsify-list li {
+    display: flex;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text2);
+    align-items: flex-start;
+  }
+  .falsify-list li::before {
+    content: '□';
+    font-family: var(--mono);
+    color: var(--accent2);
+    flex-shrink: 0;
+    font-size: 13px;
+    margin-top: -1px;
+  }
+  .falsify-list li.done::before { content: '☑'; color: var(--safe); }
+  .falsify-list li strong { color: var(--text); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  @media (max-width: 800px) {
+    .main { grid-template-columns: 1fr; }
+    .tree-panel { position: static; max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+    .detail-panel { max-height: none; }
+    .hdr { padding: 16px 16px 14px; }
+    .tabs { padding: 0 16px; }
+    .tree-panel { padding: 16px 0; }
+    .detail-panel { padding: 20px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-left">
+    <h1>800VDC / SST 全球原料拆解地圖</h1>
+    <p>N-3 穿透版 · 原料 → 元件 → 模組 → 系統 · 2026.06 更新</p>
+  </div>
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:var(--accent)"></div>純標的（高純度暴露）</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--warn)"></div>混合暴露（折價掩護）</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--locked)"></div>私有化（不可直接投）</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--danger)"></div>結構洞（無上市標的）</div>
+  </div>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" onclick="switchTab('overview')">總覽</button>
+  <button class="tab" onclick="switchTab('L3')">L3 奈米晶磁芯</button>
+  <button class="tab" onclick="switchTab('L2b')">L2b UHV SiC</button>
+  <button class="tab" onclick="switchTab('L2b-mat')">AMB 基板材料</button>
+  <button class="tab" onclick="switchTab('L1')">L1 重電變壓器</button>
+  <button class="tab" onclick="switchTab('L4')">L4 連接器/SSCB</button>
+  <button class="tab" onclick="switchTab('L5')">L5 SST 系統</button>
+  <button class="tab" onclick="switchTab('L6')">L6 GaN</button>
+  <button class="tab" onclick="switchTab('ipo')">IPO 埋伏線</button>
+  <button class="tab" onclick="switchTab('falsify')">證偽日曆</button>
+</div>
+
+<div class="main">
+  <!-- Left tree -->
+  <div class="tree-panel" id="treePanel">
+    <!-- L0 -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('overview')">
+        <span class="layer-badge" style="background:#1a2a1a;color:var(--accent)">L0</span>
+        <span class="layer-name">系統架構 / SST 分岔</span>
+        <span class="score-badge" style="background:#1a2a1a;color:var(--accent)">—</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <!-- L3 最緊 -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('L3')">
+        <span class="layer-badge" style="background:#2a1a2a;color:var(--locked)">L3</span>
+        <span class="layer-name">奈米晶磁芯 MFT</span>
+        <span class="score-badge" style="background:#2a1a2a;color:var(--locked)">23</span>
+      </div>
+      <div class="tree-sub" onclick="showDetail('L3-nb')">
+        <span class="sub-name">↳ 鈮（Nb）：穩定劑</span>
+        <span class="score-badge" style="background:#1a1a2a;color:var(--text3);font-size:9px">N-3</span>
+      </div>
+      <div class="tree-sub" onclick="showDetail('L3-fe')">
+        <span class="sub-name">↳ 高純鐵 / 硼 / 矽合金</span>
+        <span class="score-badge" style="background:#1a1a2a;color:var(--text3);font-size:9px">N-3</span>
+      </div>
+      <div class="tree-sub" onclick="showDetail('L3-anneal')">
+        <span class="sub-name">↳ 退火爐：隱形瓶頸</span>
+        <span class="score-badge" style="background:#2a1a1a;color:var(--danger);font-size:9px">卡</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <!-- L2b -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('L2b')">
+        <span class="layer-badge" style="background:#1a2020;color:var(--warn)">L2b</span>
+        <span class="layer-name">UHV SiC (3300V+)</span>
+        <span class="score-badge" style="background:#1a2020;color:var(--warn)">22</span>
+      </div>
+      <div class="tree-sub" onclick="showDetail('L2b-mat')">
+        <span class="sub-name">↳ Si₃N₄ AMB 基板</span>
+        <span class="score-badge" style="background:#2a1a1a;color:var(--danger);font-size:9px">日本壟斷</span>
+      </div>
+      <div class="tree-sub" onclick="showDetail('L2b-sic-powder')">
+        <span class="sub-name">↳ SiC 晶體 / 晶錠</span>
+        <span class="score-badge" style="background:#1a1a2a;color:var(--text3);font-size:9px">N-2</span>
+      </div>
+      <div class="tree-sub" onclick="showDetail('L2b-epi')">
+        <span class="sub-name">↳ 磊晶片 (SiC 同質磊)</span>
+        <span class="score-badge" style="background:#1a1a2a;color:var(--text3);font-size:9px">N-2</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <!-- L2b 基板 sub-sub -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('si3n4-powder')">
+        <span class="layer-badge" style="background:#1a1a2a;color:var(--text3)">N-3</span>
+        <span class="layer-name">Si₃N₄ 粉末（基板前體）</span>
+        <span class="score-badge" style="background:#2a1a1a;color:var(--danger)">高</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <!-- L1 -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('L1')">
+        <span class="layer-badge" style="background:#2a2010;color:var(--warn)">L1</span>
+        <span class="layer-name">中壓 / 特高壓變壓器</span>
+        <span class="score-badge" style="background:#2a2010;color:var(--warn)">20</span>
+      </div>
+      <div class="tree-sub" onclick="showDetail('L1-goes')">
+        <span class="sub-name">↳ 取向矽鋼片 (GOES)</span>
+        <span class="score-badge" style="background:#1a1a2a;color:var(--text3);font-size:9px">N-2</span>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <!-- L4 -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('L4')">
+        <span class="layer-badge" style="background:#1a2020;color:var(--accent2)">L4</span>
+        <span class="layer-name">連接器 / SSCB / 電容</span>
+        <span class="score-badge" style="background:#1a2020;color:var(--accent2)">16</span>
+      </div>
+    </div>
+    <!-- L5 -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('L5')">
+        <span class="layer-badge" style="background:#1a1820;color:var(--text2)">L5</span>
+        <span class="layer-name">SST 系統整合</span>
+        <span class="score-badge" style="background:#1a1820;color:var(--text2)">15</span>
+      </div>
+    </div>
+    <!-- L6 -->
+    <div class="tree-section">
+      <div class="tree-layer" onclick="showDetail('L6')">
+        <span class="layer-badge" style="background:#101820;color:var(--accent2)">L6</span>
+        <span class="layer-name">GaN 末端 DC-DC</span>
+        <span class="score-badge" style="background:#101820;color:var(--accent2)">15</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right detail -->
+  <div class="detail-panel" id="detailPanel">
+    <!-- content injected by JS -->
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = {
+
+overview: {
+  title: 'L0 — 系統架構全景 & SST 分岔',
+  meta: [
+    {text:'LV-input vs MV-input 雙路線', color:'var(--warn)'},
+    {text:'UL 認證：就在本月', color:'var(--danger)'},
+  ],
+  scores: [
+    {label:'認證事件緊迫性', val:5, color:'var(--danger)'},
+    {label:'商業化滲透度', val:2, color:'var(--accent)'},
+    {label:'整體投資可及性', val:3, color:'var(--warn)'},
+  ],
+  insight: `<strong>SST 賽道已正式分岔</strong>，形成兩條平行路線，直接重排所有下游層的時間表：<br><br>
+  <strong>LV-input（低壓輸入）路線</strong>：DG Matrix、Amperesand 主導，可立即部署於既有交流配電旁，<strong>保留 L1 中壓變壓器共存</strong>，2026-27 率先商業化。<br><br>
+  <strong>MV-input（中壓直接輸入）路線</strong>：Heron Power、Novos Power 主導，直接取代 L1，<strong>依賴 3300V+ SiC 成熟</strong>，2028+ 才能量產。<br><br>
+  <strong>關鍵二元事件（就在本週）：</strong>DG Matrix 目標 2026 Q2 底取得 UL 認證，這是整條賽道從「工程展示」切換到「可採購商品」的開關。`,
+  chain: [
+    {label:'N-3', name:'鐵/硼/矽/鈮', score:'原料'},
+    {label:'N-2', name:'奈米晶帶材', score:'L3 瓶頸'},
+    {label:'N-2', name:'SiC晶錠/磊晶', score:'L2 原料'},
+    {label:'N-2', name:'Si₃N₄粉末', score:'AMB前體'},
+    {label:'N-1', name:'UHV模組', score:'L2b'},
+    {label:'L1', name:'重電變壓器', score:'~90%定價'},
+    {label:'L4', name:'Busbar/SSCB', score:'含量爆增'},
+    {label:'L5', name:'SST整合', score:'競爭中'},
+    {label:'L6', name:'GaN PDB', score:'產能洗牌'},
+  ],
+  stocks: []
+},
+
+L3: {
+  title: 'L3 — 奈米晶磁芯（MFT）',
+  meta: [
+    {text:'瓶頸分：23/25 最高', color:'var(--locked)'},
+    {text:'定價滲透：~10%', color:'var(--safe)'},
+    {text:'結構洞 #1：無純上市標的', color:'var(--danger)'},
+  ],
+  scores: [
+    {label:'供應商集中度', val:5, color:'var(--danger)'},
+    {label:'技術/認證門檻', val:5, color:'var(--danger)'},
+    {label:'當前產能緊俏', val:5, color:'var(--danger)'},
+    {label:'不可替代性', val:4, color:'var(--warn)'},
+    {label:'擴產前置期', val:4, color:'var(--warn)'},
+  ],
+  insight: `<strong>VITROPERM（VAC）& FINEMET（Proterial）已售罄至 2026 年中，全球 AI capex 突破 2,000 億美元後形成剛性缺口。</strong><br><br>
+  奈米晶磁芯無法被矽鋼取代：AI 推論叢集在 500kHz-1MHz 切換，矽鋼渦流損耗禁止使用；奈米晶在 100kHz 下的鐵損僅傳統鋼材的五分之一。<br><br>
+  隱形瓶頸在<strong>退火爐</strong>而非帶材本身——供應商在需求高峰縮短退火時間，導致磁導率一致性下降 15-20%，Tier-2 核心廠（外購帶材自己捲繞）面臨更嚴重的二次瓶頸。<br><br>
+  唯一投資通道：<strong>台達電（2308）作為 L5 配額消耗端</strong>；若 VAC/Proterial 啟動 IPO（PE 基金 2027-2030 退出窗口），將是整條賽道最大事件。`,
+  stocks: [
+    {ticker:'VAC', name:'VACUUMSCHMELZE GmbH', exch:'法蘭克福 — 私有', role:'VITROPERM 帶材，全球22%市占，已售罄至2026中。Ara Partners持有。', type:'locked', tags:['⚠️ 私有化','IPO監測:2027-30','Ara Partners']},
+    {ticker:'Proterial', name:'日立金屬改制（旧Hitachi Metals）', exch:'東京 — 私有', role:'FINEMET，全球高性能合金28%市占，在日中印三地生產。Bain+JIP持有。', type:'locked', tags:['⚠️ 私有化','IPO監測:2027-30','Bain Capital']},
+    {ticker:'雲路股份', name:'Qingdao Yunlu Advanced Materials', exch:'A股 ⚠️', role:'中國最大非晶/奈米晶帶材廠，中國本土 SST 主要供應商（推論）', type:'partial', tags:['⚠️ 代碼待驗證','中國替代路線','A股']},
+    {ticker:'安泰科技', name:'Advanced Technology & Materials', exch:'A股 ⚠️', role:'非晶帶材廠，中國本土供應鏈組成部分', type:'partial', tags:['⚠️ 代碼待驗證','A股','替代監測']},
+    {ticker:'台達電 2308', name:'Delta Electronics', exch:'TWSE ✅', role:'SST系統整合核心，磁芯配額最大消耗端，間接受益L3缺口', type:'partial', tags:['✅ TWSE','間接映射','800V側櫃2026H2出貨']},
+  ]
+},
+
+'L3-nb': {
+  title: 'N-3 — 鈮（Niobium）：奈米晶的晶粒穩定劑',
+  meta: [
+    {text:'N-3 層：原料最深處', color:'var(--text2)'},
+    {text:'CBMM 單一壟斷：巴西', color:'var(--danger)'},
+  ],
+  scores: [
+    {label:'供應商集中度', val:5, color:'var(--danger)'},
+    {label:'替代可能性', val:4, color:'var(--warn)'},
+    {label:'AI需求相關性', val:2, color:'var(--text2)'},
+    {label:'投資可及性', val:2, color:'var(--text2)'},
+  ],
+  insight: `奈米晶帶材配方（Fe-Si-B-Cu-Nb）中，<strong>Nb（鈮）作為晶粒穩定劑不可或缺</strong>——沒有 Nb，退火時奈米晶結構無法形成均勻的 10-20nm 晶粒。<br><br>
+  全球 Nb 供應：<strong>巴西 CBMM 控制全球約 80% 產量</strong>，Araxá 礦山準壟斷地位。CBMM 由巴西私人家族資本控制，日中各持少數股份（三菱商事為日本代理）。<br><br>
+  <strong>但 AI 對 Nb 需求微乎其微</strong>——奈米晶帶材每噸用 Nb 量極少，相比鋼鐵行業（90%+ Nb 消耗）可忽略不計。Nb 不是 AI 行情的直接標的，但若 SST 全面量產（2028+），可能出現邊際拉動。`,
+  stocks: [
+    {ticker:'CBMM', name:'Companhia Brasileira de Metalurgia e Mineração', exch:'巴西 — 私有', role:'全球鈮壟斷廠，80%+市占，巴西家族控股，日中持少數', type:'locked', tags:['⚠️ 私有化','準壟斷','無直接AI投資價值']},
+    {ticker:'三菱商事 8058', name:'Mitsubishi Corporation', exch:'東證 ⚠️', role:'CBMM 日本獨家代理，鈮業務占總營收極小', type:'partial', tags:['⚠️ 後綴待驗證','稀釋暴露','貿易商折價']},
+    {ticker:'NioCorp NIOBF', name:'NioCorp Developments', exch:'NYSE American', role:'美國本土鈮礦開發，Elk Creek項目，尚未量產', type:'partial', tags:['開發階段','高風險','美國供應鏈去風險概念']},
+  ]
+},
+
+'L3-fe': {
+  title: 'N-3 — 高純鐵 / 硼 / 矽：奈米晶合金基礎原料',
+  meta: [{text:'N-3 最上游', color:'var(--text2)'}, {text:'分散度高，非單一壟斷', color:'var(--safe)'}],
+  scores: [
+    {label:'供應商集中度', val:2, color:'var(--safe)'},
+    {label:'AI需求相關性', val:1, color:'var(--text3)'},
+    {label:'投資可及性', val:3, color:'var(--warn)'},
+  ],
+  insight: `高純鐵（純度 99.99%）：<strong>全球 70%+ 高純鐵產自中國、澳大利亞、巴西</strong>。奈米晶用量占全球高純鐵產量比例極低，非瓶頸。<br><br>
+  硼（B）：全球硼砂主要產地為土耳其（Eti Maden，國有）和美國（Rio Tinto Boron），非中國壟斷，短期無供應風險。<br><br>
+  結論：N-3 原料層分散度較高，<strong>不構成投資主題</strong>，亦非 AI 賽道的獨立驅動。供應鏈風險主要來自地緣政治（中國高純鐵出口限制），而非物理稀缺。`,
+  stocks: [
+    {ticker:'Rio Tinto RIO', name:'力拓集團', exch:'NYSE/LSE', role:'全球最大硼砂生產商（US Borax），非晶/奈米晶用硼的主要供應方', type:'partial', tags:['稀釋暴露','大宗商品','硼砂占比極小']},
+  ]
+},
+
+'L3-anneal': {
+  title: 'N-3 — 退火爐：最被忽略的隱形瓶頸',
+  meta: [{text:'結構洞 #1-b', color:'var(--danger)'}, {text:'完全無上市純標的', color:'var(--danger)'}],
+  scores: [
+    {label:'瓶頸強度', val:5, color:'var(--danger)'},
+    {label:'市場認知度', val:1, color:'var(--safe)'},
+    {label:'可替代性', val:2, color:'var(--warn)'},
+  ],
+  insight: `<strong>全球能穩定生產 18-25μm 帶厚奈米晶帶材的廠商只有三家</strong>（Proterial/VAC/中國少數廠），每家設施擴產前置期 18 個月。<br><br>
+  但真正的隱形瓶頸是<strong>退火爐容量</strong>：奈米晶帶材必須在精密控制的氫氣/氮氣退火爐中，以特定溫度曲線處理 10-30 分鐘，才能形成均勻奈米晶結構。需求高峰時供應商縮短退火時間，磁導率一致性下降 15-20%——<strong>這是良率問題，不是材料問題</strong>，但結果是有效供給更少。<br><br>
+  退火爐設備商（Ipsen、Bodycote 等）為退火服務商，但規模過於分散，無法形成投資主題。`,
+  stocks: [
+    {ticker:'（無直接標的）', name:'退火爐設備/服務市場', exch:'— 分散', role:'Ipsen International（私）、Bodycote（LSE：BOY）等，退火服務分散難以純度化', type:'structural', tags:['結構洞','無純標的','設備服務稀釋']},
+  ]
+},
+
+L2b: {
+  title: 'L2b — UHV SiC 模組（3300V+）：MV-SST 守門員',
+  meta: [
+    {text:'瓶頸分：22/25', color:'var(--warn)'},
+    {text:'定價滲透：~35%（急升中）', color:'var(--warn)'},
+    {text:'Wolfspeed 10kV：2026/3 全球首發', color:'var(--accent)'},
+  ],
+  scores: [
+    {label:'供應商集中度', val:4, color:'var(--warn)'},
+    {label:'技術/認證門檻', val:5, color:'var(--danger)'},
+    {label:'當前產能緊俏（UHV）', val:5, color:'var(--danger)'},
+    {label:'不可替代性', val:4, color:'var(--warn)'},
+    {label:'雙源採購困難度', val:5, color:'var(--danger)'},
+  ],
+  insight: `Wolfspeed 2026/3 發布業界首顆商用 10kV SiC MOSFET，白皮書直接承認「<strong>雙源採購是挑戰</strong>」——10kV 級目前接近獨家。<br><br>
+  <strong>Wolfspeed 財務重整關鍵細節（必須知道）：</strong>2025/9 完成 Chapter 11 重整，Renesas 轉換債務為股權並取得董事席位；Q2 FY26 AI 資料中心營收季增 50%；持有 13 億美元現金，已完成 Durham 150mm 廠關閉、轉移至 200mm Mohawk Valley；正發展 300mm SiC 晶圓能力。<strong>技術領先 + 財務出清 = 典型低基期重整後標的</strong>，但需持續監測毛損收窄速度。<br><br>
+  台灣映射（漢磊/嘉晶）目前主要暴露在廣義 SiC（L2a，12分），3300V+ 是 2028 引擎。`,
+  stocks: [
+    {ticker:'WOLF', name:'Wolfspeed Inc.', exch:'NYSE', role:'全球唯一商用10kV SiC MOSFET，10kHz+切換使緊湊SST成為可能。已完成Chapter 11重整，AI DC收入季增50%', type:'pure', tags:['✅ NYSE','重整後低基期','10kV獨家','200mm轉移中']},
+    {ticker:'NVTS', name:'Navitas Semiconductor', exch:'Nasdaq', role:'GeneSiC 2300V/3300V UHV SiC，AEC Plus超車規認證，NVIDIA Kyber供應商', type:'pure', tags:['✅ Nasdaq','NVIDIA正式供應商','GaN+SiC雙業務']},
+    {ticker:'IFX.DE', name:'Infineon Technologies', exch:'XETRA ⚠️', role:'DG Matrix SST的SiC供應方，CoolSiC 3300V系列，但SiC只占整體小部分', type:'partial', tags:['⚠️ 後綴待驗證','SST供應協議','稀釋暴露']},
+    {ticker:'ON', name:'onsemi', exch:'Nasdaq', role:'EliteSiC系列，Amperesand等SST廠的SiC供應選項', type:'partial', tags:['✅ Nasdaq','廣義SiC','EV+AI雙驅動']},
+    {ticker:'三菱電機 6503', name:'Mitsubishi Electric', exch:'東證 ⚠️', role:'量產3300V全SiC 750A模組，牽引變流器數十年現場數據=認證時鐘優勢', type:'partial', tags:['⚠️ 後綴待驗證','日本折價套利','牽引實績≈SST資質']},
+    {ticker:'漢磊 3707', name:'漢磊科技', exch:'TPEx ⚠️', role:'廣義SiC代工，8吋試產中。L2a為主，L2b為2028引擎。Q2-Q3 EPS轉正監測中', type:'partial', tags:['⚠️ 後綴待驗證','週期反轉型','月營收≥17億/季關鍵']},
+    {ticker:'嘉晶 3016', name:'嘉晶電子', exch:'⚠️', role:'高壓SiC磊晶，已確認3300V+客戶需求——L2b最直接台股信號', type:'partial', tags:['⚠️ 代碼後綴待驗','3300V+確認','L2b領先指標']},
+  ]
+},
+
+'L2b-mat': {
+  title: 'L2b 材料 — Si₃N₄ AMB 基板：結構洞 #2',
+  meta: [
+    {text:'結構洞 #2：日本壟斷', color:'var(--danger)'},
+    {text:'東芝：最大廠商已下市', color:'var(--locked)'},
+    {text:'定價滲透：~5%', color:'var(--safe)'},
+  ],
+  scores: [
+    {label:'供應商集中度', val:5, color:'var(--danger)'},
+    {label:'技術/認證門檻', val:5, color:'var(--danger)'},
+    {label:'市場認知度', val:1, color:'var(--safe)'},
+    {label:'台股映射', val:1, color:'var(--text3)'},
+  ],
+  insight: `3300V+ SiC 模組必須以 <strong>Si₃N₄ AMB（氮化矽活性金屬釺焊）基板</strong>封裝——AlN/Al₂O₃ 在數十萬次熱循環後銅層剝離，只有 Si₃N₄ 的斷裂韌性能撐住。<br><br>
+  歷史上東芝一度佔全球市場 70%（現已私有化下市）。現在的上市供應者：京瓷、Denka、Rogers（Curamik AMB 開創者）、聖戈班、Heraeus。<br><br>
+  <strong>N-3 向上游：Si₃N₄ 粉末</strong>才是基板的前體材料，UBE Corporation（4208.T）是全球最大高品質 Si₃N₄ 粉末供應商（~18%市占），<strong>已確認在 xEV/電力半導體用途擴產，且股票折現在化工/水泥綜合企業折價中——是本次掃描最乾淨的「N-3 折價套利」</strong>。`,
+  stocks: [
+    {ticker:'ROG', name:'Rogers Corporation', exch:'Nasdaq', role:'Curamik：DCB製程發明者，Si₃N₄ AMB金標準，可0.8mm厚銅鍵合不翹曲。AMB是核心業務之一', type:'pure', tags:['✅ Nasdaq','AMB開創者','最高純度上市標的']},
+    {ticker:'東芝（私有）', name:'Toshiba Corporation', exch:'JIP 私有化', role:'歷史上全球70%市占，現已下市，與VAC/Proterial同型：最純暴露被私有化鎖住', type:'locked', tags:['⚠️ 已下市','IPO監測','JIP持有']},
+    {ticker:'京瓷 6971', name:'Kyocera Corporation', exch:'東證 ⚠️', role:'Si₃N₄ AMB上市供應商之一，但被精密元件/通訊/半導體設備稀釋', type:'partial', tags:['⚠️ 後綴待驗','稀釋暴露','日本折價']},
+    {ticker:'Denka 4061', name:'電氣化學工業', exch:'東證 ⚠️', role:'Si₃N₄ 粉末及陶瓷基板，市佔前五，被多角化化學業務稀釋', type:'partial', tags:['⚠️ 後綴待驗','稀釋暴露','日本折價']},
+    {ticker:'UBE 4208', name:'UBE Corporation', exch:'東證 ⚠️', role:'全球最大高品質Si₃N₄粉末(~18%市占)，E-10等級全球標準。已確認擴產應對xEV需求。市值僅2,460億日元。Stockopedia評為「轉機股」', type:'partial', tags:['⚠️ 後綴待驗','N-3折價套利','擴產確認','市值低估嫌疑']},
+    {ticker:'AlzChem ACT.DE', name:'AlzChem Group AG', exch:'法蘭克福 ✅', role:'Si₃N₄粉末原料(SILZOT品牌)，鈣氰胺鏈深度整合製造商，14%全球Si₃N₄粉末體積。市值~20億歐元，分析師目標價191歐元（vs收盤165歐元）', type:'partial', tags:['✅ FRA:ACT','N-3折價','分析師評Buy','目標價+15%']},
+  ]
+},
+
+'L2b-sic-powder': {
+  title: 'N-2 — SiC 晶體 / 晶錠（Boule）',
+  meta: [{text:'N-2 層', color:'var(--text2)'}, {text:'Wolfspeed 準壟斷上游', color:'var(--warn)'}],
+  scores: [
+    {label:'供應商集中度', val:4, color:'var(--warn)'},
+    {label:'晶體生長難度', val:5, color:'var(--danger)'},
+    {label:'良率瓶頸', val:4, color:'var(--warn)'},
+  ],
+  insight: `SiC 晶錠（Boule）以 PVT（物理氣相輸運）法在 2200°C 生長，是整個 SiC 供應鏈良率最差、耗時最長的步驟。<br><br>
+  <strong>Wolfspeed 是全球最大 SiC 晶錠廠</strong>，同時也是下游器件廠——垂直整合使它同時是上游供應商（賣晶圓給競爭對手）和下游競爭者。重整後的 Wolfspeed 擁有唯一已驗證的 200mm SiC 量產線（Mohawk Valley），並展示了 300mm 能力——這是整個行業的領先指標。`,
+  stocks: [
+    {ticker:'WOLF', name:'Wolfspeed Inc.', exch:'NYSE', role:'200mm晶圓唯一量產，同時是晶錠/晶圓/器件垂直整合廠，300mm已展示能力', type:'pure', tags:['✅ NYSE','晶錠到器件垂直整合','300mm領先']},
+    {ticker:'II-VI（現Coherent）COHR', name:'Coherent Corp.', exch:'NYSE', role:'重要SiC晶圓供應商，並購II-VI後覆蓋SiC底材', type:'partial', tags:['✅ NYSE','晶圓供應','光學+SiC混合']},
+  ]
+},
+
+'L2b-epi': {
+  title: 'N-2 — SiC 同質磊晶片',
+  meta: [{text:'N-2 層', color:'var(--text2)'}, {text:'嘉晶：台股唯一高壓磊晶純標', color:'var(--accent)'}],
+  scores: [
+    {label:'技術難度（高壓）', val:5, color:'var(--danger)'},
+    {label:'台股映射純度', val:4, color:'var(--warn)'},
+    {label:'3300V+客戶需求確認', val:5, color:'var(--danger)'},
+  ],
+  insight: `SiC 磊晶（同質外延）是 SiC 晶圓到 MOSFET 之間的關鍵步驟。高壓（3300V+）磊晶需要更厚的漂移層（>30μm），缺陷密度要求極嚴苛。<br><br>
+  <strong>嘉晶已在法說揭露：有客戶要求 3300V+ 規格</strong>——這是台股迄今對 L2b 最直接的驗證。嘉晶是漢磊的上游磊晶供應商，兩者在 800VDC 路線的配合是台灣最完整的 L2 布局。`,
+  stocks: [
+    {ticker:'嘉晶 3016', name:'嘉晶電子', exch:'TPEx ⚠️', role:'台灣SiC磊晶龍頭，已確認3300V+客戶需求，8吋磊晶送樣中', type:'pure', tags:['⚠️ 代碼後綴待驗','3300V+領先指標','L2b最直接台股映射']},
+    {ticker:'Wolfspeed WOLF', name:'Wolfspeed（自有磊晶）', exch:'NYSE', role:'垂直整合，自有磊晶能力，全球最先進', type:'pure', tags:['✅ NYSE','自有磊晶','IDM']},
+  ]
+},
+
+'si3n4-powder': {
+  title: 'N-3 — Si₃N₄ 粉末：AMB 基板的最上游原料',
+  meta: [{text:'N-3 最深層', color:'var(--text2)'}, {text:'UBE 主導，日本折價套利', color:'var(--accent)'}],
+  scores: [
+    {label:'供應商集中度', val:4, color:'var(--warn)'},
+    {label:'品質認證壁壘', val:5, color:'var(--danger)'},
+    {label:'市場定價滲透', val:1, color:'var(--safe)'},
+  ],
+  insight: `高品質 Si₃N₄ 粉末（電子級，如 UBE E-10 規格）是全球 AMB 基板製造商的共同進料。<strong>UBE Corporation（4208.T）持有約 18% 全球市占，E-10 等級是全球標準粉末</strong>，幾乎所有重要陶瓷廠都採購。<br><br>
+  <strong>UBE 的折價來源</strong>：母體是多角化化工/建材/機械公司（水泥、尼龍、製藥），Si₃N₄ 只是「Performance Products」業務的一部分，市場完全按化工股定價。1 年報酬 +25%，但市值僅 2,460 億日元（~16億美元）——與其在 EV 和 AI 供應鏈的系統重要性極不相稱。<br><br>
+  AlzChem（德國，ACT.DE）同樣以鈣氰胺鏈為本業，旗下 SILZOT 是 Si₃N₄ 粉末，分析師目標價 191€ vs 收盤 165€，給出 Buy。`,
+  stocks: [
+    {ticker:'UBE 4208', name:'UBE Corporation（宇部興産）', exch:'東證 TYO:4208 ⚠️', role:'全球最大高品質Si₃N₄粉末(~18%市占)，xEV/電力半導體用途已確認擴產，市值~16億美元。Stockopedia評為轉機股，1Y報酬+25%', type:'partial', tags:['⚠️ 後綴待驗','N-3折價核心','擴產已啟動','市值被壓制']},
+    {ticker:'AlzChem ACT.DE', name:'AlzChem Group AG', exch:'法蘭克福 ACT.DE ✅', role:'SILZOT Si₃N₄粉末，深度垂直整合（碳化鈣→氰胺→氮化矽），市值~20億歐元', type:'partial', tags:['✅ FRA:ACT','Si₃N₄+多化工','分析師Buy']},
+    {ticker:'Denka 4061', name:'Denka Company', exch:'東證 ⚠️', role:'Si₃N₄粉末及AMB基板，多角化化學公司稀釋', type:'partial', tags:['⚠️ 後綴待驗','日本','粉末+基板雙層']},
+  ]
+},
+
+L1: {
+  title: 'L1 — 中壓 / 特高壓變壓器',
+  meta: [
+    {text:'瓶頸分：20/25', color:'var(--warn)'},
+    {text:'全球定價滲透：~90%（末期）', color:'var(--danger)'},
+    {text:'台韓美：皆皇帝股化完成', color:'var(--danger)'},
+  ],
+  scores: [
+    {label:'供應商集中度', val:4, color:'var(--warn)'},
+    {label:'交期拉長（24-36個月）', val:5, color:'var(--danger)'},
+    {label:'定價滲透飽和度', val:5, color:'var(--danger)'},
+    {label:'LV路線共存緩衝', val:3, color:'var(--warn)'},
+  ],
+  insight: `全球能製造 765kV+ 特高壓變壓器的廠商不到五家——HD 現代電氣採「選擇性接單」策略，優先接北美/中東高毛利項目、主動拒低毛利單，<strong>這是定價權達到頂點的商業行為信號</strong>。<br><br>
+  <strong>重要修正（LV-SST 共存效應）</strong>：LV-input SST 路線（DG Matrix、Amperesand）保留上游中壓變壓器共存至 2027+，「SST 取代 L1」的時間表後移。台股重電族群 2026/6/3 全員漲停（黃仁勳 Computex 語錄觸發）= 敘事飽和的末期信號。<br><br>
+  <strong>唯一殘留 alpha</strong>：中興電（1513）本益比 18-22 倍 vs 華城 75 倍，訴訟利空出盡後仍享折價——層內相對價值，不是層級行情。`,
+  stocks: [
+    {ticker:'曉星重工 298040', name:'Hyosung Heavy Industries', exch:'KRX ⚠️', role:'已突破352萬韓元「皇帝股」，4個月+70%，UHV變壓器美國市場主力', type:'pure', tags:['⚠️ 代碼待驗','定價滲透~90%','末期信號']},
+    {ticker:'HD現代電氣 267260', name:'HD Hyundai Electric', exch:'KRX ⚠️', role:'選擇性接單策略，27.6%毛利率，4.22億美元訂單目標。Slot Reservation溢價制', type:'pure', tags:['⚠️ 代碼待驗','定價權頂點','Mall期待已定價']},
+    {ticker:'GEV', name:'GE Vernova', exch:'NYSE ✅', role:'在手訂單1,500億美元，全球燃氣輪機+電網設備雙引擎，YTD+120%', type:'pure', tags:['✅ NYSE','定價已飽和','1500億訂單']},
+    {ticker:'ETN', name:'Eaton Corporation', exch:'NYSE ✅', role:'MVSST+收購Resilient Power，L1+L5雙暴露，估值合理', type:'partial', tags:['✅ NYSE','L1+L5跨層','MVSST最完整']},
+    {ticker:'中興電 1513', name:'中興電工機械', exch:'TWSE ✅', role:'PE 18-22x vs 華城75x，訴訟折價出盡，在手訂單431億元。層內相對價值交易', type:'partial', tags:['✅ TWSE','層內折價套利','訴訟利空出盡']},
+    {ticker:'LS Electric', name:'LS ELECTRIC Co.', exch:'KRX ⚠️', role:'首度打入歐洲（德國RWE 4250萬美元合約），UHV+HVDC雙布局', type:'pure', tags:['⚠️ 代碼待驗','歐洲破壁','訂單實證']},
+  ]
+},
+
+'L1-goes': {
+  title: 'N-2 — 取向矽鋼片（GOES）：L1 的原料心臟',
+  meta: [{text:'N-2 層', color:'var(--text2)'}, {text:'日本製鐵/武鋼/AK Steel寡占', color:'var(--warn)'}],
+  scores: [
+    {label:'供應商集中度', val:4, color:'var(--warn)'},
+    {label:'AI相關性', val:3, color:'var(--warn)'},
+    {label:'擴產前置期', val:4, color:'var(--warn)'},
+  ],
+  insight: `高牌號取向矽鋼片（Hi-B，即高磁感取向矽鋼）是特高壓變壓器鐵芯的核心原料，全球高端 GOES 由日本製鐵、武漢鋼鐵（中）、AK Steel（美，現 Cleveland-Cliffs）、蒂森克虜伯（德）寡占。<br><br>
+  AI 資料中心建設帶動特高壓變壓器需求，進而提升 Hi-B GOES 需求。但<strong>鋼鐵公司本身多角化程度高，GOES 對財報影響有限</strong>，投資主題較弱。`,
+  stocks: [
+    {ticker:'日本製鐵 5401', name:'Nippon Steel Corporation', exch:'東證 ⚠️', role:'Hi-B高牌號GOES全球龍頭，正收購US Steel（仍待批准）', type:'partial', tags:['⚠️ 後綴待驗','GOES龍頭','US Steel收購案']},
+    {ticker:'CLF', name:'Cleveland-Cliffs（前AK Steel）', exch:'NYSE ✅', role:'美國最大GOES生產商，AK Steel整合後電工鋼業務','type':'partial', tags:['✅ NYSE','美國本土GOES','稀釋暴露']},
+  ]
+},
+
+L4: {
+  title: 'L4 — 連接器 / Busbar / 薄膜電容 / SSCB',
+  meta: [
+    {text:'瓶頸分：16/25（含SSCB上修）', color:'var(--accent2)'},
+    {text:'定價滲透：~50%（貿聯已認證）', color:'var(--warn)'},
+    {text:'SSCB：第四個結構洞', color:'var(--danger)'},
+    {text:'2028懸崖：側櫃ASP縮水60%', color:'var(--danger)'},
+  ],
+  scores: [
+    {label:'含量暴增（10x ASP）', val:5, color:'var(--danger)'},
+    {label:'2028懸崖風險', val:4, color:'var(--warn)'},
+    {label:'NVIDIA認證護城河', val:4, color:'var(--warn)'},
+    {label:'SSCB市場未定價', val:5, color:'var(--safe)'},
+  ],
+  insight: `<strong>L4 是「含量型」而非「瓶頸型」</strong>，報酬邏輯是 10x ASP 而非稀缺定價。800V 側櫃（行級 HVDC 電源側櫃）單台 ASP 達 40-50 萬美元，比傳統交流電源設備高約 10 倍。<br><br>
+  <strong>2028 懸崖警告（最重要的隱性風險）</strong>：第三階段（2028-29）電氣架構整體重寫，側櫃功成身退被電池機架取代，每 MW 設備成本從 50 萬降至 20 萬美元（-60%）。最佳持有窗口：<strong>2026H2-2028H1</strong>，這是有明確到期日的交易，不是長期持有。<br><br>
+  <strong>SSCB（固態直流斷路器）= 結構洞 #4</strong>：直流無過零點，800VDC 故障切斷需毫秒級半導體保護器件，安規認證長達 12-18 個月，但目前所有台股 HVDC 清單均無此項。`,
+  stocks: [
+    {ticker:'貿聯-KY 3665', name:'Bizlink Holding', exch:'TWSE ✅', role:'NVIDIA認證Power Whip/Rack Busbar/Busbar連接器，Vera Rubin平台專屬設計，MGX生態正式成員', type:'pure', tags:['✅ TWSE','NVIDIA官方認證','Vera Rubin供應商']},
+    {ticker:'順達 3211', name:'順達科技（Dynapack）', exch:'⚠️', role:'800V HVDC高壓BBU，2026起少量出貨，2027量產。2026非IT營收將首破50%', type:'partial', tags:['⚠️ 後綴待驗','BBU跨越懸崖','非IT比重轉折']},
+    {ticker:'ETN', name:'Eaton', exch:'NYSE ✅', role:'MVSST系統+SSCB技術，L1+L4+L5三層覆蓋最廣', type:'partial', tags:['✅ NYSE','SSCB+MVSST','最全面L4+L5']},
+    {ticker:'LFUS', name:'Littelfuse', exch:'Nasdaq', role:'直流保護元件/SSCB相關技術，800VDC保護應用潛在受益（推論，需驗證）', type:'partial', tags:['⚠️ 推論待驗','直流保護','SSCB潛在受益']},
+    {ticker:'（SSCB純標的）', name:'固態直流斷路器純標的', exch:'—', role:'目前無上市純SSCB廠商，ABB/施耐德/Eaton皆稀釋。結構洞#4', type:'structural', tags:['結構洞','無純標的','安規認證12-18月']},
+  ]
+},
+
+L5: {
+  title: 'L5 — SST 系統整合',
+  meta: [
+    {text:'瓶頸分：15/25（下修）', color:'var(--text2)'},
+    {text:'定價滲透：~85%', color:'var(--danger)'},
+    {text:'競爭擁擠：玩家數12個月翻倍', color:'var(--danger)'},
+    {text:'真瓶頸：UL認證+Field Hours', color:'var(--warn)'},
+  ],
+  scores: [
+    {label:'製造進入壁壘', val:2, color:'var(--safe)'},
+    {label:'認證/實績壁壘', val:5, color:'var(--danger)'},
+    {label:'資本湧入速度', val:5, color:'var(--danger)'},
+    {label:'台達電先發優勢持久性', val:3, color:'var(--warn)'},
+  ],
+  insight: `<strong>L5 重分類：從瓶頸層降為競爭層</strong>。12個月內玩家翻倍（ABB/日立/Eaton/三菱/GEV/施耐德/Enphase/SolarEdge/台達電/中國西電+新創軍），競爭格局趨同效率，毛利率假設應保守化。<br><br>
+  <strong>真正的護城河只有兩個</strong>：(1) 誰先拿到 UL 認證（DG Matrix 目標本月底）；(2) 誰先有 CSP 試點現場小時數——資料中心業主不會押 1GW 園區在無 field data 的設備上。<br><br>
+  <strong>中國西電已部署資料中心 SST（東數西算）</strong>，是全球唯一有量產實績的 SST 廠，技術驗證先行一步，但受地緣政治限制西方採購。`,
+  stocks: [
+    {ticker:'台達電 2308', name:'Delta Electronics', exch:'TWSE ✅', role:'800V側櫃2026H2出貨，先發但圍攻中。L3磁芯配額消耗端+L5整合雙重暴露', type:'partial', tags:['✅ TWSE','先發已定價','L3+L5雙層']},
+    {ticker:'ETN', name:'Eaton', exch:'NYSE ✅', role:'MVSST商品化最完整+收購Resilient Power取得SST專長', type:'pure', tags:['✅ NYSE','MVSST最完整','Resilient收購']},
+    {ticker:'VRT', name:'Vertiv Holdings', exch:'NYSE ✅', role:'Kyber整合800V生態系2026H2商用，UPS+熱管理延伸電源架構', type:'pure', tags:['✅ NYSE','Kyber官方夥伴','2026H2商用']},
+    {ticker:'DG Matrix', name:'DG Matrix（ABB投資）', exch:'未上市', role:'ABB投資，英飛凌SiC供應協議，目標本月底UL認證=賽道最重要近期事件', type:'locked', tags:['⚠️ 未上市','UL認證最近','IPO候選']},
+    {ticker:'Heron Power', name:'Heron Power Inc.', exch:'未上市', role:'融資1.4億美元，40GW美國產能，Heron Link 4.2MW MV-input', type:'locked', tags:['⚠️ 未上市','40GW目標','MV-input路線']},
+    {ticker:'Enphase ENPH', name:'Enphase Energy', exch:'Nasdaq ✅', role:'IQ SST：全系統展示2026底，試點2027，量產2028。純度有限但有SST時間表', type:'partial', tags:['✅ Nasdaq','2028量產','太陽能+SST']},
+    {ticker:'中國西電 601179', name:'China XD Electric', exch:'A股 ⚠️', role:'東數西算已部署2.4MW資料中心SST，全球唯一量產實績，西方採購受限', type:'partial', tags:['⚠️ 代碼待驗','量產實績唯一','地緣限制']},
+  ]
+},
+
+L6: {
+  title: 'L6 — GaN 末端 DC-DC',
+  meta: [
+    {text:'瓶頸分：15/25（上修）', color:'var(--accent2)'},
+    {text:'台積電2027/7/31退出：強制轉單', color:'var(--warn)'},
+    {text:'800V→6V直接轉換：IBC消失', color:'var(--accent)'},
+  ],
+  scores: [
+    {label:'產能重分配規模', val:4, color:'var(--warn)'},
+    {label:'轉單時間窗口緊迫性', val:5, color:'var(--danger)'},
+    {label:'800V直接轉換需求', val:5, color:'var(--danger)'},
+    {label:'台股代工映射', val:3, color:'var(--warn)'},
+  ],
+  insight: `<strong>雙重驅動力同步觸發 L6 投資主題</strong>：<br><br>
+  1. <strong>強制轉單死線</strong>：台積電 2027/7/31 退出 GaN 代工，所有現掛 TSMC 的 GaN 客戶（含 Navitas 650V 產品）<strong>必須在 2026 年底前啟動新代工認證</strong>（驗證週期 12-18 個月）。轉單窗口就是現在。<br><br>
+  2. <strong>800V→6V 直接轉換</strong>：Navitas Computex 展示 PDB 消滅 48V IBC 中間環節，16 顆 GaNFast 元件/板，單板 2100W/in³——GaN 顆數含量密度大幅提升，IBC 廠商是受害者。<br><br>
+  力積電 2026 GaN 產能擴 3-4 倍，世界先進 2028 上半年量產——台股代工是美股 GaN IC 廠敘事的滯後映射。`,
+  stocks: [
+    {ticker:'NVTS', name:'Navitas Semiconductor', exch:'Nasdaq ✅', role:'GaN（GaNFast）+SiC（GeneSiC）雙業務，NVIDIA Kyber生態正式成員，800V→6V PDB已展示', type:'pure', tags:['✅ Nasdaq','NVIDIA正式認證','GaN+SiC純度最高']},
+    {ticker:'POWI', name:'Power Integrations', exch:'Nasdaq ✅', role:'GaN功率IC，題材純度高但轉型高功率速度較慢', type:'partial', tags:['✅ Nasdaq','GaN純度高','轉型速度監測']},
+    {ticker:'英飛凌 IFX.DE', name:'Infineon Technologies', exch:'XETRA ⚠️', role:'CoolGaN+GaN Systems併購+300mm路線，最大GaN IDM計畫', type:'partial', tags:['⚠️ 後綴待驗','300mm路線','GaN+SiC綜合最大']},
+    {ticker:'Innoscience 2577', name:'英諾賽科', exch:'港股 ⚠️', role:'全球最大8吋GaN IDM，15億顆出貨，市占42.4%，最直接純標的', type:'pure', tags:['⚠️ 港股代碼待驗','全球最大8吋GaN','市占42%']},
+    {ticker:'GFS', name:'GlobalFoundries', exch:'Nasdaq ✅', role:'取得台積電GaN授權（650V/80V），美國本土200mm GaN產能補缺，2026年認證量產', type:'partial', tags:['✅ Nasdaq','台積授權承接','美國本土']},
+    {ticker:'力積電 6770', name:'Powerchip Semiconductor', exch:'⚠️', role:'承接Navitas 100V-650V GaN，2026產能擴3-4倍。母體記憶體虧損稀釋=母體拖累型低基期', type:'partial', tags:['⚠️ 代碼待驗','GaN+記憶體雙業務','母體拖累折價']},
+    {ticker:'世界先進 5347', name:'Vanguard International Semiconductor', exch:'TWSE ✅', role:'取得台積電GaN授權，2028H1量產15V-1200V全域，同時是漢磊8吋SiC廠房方（L2+L6雙層）', type:'partial', tags:['✅ TWSE','L2+L6跨層唯一','2028量產']},
+  ]
+},
+
+ipo: {
+  title: 'IPO 埋伏監測清單',
+  meta: [{text:'PE 基金退出窗口：2027-2030', color:'var(--warn)'}, {text:'本輪最大不對稱事件集合', color:'var(--accent)'}],
+  scores: [],
+  insight: `整條 800VDC/SST 賽道的<strong>最純暴露幾乎全部被私有化鎖住</strong>（VAC、Proterial/東芝 AMB、DG Matrix、Amperesand、Heron）。PE 基金在需求頂點退出是教科書劇本。<br>設立常設監測——任何下列名字的上市傳聞都是<strong>一級投研事件</strong>。`,
+  stocks: [],
+  ipo_table: true
+},
+
+falsify: {
+  title: '統一證偽日曆',
+  meta: [{text:'按時間排序', color:'var(--accent2)'}],
+  scores: [],
+  insight: '以下每一個事件都是「可觀察的事實」，而非預測。每個事件的結果決定是否維持、加倉或退出對應標的。',
+  stocks: [],
+  falsify: true
+},
+};
+
+const IPO_DATA = [
+  {name:'DG Matrix', layer:'L5', holder:'ABB私人投資', timeline:'2026 UL認證後→2027 IPO視窗', trigger:'首個 CSP 大型試點合約', signal:'UL認證通過（本月）'},
+  {name:'VACUUMSCHMELZE (VAC)', layer:'L3', holder:'Ara Partners (PE)', timeline:'2027-2029（PE持有2023年起）', trigger:'MV-SST 量產帶動磁芯需求暴增', signal:'任何「VAC IPO」新聞'},
+  {name:'Proterial（FINEMET）', layer:'L3', holder:'Bain Capital + JIP', timeline:'2027-2030', trigger:'同VAC，需求頂點退出', signal:'任何「Proterial上市」新聞'},
+  {name:'東芝 Si₃N₄ AMB業務', layer:'L2b材料', holder:'Japan Industrial Partners', timeline:'分拆或SPAC可能：2027-2029', trigger:'EV+SST AMB需求爆發', signal:'「東芝陶瓷業務分拆」新聞'},
+  {name:'Amperesand', layer:'L5', holder:'VC輪', timeline:'2027-2028（30MW商業部署目標）', trigger:'累計商業案場達到規模', signal:'Series C/D或SPAC'},
+  {name:'Heron Power', layer:'L5', holder:'VC輪，已融資1.4億美元', timeline:'40GW製造目標實現後', trigger:'與超大型CSP簽署長期合約', signal:'大規模生產啟動公告'},
+];
+
+const FALSIFY_DATA = [
+  {date:'2026/6 本月底', event:'DG Matrix UL 認證結果', target:'L5 整體/台達電', action:'通過 → 賽道從工程展示切換到可採購商品，加速 L4 busbar 訂單；失敗 → LV-SST 商業化再延後 1-2 季', done:false},
+  {date:'2026/7/10', event:'漢磊 6 月營收（MOPS）', target:'漢磊 3707', action:'≥5.5億 → Q2/Q3 轉盈路徑維持；<5.5億 → 臨界點跳票，退出或減倉', done:false},
+  {date:'2026/7 中', event:'漢磊 Q2 財報：季度營收是否逼近 17-18億', target:'漢磊/嘉晶', action:'突破臨界 → 加倉；未突破 → 觀察等 Q3', done:false},
+  {date:'2026/Q3', event:'嘉晶法說：3300V+ 訂單量化揭露', target:'嘉晶 3016/L2b', action:'首次量化數字 → L2b 引擎點火確認信號；僅定性描述 → 維持觀察', done:false},
+  {date:'2026/Q3-Q4', event:'力積電 GaN 轉單放量：100V 系產品出貨認證', target:'力積電/世界先進/L6', action:'認證完成 → 台積電轉單效應啟動；延遲 → L6 台股窗口縮窄', done:false},
+  {date:'2026/年底', event:'Enphase IQ SST 全系統展示', target:'L5 競爭格局', action:'如期展示 → L5 競爭更擁擠，台達電毛利壓力；跳票 → L5 護城河延長', done:false},
+  {date:'2026/H2', event:'台達電/Vertiv 800V 側櫃實際出貨量 vs NEMA「多數還在400V」落差', target:'L4 貿聯/順達', action:'放量超預期 → L4 含量暴增兌現，加倉 busbar；低於預期 → 400V→800V 滲透比 SemiAnalysis 慢，推遲 L4', done:false},
+  {date:'2027/首個商業案場', event:'MV-input SST 首個資料中心商業部署', target:'L2b/L3 第二引擎', action:'成功部署 → L2b UHV SiC 和 L3 磁芯進入大規模消耗期；延遲 → L4 懸崖也跟著推遲', done:false},
+  {date:'持續監測', event:'SiC 族群是否出現集體漲停（台股）', target:'漢磊/嘉晶/L2', action:'集體漲停 = L2 滲透完成信號，停止建倉/開始減倉', done:false},
+  {date:'持續監測', event:'任何 CSP capex guidance 下修', target:'全部外圍層', action:'立即啟動全部外圍層（L2-L6）減倉，不等個股財報——外圍層修正不等財報', done:false},
+];
+
+function getScoreColor(val) {
+  if (val >= 5) return 'var(--danger)';
+  if (val >= 4) return 'var(--warn)';
+  if (val >= 3) return 'var(--accent2)';
+  return 'var(--safe)';
+}
+
+function renderStocks(stocks) {
+  if (!stocks || stocks.length === 0) return '';
+  let html = `<div class="section-title">全球可投資映射</div><div class="stocks-grid">`;
+  for (const s of stocks) {
+    const typeColors = {pure:'var(--accent)', partial:'var(--warn)', locked:'var(--locked)', structural:'var(--danger)'};
+    const typeLabels = {pure:'純標的', partial:'混合暴露', locked:'私有化', structural:'結構洞'};
+    html += `<div class="stock-card ${s.type}">
+      <div class="stock-top">
+        <div>
+          <div class="stock-ticker">${s.ticker}</div>
+          <div class="stock-exch">${s.exch}</div>
+        </div>
+        <div class="stock-type" style="background:${typeColors[s.type]}22;color:${typeColors[s.type]};border:1px solid ${typeColors[s.type]}44">
+          ${typeLabels[s.type]}
+        </div>
+      </div>
+      <div class="stock-name">${s.name}</div>
+      <div class="stock-role">${s.role}</div>
+      <div class="stock-tags">${s.tags.map(t => {
+        let cls = '';
+        if (t.startsWith('✅')) cls = 'safe';
+        else if (t.startsWith('⚠️')) cls = 'warn';
+        else if (t.includes('私有') || t.includes('未上市') || t.includes('結構洞')) cls = 'locked';
+        return `<span class="stag ${cls}">${t}</span>`;
+      }).join('')}</div>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderChain(chain) {
+  if (!chain) return '';
+  let html = `<div class="section-title">原料拆解鏈（N-3 → 系統）</div><div class="chain">`;
+  chain.forEach((n, i) => {
+    html += `<div class="chain-node" onclick="showDetail('${n.label}')">
+      <div class="cn-label">${n.label}</div>
+      <div class="cn-name">${n.name}</div>
+      <div class="cn-score">${n.score}</div>
+    </div>`;
+    if (i < chain.length - 1) html += `<div class="chain-arrow">→</div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderIPO() {
+  let html = `<table class="ipo-table">
+    <thead><tr>
+      <th>名稱</th><th>層</th><th>持有者</th><th>上市時間窗</th><th>觸發條件</th><th>監測信號</th>
+    </tr></thead><tbody>`;
+  for (const row of IPO_DATA) {
+    html += `<tr>
+      <td>${row.name}</td>
+      <td><span style="font-family:var(--mono);font-size:10px;color:var(--accent2)">${row.layer}</span></td>
+      <td>${row.holder}</td>
+      <td style="color:var(--warn)">${row.timeline}</td>
+      <td>${row.trigger}</td>
+      <td style="color:var(--accent)">${row.signal}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderFalsify() {
+  let html = `<ul class="falsify-list">`;
+  for (const f of FALSIFY_DATA) {
+    html += `<li class="${f.done?'done':''}">
+      <div style="flex:1">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:4px">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--accent2);white-space:nowrap">${f.date}</span>
+          <strong>${f.event}</strong>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text3);background:var(--bg3);padding:2px 6px;border-radius:3px;white-space:nowrap">${f.target}</span>
+        </div>
+        <div style="color:var(--text2)">${f.action}</div>
+      </div>
+    </li>`;
+  }
+  html += `</ul>`;
+  return html;
+}
+
+function showDetail(id) {
+  const d = DATA[id];
+  if (!d) return;
+
+  // Update active state
+  document.querySelectorAll('.tree-layer,.tree-sub').forEach(el => el.classList.remove('active'));
+
+  const panel = document.getElementById('detailPanel');
+
+  let scoreHTML = '';
+  if (d.scores && d.scores.length > 0) {
+    scoreHTML = `<div class="score-section">
+      <div class="section-title">維度評分</div>
+      <div class="score-grid">`;
+    for (const s of d.scores) {
+      const pct = (s.val / 5) * 100;
+      scoreHTML += `
+        <div class="score-label">${s.label}</div>
+        <div class="score-bar-wrap"><div class="score-bar-fill" style="width:${pct}%;background:${s.color || getScoreColor(s.val)}"></div></div>
+        <div class="score-val" style="color:${s.color || getScoreColor(s.val)}">${s.val}/5</div>`;
+    }
+    scoreHTML += `</div></div>`;
+  }
+
+  let metaHTML = d.meta ? d.meta.map(m => `<span class="meta-tag" style="color:${m.color};border-color:${m.color}44;background:${m.color}11">${m.text}</span>`).join('') : '';
+
+  let extraHTML = '';
+  if (d.ipo_table) extraHTML = renderIPO();
+  if (d.falsify) extraHTML = renderFalsify();
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <h2>${d.title}</h2>
+      <div class="detail-meta">${metaHTML}</div>
+    </div>
+    ${d.chain ? renderChain(d.chain) : ''}
+    ${scoreHTML}
+    <div class="section-title" style="margin-bottom:12px">分析洞察</div>
+    <div class="insight-box">${d.insight}</div>
+    ${renderStocks(d.stocks)}
+    ${extraHTML}
+  `;
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  showDetail(id);
+}
+
+// init
+showDetail('overview');
+</script>
+</body>
+</html>

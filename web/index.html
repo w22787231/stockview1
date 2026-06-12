@@ -3225,10 +3225,14 @@ async function fetchSupplyQuotes(theme){
   box.querySelectorAll(".sym.clk").forEach(td=>td.onclick=()=>openHoldStock(td.dataset.code, td.dataset.used));
 }
 
-// ── 強勢股:全美股 Best-winners 篩選(data/strong.json,由 us5000 流程順便產)──
-let STRONG_DATA=null, STRONG_BUYONLY=false;
+// ── 強勢股:全美股候選池 + 前端可調整篩選(data/strong.json,由 us5000 流程順便產)──
+let STRONG_DATA=null;
+const STRONG_DEF={pal:70, adr:4.5, dv30:50, dv1:20, p3m:true, p6m:true, p1y:true, ema:true, e60:true, buy:false};
+function _strongF(){ try{ const s=JSON.parse(localStorage.getItem("strongF")); return Object.assign({},STRONG_DEF,s||{}); }catch(e){ return Object.assign({},STRONG_DEF); } }
+function strongSetF(k,v){ const f=_strongF(); f[k]=v; try{localStorage.setItem("strongF",JSON.stringify(f));}catch(e){} renderStrong(); }
+function strongReset(){ try{localStorage.removeItem("strongF");}catch(e){} renderStrong(); }
 async function loadStrong(){
-  $("#meta").innerHTML='<div><b>強勢股</b> 全美股篩選</div><div>價≥1·ADR≥4.5%·距52週低≥70%·3M/6M/1Y漲·量能·EMA8≥21·價>EMA60</div>';
+  $("#meta").innerHTML='<div><b>強勢股</b> 全美股篩選</div><div>條件可在下方自由調整/開關</div>';
   $("#poolNote").innerHTML="";
   if(STRONG_DATA){ renderStrong(); return; }
   $("#content").innerHTML='<div class="loading-screen">載入強勢股 …</div>';
@@ -3255,23 +3259,45 @@ function strongTable(rows){
   ];
   return buildTable("t-strong", rows, cols, {empty:"(無符合條件者)"});
 }
+function strongFilterBar(f){
+  const num=(k,lab,suf)=>'<label style="display:inline-flex;align-items:center;gap:3px;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 8px">'+lab+' ≥ '+
+    '<input type="number" value="'+f[k]+'" min="0" step="any" style="width:52px;border:1px solid var(--line);border-radius:5px;padding:2px 4px;font-size:12px;background:var(--panel)" onchange="strongSetF(\''+k+'\',parseFloat(this.value)||0)">'+(suf||'')+'</label>';
+  const chk=(k,lab)=>'<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;cursor:pointer"><input type="checkbox" '+(f[k]?"checked":"")+' onchange="strongSetF(\''+k+'\',this.checked)">'+lab+'</label>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px">'+
+    num("pal","距52週低","%")+num("adr","ADR","%")+num("dv30","30日$量","M")+num("dv1","當日$量","M")+
+    chk("p3m","3月漲>0")+chk("p6m","6月漲>0")+chk("p1y","1年漲>0")+chk("ema","EMA8≥21")+chk("e60","價>EMA60")+chk("buy","只看Buy金叉")+
+    '<button class="btn" style="font-size:12px" onclick="strongReset()">↺ 重設預設</button>'+
+  '</div>';
+}
+function strongApply(all,f){
+  return all.filter(r=>
+    (f.pal<=0 || (r.pal||0)>=f.pal) &&
+    ((r.adr||0)>=f.adr) &&
+    ((r.dv30||0)>=f.dv30*1e6) &&
+    ((r.dv1||0)>=f.dv1*1e6) &&
+    (!f.p3m || (r.p3m||0)>0) &&
+    (!f.p6m || (r.p6m||0)>0) &&
+    (!f.p1y || (r.p1y||0)>0) &&
+    (!f.ema || r.up821) &&
+    (!f.e60 || r.abv60) &&
+    (!f.buy || r.cross_state==="golden")
+  );
+}
 function renderStrong(){
   const d=STRONG_DATA; if(!d) return;
-  let rows=(d.rows||[]).slice();
-  const nBuy=rows.filter(r=>r.cross_state==="golden").length;
-  if(STRONG_BUYONLY) rows=rows.filter(r=>r.cross_state==="golden");
+  const all=d.rows||[], f=_strongF();
+  const rows=strongApply(all,f);
   $("#content").innerHTML=
-    '<section><div class="sec-head"><h2>強勢股</h2><span class="tag">全美股 · '+(d.n||0)+' 檔</span>'+
-      '<span class="hint">Best-winners 條件(同你的 TradingView 篩選);資料 '+esc(fmtTime(d.generated_at))+'</span></div>'+
-    '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 12px">'+
-      '✅ 條件:價≥1 · ADR≥4.5% · 距52週低≥70% · 3M/6M/1Y 漲幅>0 · 30日均$量>50M & 當日$量>20M · EMA8≥EMA21 · 價>EMA60。<b>RS</b>=3M+6M+1Y 漲幅合計(越高越強)。'+
+    '<section><div class="sec-head"><h2>強勢股</h2><span class="tag">全美股候選 '+(d.n||0)+' 檔</span>'+
+      '<span class="hint">條件可自由調整/開關(存於本機);資料 '+esc(fmtTime(d.generated_at))+'</span></div>'+
+    '<div class="banner show" style="display:block;background:#eef6ff;border-color:#9cc3f5;color:#1d4ed8;margin:0 0 10px">'+
+      '🎛️ 調整下方條件即時篩選。<b>距52週低填 0 = 不限</b>;勾選框取消=不套用該條件。預設值=你原本的 TradingView 設定。<b>RS</b>=3M+6M+1Y 漲幅合計。'+
     '</div>'+
-    '<div class="etf-filters" style="margin:0 0 10px"><button class="etf-fb'+(STRONG_BUYONLY?" on":"")+'" id="strongBuyBtn">⭐ 只看 Buy(金叉)'+(STRONG_BUYONLY?" ✓":"")+'</button>'+
-      '<span class="dim" style="font-size:12px;margin-left:8px">勾選後只留目前 EMA20/60 金叉(多頭排列)者　·　目前金叉 '+nBuy+' 檔</span></div>'+
+    strongFilterBar(f)+
+    '<div class="dim" style="font-size:12.5px;margin:0 0 8px">符合 <b style="color:var(--ink);font-size:14px">'+rows.length+'</b> / '+all.length+' 檔候選'+(f.buy?'(僅金叉)':'')+'</div>'+
     strongTable(rows)+
-    '<div class="legend">⚠️ 技術面篩選,非買賣建議。資料每美股收盤後更新(us5000 全市場掃描)。<b>金叉Buy</b>=EMA20 上穿 EMA60(與技術線圖 Buy 同口徑),Nd=距觸發天數。代號可點進個股。</div>'+
+    '<div class="legend">⚠️ 技術面篩選,非買賣建議。候選池=全美股經基本流動性/資料品質過濾(已剔除分拆/新上市失真)。資料每美股收盤後更新。<b>金叉Buy</b>=EMA20 上穿 EMA60(與技術線圖 Buy 同口徑),Nd=距觸發天數。代號可點進個股。</div>'+
     '</section>';
-  const bb=$("#strongBuyBtn"); if(bb) bb.onclick=()=>{ STRONG_BUYONLY=!STRONG_BUYONLY; renderStrong(); };
 }
 // ── 資金流向:台股法人/融資券(TWSE)+ 美股流動性/類股輪動(FRED+Yahoo)(data/capital.json)──
 let CAP_DATA=null, CAP_SUB="inst", INST_SORT="net";

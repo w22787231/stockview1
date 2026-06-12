@@ -22,20 +22,31 @@ PRESETS = {
 def _offline(syms):
     raise RuntimeError("lite pool: no 5y backtest")
 
-# 強勢股篩選(對齊 TradingView Best-winners):價≥1、ADR≥4.5%、距52週低≥70%、
-# 3M/6M/1Y 漲幅>0、30日均日成交額>50M、當日成交額>20M、EMA8≥EMA21、價>EMA60。
-# 另:bars≥230(滿一年交易日,排除新上市/分拆不足一年)、lowok(52週低非調整雜訊)。
-STRONG = {"min_price": 1.0, "min_adr": 4.5, "min_pal": 70.0,
-          "min_dv30": 50e6, "min_dv1": 20e6, "min_bars": 230}
+# 前端預設篩選值(=原 TradingView Best-winners 條件;使用者可在網頁調整/關閉)
+STRONG_DEFAULTS = {"pal": 70, "adr": 4.5, "dv30": 50, "dv1": 20,
+                   "p3m": 1, "p6m": 1, "p1y": 1, "ema": 1, "e60": 1, "buy": 0}
+# 候選池基底(永遠成立,給前端互動篩選留空間;放寬到此下限):
+# 價≥1、滿一年交易日、52週低乾淨(修分拆雜訊)、流動性與 ADR 下限、需有 1Y 漲幅。
+CAND = {"min_price": 1.0, "min_bars": 230, "min_dv30": 20e6, "min_dv1": 5e6,
+        "min_adr": 3.0, "max_pal": 1500.0}   # max_pal:距52週低>1500%(16x)幾乎都是分拆/還原失真,剔除
+CAND_TOPN = 1000   # 候選池最多留 RS 前 1000(控 JSON 大小、確保產業涵蓋強者)
 
-def _is_strong(r):
-    return (r.get("close", 0) >= STRONG["min_price"]
-            and r.get("a20", 0) >= STRONG["min_adr"]
-            and r.get("pal", -1) >= STRONG["min_pal"]
-            and r.get("bars", 0) >= STRONG["min_bars"] and r.get("lowok")   # 修分拆/新上市雜訊
-            and (r.get("p3m") or 0) > 0 and (r.get("p6m") or 0) > 0 and (r.get("p1y") or 0) > 0
-            and r.get("dv30", 0) > STRONG["min_dv30"] and r.get("dv1", 0) > STRONG["min_dv1"]
-            and r.get("up821") and r.get("abv60"))
+def _is_candidate(r):
+    pal = r.get("pal", 0)
+    return (r.get("close", 0) >= CAND["min_price"]
+            and r.get("bars", 0) >= CAND["min_bars"] and r.get("lowok")
+            and pal <= CAND["max_pal"]                       # 修分拆雜訊(SNDK +4939% 那種)
+            and r.get("a20", 0) >= CAND["min_adr"]
+            and r.get("dv30", 0) > CAND["min_dv30"] and r.get("dv1", 0) > CAND["min_dv1"]
+            and r.get("p1y") is not None)
+
+def _load_sector_cache(out_dir):
+    """重用上次 strong.json 的 sector_zh 當快取(pull_live_data 會先把 strong 拉回),只補抓新代號。"""
+    try:
+        old = json.load(io.open(os.path.join(out_dir, "strong.json"), encoding="utf-8"))
+        return {x["sym"]: x.get("sector_zh") for x in old.get("rows", []) if x.get("sector_zh")}
+    except Exception:
+        return {}
 
 def _fetch_sectors(syms):
     """抓強勢股的產業(yfinance,平行)→中文。失敗則略過(產業選填)。"""
@@ -64,34 +75,44 @@ def _fetch_sectors(syms):
     return out
 
 def _write_strong(rows, out_dir):
-    sel = [r for r in rows if _is_strong(r)]
-    secs = _fetch_sectors([r["sym"] for r in sel])
     def _rs(r):  # 強度排序:3M+6M+1Y 漲幅合計
         return (r.get("p3m") or 0) + (r.get("p6m") or 0) + (r.get("p1y") or 0)
-    sel.sort(key=_rs, reverse=True)
+    cand = [r for r in rows if _is_candidate(r)]
+    cand.sort(key=_rs, reverse=True)
+    cand = cand[:CAND_TOPN]
+    # 產業:先用上次 strong.json 當快取,只補抓還沒有的(每次最多 300,逐步收斂;CI yf.info 不穩故 best-effort)
+    cache = _load_sector_cache(out_dir)
+    missing = [r["sym"] for r in cand if r["sym"] not in cache][:300]
+    cache.update(_fetch_sectors(missing))
     out = []
-    for r in sel:
+    for r in cand:
         out.append({
-            "sym": r["sym"], "name": r.get("name"), "sector_zh": secs.get(r["sym"]),
+            "sym": r["sym"], "name": r.get("name"), "sector_zh": cache.get(r["sym"]),
             "close": round(r["close"], 2), "adr": round(r.get("a20", 0), 1),
             "pal": round(r.get("pal", 0), 0),
             "p3m": round(r.get("p3m") or 0, 1), "p6m": round(r.get("p6m") or 0, 1),
             "p1y": round(r.get("p1y") or 0, 1),
             "dv30": round(r.get("dv30", 0)), "dv1": round(r.get("dv1", 0)),
             "rs": round(_rs(r), 1),
+            "up821": bool(r.get("up821")), "abv60": bool(r.get("abv60")),
             "cross_state": r.get("cross_state"), "buy_days": r.get("buy_days"),
             "cur": r.get("cur", "USD"),
         })
     payload = {
         "pool": "strong", "label": "強勢股", "lite": True,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "filters": STRONG, "n": len(out), "rows": out,
+        "defaults": STRONG_DEFAULTS, "cand_base": {k: v for k, v in CAND.items()},
+        "n": len(out), "rows": out,
     }
     os.makedirs(out_dir, exist_ok=True)
     fp = os.path.join(out_dir, "strong.json")
     with io.open(fp, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
-    print(f"[strong] -> {fp}  ({len(out)} 檔強勢股)", flush=True)
+    n_def = sum(1 for r in cand if (r.get("pal", 0) >= STRONG_DEFAULTS["pal"]
+                and r.get("a20", 0) >= STRONG_DEFAULTS["adr"] and r.get("dv30", 0) > STRONG_DEFAULTS["dv30"] * 1e6
+                and r.get("dv1", 0) > STRONG_DEFAULTS["dv1"] * 1e6 and (r.get("p3m") or 0) > 0
+                and (r.get("p6m") or 0) > 0 and (r.get("p1y") or 0) > 0 and r.get("up821") and r.get("abv60")))
+    print(f"[strong] -> {fp}  (候選 {len(out)} 檔,預設條件命中 {n_def} 檔,產業 {sum(1 for r in out if r['sector_zh'])} 檔)", flush=True)
 
 def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
                   buy_within=0, backtest=False, symbols=None, compute=None, out_dir=None, batch=300,

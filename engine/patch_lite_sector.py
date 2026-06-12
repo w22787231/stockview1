@@ -45,5 +45,21 @@ def main():
     json.dump(d, io.open(fp, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     print(f"[sector] {pool}: 標了 {n} 檔業務類別")
 
+    # us5000 順便補 strong.json:從個股詳情 metrics.sector 補上還沒有產業的強勢股(可靠來源)
+    if pool == "us5000":
+        sp = os.path.join(DATA, "strong.json")
+        try:
+            sd = json.load(io.open(sp, encoding="utf-8"))
+            m = 0
+            for r in sd.get("rows", []):
+                if not r.get("sector_zh"):
+                    z = _sector_zh(r["sym"])
+                    if z:
+                        r["sector_zh"] = z; m += 1
+            json.dump(sd, io.open(sp, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+            print(f"[sector] strong.json: 補了 {m} 檔")
+        except Exception as e:
+            print("[sector] strong.json 略過:", e)
+
 if __name__ == "__main__":
     main()

@@ -3253,7 +3253,10 @@ async function loadStrong(){
   if(STRONG_CACHE[mkt]){ STRONG_DATA=STRONG_CACHE[mkt]; renderStrong(); return; }
   $("#content").innerHTML='<div class="loading-screen">載入強勢股（'+(mkt==="tw"?"台股":"美股")+'）…</div>';
   const file=mkt==="tw"?"data/strong_tw.json":"data/strong.json";
-  try{ const d=await (await fetch(file+"?t="+Date.now(),{cache:"no-store"})).json(); STRONG_CACHE[mkt]=d; STRONG_DATA=d; renderStrong(); }
+  try{ const d=await (await fetch(file+"?t="+Date.now(),{cache:"no-store"})).json();
+    if(mkt==="tw"){ try{ const NI=await loadNames(); const by=(NI&&NI.bySym)||{};   // 台股補繁中名
+      (d.rows||[]).forEach(r=>{ if(!r.name){ const s=(r.sym||"").toUpperCase(); r.name=by[s]||by[s.replace(/\.(TW|TWO)$/,"")]||null; } }); }catch(e){} }
+    STRONG_CACHE[mkt]=d; STRONG_DATA=d; renderStrong(); }
   catch(e){ STRONG_DATA=null;
     $("#content").innerHTML='<section><div class="sec-head"><h2>強勢股</h2></div>'+strongMktBar(mkt)+
       '<div class="note">⚠️ '+(mkt==="tw"?"台股":"美股")+'強勢股資料尚未產生(由收盤後 '+(mkt==="tw"?"tw_all":"us5000")+' 流程產生,首次需等一次排程)。</div></section>'; }
@@ -3261,7 +3264,10 @@ async function loadStrong(){
 function strongTable(rows){
   const cols=[
     {h:"#", key:null, rownum:true},
-    {h:"代號", key:"sym", type:"str", cell:r=>symCell(r.sym,r.name)},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>{
+      const disp=(r.sym||"").replace(/\.(TW|TWO)$/,"");   // 台股顯示去後綴,點擊仍用完整代號
+      return '<td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(disp)+(r.name?'<span class="nm">'+esc(r.name)+'</span>':'')+'</td>';
+    }},
     {h:"產業", key:"sector_zh", type:"str", cell:r=>'<td style="text-align:left;font-size:12px" class="dim">'+esc(r.sector_zh||"–")+'</td>'},
     {h:"現價", key:"close", cell:r=>'<td>'+fmtNum(r.close,2)+'</td>'},
     {h:"ADR%", key:"adr", cell:r=>'<td>'+fmtNum(r.adr,1)+'</td>'},

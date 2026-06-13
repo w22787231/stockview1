@@ -689,13 +689,17 @@ def fetch_cot_spx():
         try:
             import yfinance as yf
             import datetime as _dt
-            _spy = yf.download("SPY", period="10y", interval="1wk", auto_adjust=True, progress=False)
+            # 使用 Ticker.history() 確保欄位為 flat(不受 yfinance 版本 MultiIndex 影響)
+            _spy_hist = yf.Ticker("SPY").history(period="10y", interval="1wk")
             _spy_map = {}
-            for idx, row in _spy.iterrows():
+            for idx in _spy_hist.index:
                 try:
-                    _spy_map[str(idx)[:10]] = round(float(row["Close"]), 2)
+                    v = float(_spy_hist.at[idx, "Close"])
+                    if v == v:  # 排除 NaN
+                        _spy_map[str(idx)[:10]] = round(v, 2)
                 except Exception:
                     pass
+            print(f"[cot_spx] SPY 週收盤 {len(_spy_map)} 筆")
             for i, d in enumerate(dates):
                 if d in _spy_map:
                     spy_prices[i] = _spy_map[d]
@@ -710,6 +714,8 @@ def fetch_cot_spx():
                     else:
                         continue
                     break
+            filled = sum(1 for p in spy_prices if p is not None)
+            print(f"[cot_spx] SPY 對齊 {filled}/{len(dates)} 週")
         except Exception as e:
             print(f"[cot_spx] SPY 失敗: {e}")
 

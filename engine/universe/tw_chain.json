@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-07",
+  "generated_at": "2026-06-13",
   "source": "人工維護 · 依 MoneyDJ 產業價值鏈分類邏輯（上中下游）整理；個股定位參考 CPO 研究報告與公開資料",
   "note": "本分頁為產業鏈結構分類，非漲跌行情。概念股標籤＝同一檔可橫跨多環節。代號可點進個股詳情（僅涵蓋已產生詳情的清單）。資料為人工整理，可能不完整或過時，非投資建議。",
   "chains": [
@@ -1572,6 +1572,438 @@
                 "PSU"
               ],
               "note": "1MW HVDC 機櫃對標 RUBY 等級,支援 ±400V/800V,整合 100kW Power Shelf+BBU。PE 待確認。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wf6-tungsten",
+      "name": "WF6 / 鎢前驅體",
+      "group": "未來",
+      "desc": "六氟化鎢（WF6）是 3D NAND 字元線、先進邏輯 via 填充的關鍵半導體前驅體。2026/07 日本兩大廠永久停產（全球 -25% 產能），中國鎢出口管制同步推高原料 +557%，雙重缺口鎖定至 2027–2028。",
+      "concepts": [
+        "WF6",
+        "六氟化鎢",
+        "鎢",
+        "半導體特氣",
+        "CVD W",
+        "3D NAND",
+        "先進邏輯",
+        "供應鏈"
+      ],
+      "stages": [
+        {
+          "pos": "上游",
+          "name": "鎢礦採掘（最稀缺層）",
+          "desc": "中國控制 >80% 全球鎢礦；Almonty Sangdong 是非中唯一大型礦山，2026Q1 Phase 1 投產，DoD 2027 後強制非中來源。",
+          "concepts": [
+            "鎢礦",
+            "非中鎢",
+            "地緣政治",
+            "DoD"
+          ],
+          "members": [
+            {
+              "sym": "ALM",
+              "name": "Almonty Industries",
+              "tags": [
+                "非中鎢礦",
+                "DoD錨點",
+                "最純",
+                "最高不對稱"
+              ],
+              "note": "唯一非中大型鎢礦；Sangdong Phase 1 投產（2026Q1）；USD 8億融資完成；美 DoD 2027 後強制非中採購。市值 ~USD 2–3億，最高不對稱標的。"
+            },
+            {
+              "sym": "600549.SS",
+              "name": "廈門鎢業",
+              "tags": [
+                "中國鎢礦",
+                "APT加工",
+                "A股"
+              ],
+              "note": "中國最大鎢礦+APT加工；APT 價格自 2025/02 +557%；受益漲價但有地緣折價（A 股）。"
+            }
+          ]
+        },
+        {
+          "pos": "上游",
+          "name": "氟化氫 / F2 供應（尚未定價層）",
+          "desc": "超純 HF 是 WF6 合成關鍵；Stella Chemifa + Morita Chemical 日本雙寡斷，12N+ 純度門檻極高，幾乎無西方機構覆蓋。",
+          "concepts": [
+            "超純HF",
+            "氟化氫",
+            "F2氣體",
+            "寡斷",
+            "未被發現"
+          ],
+          "members": [
+            {
+              "sym": "4109.T",
+              "name": "Stella Chemifa",
+              "tags": [
+                "超純HF",
+                "日本寡斷",
+                "未被發現"
+              ],
+              "note": "半導體超純 HF（12N+）龍頭；WF6 供應鏈壓力向上傳導；幾乎無西方機構覆蓋。"
+            },
+            {
+              "sym": "6367.T",
+              "name": "Daikin 大金工業",
+              "tags": [
+                "F2氣體",
+                "氟化學品"
+              ],
+              "note": "F2 氣體與氟化學品供應商，WF6 合成啟用層。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "WF6 電子特氣生產（缺口爆發層）",
+          "desc": "2026/07/01 Kanto Denka + Central Glass 永久停產（-25% 全球容量 ≈2,200 t/年）；認證週期 18–24 個月確保缺口至 2027–2028；韓廠已宣佈 +70–90% 漲價。",
+          "concepts": [
+            "WF6生產",
+            "日本退出",
+            "韓廠受益",
+            "漲價",
+            "缺口"
+          ],
+          "members": [
+            {
+              "sym": "093370.KQ",
+              "name": "Foosung 福松",
+              "tags": [
+                "WF6韓國#2",
+                "唯一AHF",
+                "漲價受益",
+                "立即催化劑"
+              ],
+              "note": "韓國 WF6 #2 廠 + 唯一國內 AHF 廠；日本退出直接受益；已宣佈 +70–90% 漲價。最直接短期催化劑 ★★★★★。"
+            },
+            {
+              "sym": "011210.KS",
+              "name": "SK Inc. Materials",
+              "tags": [
+                "WF6最大非中廠",
+                "SK Specialty"
+              ],
+              "note": "全球最大非中 WF6 廠（2,000 t/年）；Samsung 加速認證為日本退出替代廠。"
+            },
+            {
+              "sym": "APD",
+              "name": "Air Products",
+              "tags": [
+                "美國WF6",
+                "CHIPS Act",
+                "唯一美國本土"
+              ],
+              "note": "美國本土唯一 WF6 廠（Hometown, PA）；CHIPS Act 戰略供應安全角色；WF6 在 APD 總收入佔比仍小。"
+            },
+            {
+              "sym": "LIN",
+              "name": "Linde",
+              "tags": [
+                "全球特氣",
+                "WF6"
+              ],
+              "note": "全球工業氣體龍頭；WF6 列於產品線；規模大稀釋效應。"
+            }
+          ]
+        },
+        {
+          "pos": "下游",
+          "name": "晶圓廠消費端",
+          "desc": "WF6 最終消費方；Samsung 對日本供應商依賴最高，SK Hynix 供應較分散。",
+          "concepts": [
+            "3D NAND",
+            "先進邏輯",
+            "CVD W",
+            "ALD W"
+          ],
+          "members": [
+            {
+              "sym": "000660.KS",
+              "name": "SK Hynix",
+              "tags": [
+                "NAND",
+                "DRAM",
+                "WF6消費"
+              ],
+              "note": "WF6 主要消費方；供應較分散（SK Specialty 自家供應）；曝險低於 Samsung。"
+            },
+            {
+              "sym": "MU",
+              "name": "Micron Technology",
+              "tags": [
+                "NAND",
+                "DRAM",
+                "WF6消費"
+              ],
+              "note": "NAND/DRAM 大廠；美國 CHIPS Act 擴廠需穩定 WF6 供應。"
+            },
+            {
+              "sym": "TSM",
+              "name": "TSMC 台積電",
+              "tags": [
+                "先進邏輯",
+                "WF6消費",
+                "中雙特氣認可"
+              ],
+              "note": "先進邏輯 CVD W；中雙特氣已入 TSMC 供應鏈；曝險相對分散。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lpl-glass",
+      "name": "LPL / 玻璃基板",
+      "group": "未來",
+      "desc": "大面板級封裝（LPL）搭配玻璃核心基板，是 AI 超大尺寸晶片（NVIDIA Feynman）突破 CoWoS 翹曲極限的下一代解方。TSMC CoPoS 2028–29 量產，Absolics 2026 底全球首家商業量產。LPKF LIDE 技術在 TGV 鑽孔幾乎壟斷；設備層和材料層最不對稱。",
+      "concepts": [
+        "LPL",
+        "大面板封裝",
+        "玻璃基板",
+        "TGV",
+        "CoPoS",
+        "ABF替代",
+        "先進封裝",
+        "AI封裝",
+        "NVIDIA Feynman"
+      ],
+      "stages": [
+        {
+          "pos": "上游",
+          "name": "超平玻璃材料（寡斷層）",
+          "desc": "CTE 可調低膨脹玻璃（3–9 ppm/°C）需 10 年配方 know-how；全球 ~5 家廠商控制 90% 供給；幾乎無西方機構覆蓋。",
+          "concepts": [
+            "超平玻璃",
+            "CTE可調",
+            "低膨脹",
+            "TGV玻璃",
+            "寡斷",
+            "未被發現"
+          ],
+          "members": [
+            {
+              "sym": "5201.T",
+              "name": "AGC 旭硝子",
+              "tags": [
+                "超平玻璃",
+                "CTE可調",
+                "TGV材料",
+                "未被發現"
+              ],
+              "note": "全球玻璃基板材料領導者；CTE 可調配方；TGV 訂製服務；R&D 投入超 USD 5億/年；幾乎無西方機構追蹤玻璃基板論述。"
+            },
+            {
+              "sym": "5214.T",
+              "name": "NEG 日本電氣硝子",
+              "tags": [
+                "特殊玻璃",
+                "TGV材料",
+                "未被發現"
+              ],
+              "note": "四大玻璃基板材料商之一；低 CTE 特殊玻璃；西方覆蓋極少。"
+            },
+            {
+              "sym": "GLW",
+              "name": "Corning",
+              "tags": [
+                "玻璃材料",
+                "先進封裝",
+                "光纖雙論述"
+              ],
+              "note": "Advanced Packaging Glass Carriers；2026/05 與 BOE 簽 MOU；分析師 Citi/BofA/MS 均「強烈買入」；主要論述仍為光纖 AI，玻璃基板為長期期權。"
+            }
+          ]
+        },
+        {
+          "pos": "上游",
+          "name": "TGV 鑽孔設備（最高壁壘）",
+          "desc": "LPKF LIDE 技術是目前唯一成熟商業化 TGV 設備；解決 SeWaRe（後背裂紋）；Aspect Ratio 最高 1:50；替代路徑至少 3–5 年。",
+          "concepts": [
+            "TGV",
+            "LIDE技術",
+            "SeWaRe",
+            "雷射鑽孔",
+            "壟斷"
+          ],
+          "members": [
+            {
+              "sym": "LPKF.DE",
+              "name": "LPKF Laser",
+              "tags": [
+                "TGV設備唯一",
+                "LIDE",
+                "壟斷",
+                "未被發現",
+                "最高不對稱"
+              ],
+              "note": "TGV 鑽孔唯一成熟商業化設備廠；市值 €3–4億 vs 服務潛在市場數十億；Absolics 量產 = 設備訂單；TSMC CoPoS 2028–29 第二波需求。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "TGV 良率檢測",
+          "desc": "Firefly G3 是目前最成熟的玻璃基板缺陷檢測系統；與 LPKF PACE partnership。",
+          "concepts": [
+            "TGV檢測",
+            "良率",
+            "Firefly G3",
+            "AOI"
+          ],
+          "members": [
+            {
+              "sym": "ONTO",
+              "name": "Onto Innovation",
+              "tags": [
+                "TGV檢測",
+                "Firefly G3",
+                "LPKF夥伴"
+              ],
+              "note": "Firefly G3 玻璃基板自動化檢測量測；LPKF PACE partnership；玻璃基板在 ONTO 總收入佔比仍需追蹤。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "玻璃基板製造（量產競賽）",
+          "desc": "Absolics（SKC）2026 底全球最快商業量產；SEMCO 2027；LG Innotek 已推遲至 2030。AMD 認證進度是最重要催化劑。",
+          "concepts": [
+            "玻璃基板量產",
+            "Absolics",
+            "CHIPS Act",
+            "AMD認證",
+            "SEMCO"
+          ],
+          "members": [
+            {
+              "sym": "011790.KS",
+              "name": "SKC（Absolics 母公司）",
+              "tags": [
+                "玻璃基板量產",
+                "全球最快",
+                "CHIPS Act",
+                "AMD認證中",
+                "美國製造"
+              ],
+              "note": "Absolics = SKC 70.1%；Covington, GA 廠 12,000 m²/年；CHIPS Act $175M 補助；AMD MI400 樣品出貨；2026 底目標量產。催化劑：AMD 官方認證公告。"
+            },
+            {
+              "sym": "009150.KS",
+              "name": "Samsung Electro-Mechanics",
+              "tags": [
+                "玻璃基板2027",
+                "ABF雙線",
+                "Apple樣品"
+              ],
+              "note": "ABF 基板龍頭 + 玻璃基板 2027 量產；向 Apple/Broadcom 供樣品（2025/06）；玻璃論述被 ABF 遮蔽，定價尚不充分。"
+            },
+            {
+              "sym": "011070.KS",
+              "name": "LG Innotek",
+              "tags": [
+                "玻璃基板2030",
+                "⚠️已推遲"
+              ],
+              "note": "⚠️ 已宣佈推遲至 2030；需求不確定性；短中期玻璃基板曝險有限。"
+            }
+          ]
+        },
+        {
+          "pos": "中游",
+          "name": "玻璃製程設備（通用層）",
+          "desc": "玻璃薄化、切割、金屬化等製程設備；Absolics 策略投資者 Applied Materials。",
+          "concepts": [
+            "玻璃薄化",
+            "切割",
+            "金屬化",
+            "蝕刻電鍍"
+          ],
+          "members": [
+            {
+              "sym": "6146.T",
+              "name": "DISCO",
+              "tags": [
+                "玻璃切割",
+                "薄化研磨"
+              ],
+              "note": "半導體研磨切割設備龍頭；SD/LEAF 雷射技術用於玻璃基板切割薄化。"
+            },
+            {
+              "sym": "LRCX",
+              "name": "Lam Research",
+              "tags": [
+                "蝕刻電鍍",
+                "TGV金屬化"
+              ],
+              "note": "TGV 金屬化關鍵步驟（蝕刻/電鍍）；玻璃基板增量邊際貢獻較小。"
+            },
+            {
+              "sym": "AMAT",
+              "name": "Applied Materials",
+              "tags": [
+                "封裝材料",
+                "Absolics策略投資"
+              ],
+              "note": "Absolics 策略投資者（$40.2M）；NAPMP 三家受益者之一。"
+            }
+          ]
+        },
+        {
+          "pos": "下游",
+          "name": "封裝應用 / 晶圓廠（終端需求）",
+          "desc": "TSMC CoPoS（310×310mm）2028–29 量產，首批採用者為 NVIDIA Feynman；Intel 2030 目標。",
+          "concepts": [
+            "CoPoS",
+            "AI封裝",
+            "NVIDIA Feynman",
+            "HBM4"
+          ],
+          "members": [
+            {
+              "sym": "TSM",
+              "name": "TSMC 台積電",
+              "tags": [
+                "CoPoS",
+                "NVIDIA Feynman",
+                "2028量產"
+              ],
+              "note": "CoPoS 2028–29 量產；NVIDIA Feynman（>9.5× 光罩面積）為首批採用目標；VisEra 試產線 2026/04 完成。"
+            },
+            {
+              "sym": "INTC",
+              "name": "Intel",
+              "tags": [
+                "玻璃基板R&D先驅",
+                "2030目標",
+                "EMIB+Glass"
+              ],
+              "note": "玻璃基板 R&D 先驅（>$10億研發，600 項專利）；2026/01 展示 EMIB+thick-core glass 首個樣品；商業量產目標 2030 年前。"
+            },
+            {
+              "sym": "005930.KS",
+              "name": "Samsung Electronics",
+              "tags": [
+                "HBM4整合",
+                "CoPoS消費端"
+              ],
+              "note": "HBM4 封裝測試玻璃 interposer；CoPoS 消費端。"
+            },
+            {
+              "sym": "5933.T",
+              "name": "Ibiden",
+              "tags": [
+                "ABF基板龍頭",
+                "玻璃競爭對手",
+                "混合核心布局"
+              ],
+              "note": "ABF 基板全球 #1；2025 年申請 47 項基板專利，60% 涉及混合玻璃-有機核心 → 主動布局；ABF 短期不被取代，玻璃僅威脅最高端 AI 封裝段。"
             }
           ]
         }

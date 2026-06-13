@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """總體市場 macro 匯出：指數 + 類股/主題 ETF。
 - 一般標的：收盤價 + 今日漲跌%。
 - 收益率/VIX(yield_like=True)：顯示水準 + 與昨日差(bps；VIX 用點)。
@@ -24,9 +24,7 @@ INDICES = [
     {"sym": "^GSPC",     "label": "S&P 500",        "note": "標普500指數"},
     {"sym": "^IXIC",     "label": "Nasdaq",         "note": "那斯達克綜合"},
     {"sym": "^SOX",      "label": "SOX 半導體",      "note": "費城半導體指數"},
-    {"sym": "^VIX",      "label": "VIX 波動率",      "note": "標普500波動率", "yield_like": True, "unit": "pt"},
     {"sym": "^TNX",      "label": "10Y 公債殖利率",  "note": "美國10年期", "yield_like": True, "unit": "bps"},
-    {"sym": "UTWO",      "label": "2Y 公債(UTWO)",  "note": "2年期公債ETF代理"},
     {"sym": "GC=F",      "label": "黃金",           "note": "黃金期貨"},
     {"sym": "CL=F",      "label": "原油 WTI",        "note": "西德州原油期貨"},
     {"sym": "DX-Y.NYB",  "label": "美元指數",        "note": "DXY"},

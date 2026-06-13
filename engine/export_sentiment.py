@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """情緒指標匯出。
 - VIX/VXN/SKEW/HYG：水準 + 與昨日差。
 - 市場廣度：SP500 中站上 20MA/50MA 的家數%，並與昨日比。
@@ -608,6 +608,85 @@ def fetch_0dte():
         return None
 
 
+
+
+def fetch_cot_spx():
+    """CFTC TFF(Traders in Financial Futures) - E-mini S&P 500 期貨定位。
+    Leveraged Funds = 槓桿資金/CTA 代理；Asset Manager = 機構長線。
+    資料來源：www.cftc.gov 年度 ZIP/CSV，每週五發布，免費公開。"""
+    import zipfile
+    MARKET = "E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE"
+
+    def _dl_year(year):
+        url = f"https://www.cftc.gov/files/dea/history/fut_fin_txt_{year}.zip"
+        try:
+            raw = urllib.request.urlopen(
+                urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=30
+            ).read()
+            z = zipfile.ZipFile(io.BytesIO(raw))
+            fname = next(n for n in z.namelist() if n.lower().endswith(".txt") or n.lower().endswith(".csv"))
+            return z.open(fname).read().decode("latin-1", "ignore")
+        except Exception:
+            return ""
+
+    try:
+        import csv as _csv
+        year = datetime.datetime.now().year
+        raw = _dl_year(year) + _dl_year(year - 1)
+
+        def _int(v):
+            try: return int(v.strip() or 0)
+            except: return 0
+
+        seen, rows = set(), []
+        for line in raw.split("\n"):
+            if not line.strip() or MARKET not in line:
+                continue
+            cols = next(_csv.reader([line]))
+            if len(cols) < 16 or cols[0].strip() != MARKET:
+                continue
+            d = cols[2].strip()[:10]
+            if not d or d in seen:
+                continue
+            seen.add(d)
+            rows.append({
+                "date":  d,
+                "lev_l": _int(cols[14]), "lev_s": _int(cols[15]),
+                "am_l":  _int(cols[11]), "am_s":  _int(cols[12]),
+            })
+
+        rows.sort(key=lambda r: r["date"])
+        rows = rows[-60:]
+        if not rows:
+            return None
+
+        dates   = [r["date"]               for r in rows]
+        lev_net = [r["lev_l"] - r["lev_s"] for r in rows]
+        am_net  = [r["am_l"]  - r["am_s"]  for r in rows]
+
+        def _pctile(arr):
+            if len(arr) < 2: return 50
+            lo, hi = min(arr), max(arr)
+            return round((arr[-1] - lo) / (hi - lo) * 100) if hi != lo else 50
+
+        lev_prev = lev_net[-2] if len(lev_net) >= 2 else lev_net[-1]
+        am_prev  = am_net[-2]  if len(am_net)  >= 2 else am_net[-1]
+        return {
+            "dates":      dates,
+            "lev_net":    lev_net,
+            "am_net":     am_net,
+            "lev_cur":    lev_net[-1],
+            "lev_wow":    lev_net[-1] - lev_prev,
+            "lev_pctile": _pctile(lev_net),
+            "am_cur":     am_net[-1],
+            "am_wow":     am_net[-1] - am_prev,
+            "am_pctile":  _pctile(am_net),
+            "src":        "CFTC TFF Disaggregated / E-mini S&P 500",
+        }
+    except Exception as e:
+        print(f"[cot_spx] 失敗: {e}")
+        return None
+
 def build():
     levels, failed = fetch_levels()
     cor = fetch_cor1m()
@@ -628,15 +707,19 @@ def build():
     breadth = market_breadth()
     fng = fetch_fear_greed()
     leverage = fetch_leverage()
+    cot_spx = fetch_cot_spx()
+    if not cot_spx:
+        failed.append("COT_SPX")
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "yfinance + CNN F&G + FINRA/WorldBank",
+        "source": "yfinance + CNN F&G + FINRA/WorldBank + CFTC",
         "levels": levels,
         "breadth": breadth,
         "fear_greed": fng,
         "leverage": leverage,
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
+        "cot_spx": cot_spx,
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

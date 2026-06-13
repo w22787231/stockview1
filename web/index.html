@@ -1197,8 +1197,8 @@ function renderMacro(d){
   $("#content").innerHTML =
     '<section>'+
       '<div class="sec-head"><h2>指數總覽</h2><span class="tag">今日漲跌</span>'+
-        '<span class="hint">收益率/VIX 顯示水準 + 與昨日差(bps／點)</span></div>'+
-      '<div class="idx-grid">'+(d.indices||[]).map(idxCard).join("")+'</div>'+
+        '<span class="hint">收益率顯示水準 + 與昨日差(bps)</span></div>'+
+      '<div class="idx-grid">'+(d.indices||[]).filter(r=>r.sym!=='^VIX'&&r.sym!=='UTWO').map(idxCard).join("")+'</div>'+
       (d.m1b_m2 ? '<div style="margin-top:18px">'+
         '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">台灣 M1B / M2 年增率</h2>'+
           '<span class="tag">資金黃金交叉 · 央行月資料</span></div>'+
@@ -1419,10 +1419,11 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
+  if(d.cot_spx) drawCotSpx(d.cot_spx);
 }
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
 function sp500FwdPeBox(v){
@@ -1494,6 +1495,71 @@ function _renderFwdPe(){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
+function cotSpxBox(v){
+  if(!v||!v.dates||!v.dates.length) return '';
+  const lp=v.lev_pctile, ap=v.am_pctile;
+  const _k=(n)=>n==null?'–':(n>0?'+':'')+Math.round(n/1000)+'K';
+  const _wow=(n)=>n==null?'':' ('+(n>=0?'+':'')+Math.round(n/1000)+'K WoW)';
+  const _pc=(p)=>{
+    if(p>=80) return '<span class="neg">'+p+'%位 過度看多</span>';
+    if(p<=20) return '<span class="pos">'+p+'%位 過度看空</span>';
+    return '<span class="dim">'+p+'%位 中性</span>';
+  };
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">CFTC COT — S&amp;P 500 期貨定位'+
+      '<span class="legend" style="font-weight:normal;margin-left:8px">E-mini / 每週二部位(週五發布)</span></div>'+
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 8px">'+
+      '<span><b style="color:#3b82f6">Leveraged (CTA代理)</b> '+_k(v.lev_cur)+_wow(v.lev_wow)+' · '+_pc(lp)+'</span>'+
+      '<span><b style="color:#f59e0b">Asset Manager (機構)</b> '+_k(v.am_cur)+_wow(v.am_wow)+' · '+_pc(ap)+'</span>'+
+    '</div>'+
+    '<div id="cotSpxChart" class="m1m2-chart"></div>'+
+    '<div class="ex">Leveraged Funds = 槓桿資金(主要為 CTA/對沖基金)；Asset Manager = 資產管理機構(養老金/主動基金)。'+
+      '位數高(>80%)= 過度做多，歷史上易成拉回壓力；位數低(&lt;20%)= 過度做空，常為反彈觸發點。'+
+      '數值為淨口數(多-空)，K=千口。資料：CFTC TFF Disaggregated Report。</div>'+
+  '</div>';
+}
+function drawCotSpx(v){
+  const el=document.getElementById('cotSpxChart');
+  if(!el||!window.echarts||!v||!v.dates||!v.dates.length) return;
+  const n=Math.min(v.dates.length,60);
+  const dates=v.dates.slice(-n);
+  const lev=v.lev_net.slice(-n);
+  const am=v.am_net.slice(-n);
+  // 百分位帶計算
+  const _pct=(arr,p)=>{
+    const s=[...arr].sort((a,b)=>a-b);
+    return s[Math.floor((p/100)*(s.length-1))];
+  };
+  const lev80=_pct(lev,80), lev20=_pct(lev,20);
+  const fmt=(v)=>v==null?'-':(v>=0?'+':'')+Math.round(v/1000)+'K';
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:'canvas'});
+  ch.setOption({
+    grid:{left:42,right:14,top:20,bottom:30},
+    legend:{data:['Leveraged (CTA)','Asset Manager'],top:0,right:0,itemWidth:14,itemHeight:8,textStyle:{fontSize:10}},
+    tooltip:{trigger:'axis',formatter:function(ps){
+      if(!ps||!ps.length) return '';
+      let s=ps[0].axisValue;
+      ps.forEach(p=>{s+='<br>'+p.marker+p.seriesName+': '+fmt(p.value);});
+      return s;
+    }},
+    dataZoom:[{type:'inside'}],
+    xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
+    yAxis:{type:'value',axisLabel:{fontSize:10,formatter:v=>Math.round(v/1000)+'K'},splitLine:{lineStyle:{opacity:.3}}},
+    series:[
+      {name:'Leveraged (CTA)',type:'line',data:lev,smooth:false,symbol:'none',
+        lineStyle:{width:2,color:'#3b82f6'},itemStyle:{color:'#3b82f6'},
+        areaStyle:{color:function(p){return p.data>=0?'rgba(59,130,246,0.12)':'rgba(239,68,68,0.12)';}},
+        markLine:{silent:true,symbol:'none',data:[
+          {yAxis:0,lineStyle:{color:'#888',type:'solid',width:1.5},label:{show:false}},
+          {yAxis:lev80,lineStyle:{color:'#ef4444',type:'dashed',width:1},label:{formatter:'過多 '+Math.round(lev80/1000)+'K',fontSize:9,color:'#ef4444',position:'insideEndTop'}},
+          {yAxis:lev20,lineStyle:{color:'#16a34a',type:'dashed',width:1},label:{formatter:'過空 '+Math.round(lev20/1000)+'K',fontSize:9,color:'#16a34a',position:'insideEndBottom'}}
+        ]}},
+      {name:'Asset Manager',type:'line',data:am,smooth:false,symbol:'none',
+        lineStyle:{width:1.5,color:'#f59e0b',opacity:.85},itemStyle:{color:'#f59e0b'}},
+    ],
+  },true);
+  if(!el._ro){el._ro=()=>ch.resize();window.addEventListener('resize',el._ro);}
+}
 async function loadSentiment(){
   try{
     const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});

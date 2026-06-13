@@ -689,7 +689,7 @@ def fetch_cot_spx():
         try:
             import yfinance as yf
             import datetime as _dt
-            _spy = yf.download("SPY", period="6y", interval="1wk", auto_adjust=True, progress=False)
+            _spy = yf.download("SPY", period="10y", interval="1wk", auto_adjust=True, progress=False)
             _spy_map = {}
             for idx, row in _spy.iterrows():
                 try:

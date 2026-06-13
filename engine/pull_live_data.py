@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """純前端部署用(web_only):不重算任何資料,直接從線上把整個 data 樹抓回來,
 這樣只改 index.html / _worker.js 時也能部署,且不會讓站上資料消失。
 頂層 JSON + 5 池 + 中文名 + ~1700 檔個股詳情,全部沿用線上既有版本。"""
@@ -7,6 +7,36 @@ import os
 import json
 import urllib.request
 import concurrent.futures
+
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "industry_cache.json")
+
+
+def _apply_industry_cache():
+    """把 industry_cache.json 的 industry_zh 回填到 strong*.json(不覆蓋已有值)。"""
+    if not os.path.exists(CACHE_FILE):
+        return
+    try:
+        cache = json.load(io.open(CACHE_FILE, encoding="utf-8"))
+    except Exception:
+        return
+    for fname, ckey in [("strong.json", "us"), ("strong_tw.json", "tw")]:
+        fp = os.path.join(DATA, fname)
+        if not os.path.exists(fp):
+            continue
+        try:
+            d = json.load(io.open(fp, encoding="utf-8"))
+            pool = cache.get(ckey, {})
+            n = 0
+            for r in d.get("rows", []):
+                if not r.get("industry_zh") and r.get("sym") in pool:
+                    r["industry_zh"] = pool[r["sym"]]
+                    n += 1
+            with io.open(fp, "w", encoding="utf-8") as wf:
+                json.dump(d, wf, ensure_ascii=False, separators=(",", ":"))
+            if n:
+                print("[cache] %s +%d industry_zh" % (fname, n))
+        except Exception as e:
+            print("[cache] %s %s" % (fname, e))
 
 BASE = "https://stockview1.pages.dev"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,6 +99,7 @@ def main():
         print("[pull] 個股詳情 %d/%d 檔" % (n, len(syms)))
     except Exception as e:
         print("[pull] 個股 _index 失敗:", e)
+    _apply_industry_cache()
 
 
 if __name__ == "__main__":

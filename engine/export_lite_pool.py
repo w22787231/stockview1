@@ -70,6 +70,19 @@ def _load_industry_cache(out_dir, fname):
     except Exception:
         return {}
 
+_GLOBAL_IND_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "industry_cache.json")
+
+def _load_global_industry_cache():
+    """從 engine/industry_cache.json 讀取手工/本機富集的產業名稱。"""
+    try:
+        c = json.load(io.open(_GLOBAL_IND_CACHE_FILE, encoding="utf-8"))
+        merged = {}
+        merged.update(c.get("us", {}))
+        merged.update(c.get("tw", {}))
+        return merged
+    except Exception:
+        return {}
+
 def _fetch_sector_info(syms):
     """抓強勢股的粗/細產業(yfinance,平行)→中文 (sector_zh, industry_zh)。失敗則略過。"""
     if not syms:
@@ -115,6 +128,12 @@ def _write_strong(rows, out_dir, cur):
     for s, (sz, iz) in _fetch_sector_info(missing).items():
         if sz: sec_cache[s] = sz
         if iz: ind_cache[s] = iz
+    # 全域 industry 快取回填(涵蓋 yfinance 抓不到的股票)
+    global_ind = _load_global_industry_cache()
+    for r in cand:
+        sym = r["sym"]
+        if sym not in ind_cache and sym in global_ind:
+            ind_cache[sym] = global_ind[sym]
     out = []
     for r in cand:
         out.append({

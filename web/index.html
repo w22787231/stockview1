@@ -3275,7 +3275,7 @@ function strongTable(rows){
       const disp=(r.sym||"").replace(/\.(TW|TWO)$/,"");   // 台股顯示去後綴,點擊仍用完整代號
       return '<td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(disp)+(r.name?'<span class="nm">'+esc(r.name)+'</span>':'')+'</td>';
     }},
-    {h:"產業", key:"industry_zh", type:"str", cell:r=>{const ind=r.industry_zh||r.sector_zh||"–"; const tt=r.sector_zh&&r.industry_zh?' title="'+esc(r.sector_zh)+'"':""; return '<td style="text-align:left;font-size:11px" class="dim"'+tt+'>"+esc(ind)+"</td>'; }},
+    {h:"產業", key:"industry_zh", type:"str", cell:r=>{const ind=r.industry_zh||r.sector_zh||"–"; const tt=r.sector_zh&&r.industry_zh?' title="'+esc(r.sector_zh)+'"':""; return '<td style="text-align:left;font-size:11px" class="dim"'+tt+'>'+esc(ind)+'</td>'; }},
     {h:"現價", key:"close", cell:r=>'<td>'+fmtNum(r.close,2)+'</td>'},
     {h:"ADR%", key:"adr", cell:r=>'<td>'+fmtNum(r.adr,1)+'</td>'},
     {h:"距52週低", key:"pal", cell:r=>'<td class="pos">+'+fmtNum(r.pal,0)+'%</td>'},

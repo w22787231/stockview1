@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """輕量金叉池匯出(us5000 / tw_all):1年日線→EMA20/60金叉→門檻→cross_signals(無回測)。
 重用 adr_screen.compute_trend(分批) + export_json.build_cross_signals(offline downloader→不跑5年回測)。
 不改動 export_json.run_pool / 40分流程。
@@ -62,28 +62,40 @@ def _load_sector_cache(out_dir, fname):
     except Exception:
         return {}
 
-def _fetch_sectors(syms):
-    """抓強勢股的產業(yfinance,平行)→中文。失敗則略過(產業選填)。"""
+def _load_industry_cache(out_dir, fname):
+    """重用上次 strong*.json 的 industry_zh 當快取。"""
+    try:
+        old = json.load(io.open(os.path.join(out_dir, fname), encoding="utf-8"))
+        return {x["sym"]: x.get("industry_zh") for x in old.get("rows", []) if x.get("industry_zh")}
+    except Exception:
+        return {}
+
+def _fetch_sector_info(syms):
+    """抓強勢股的粗/細產業(yfinance,平行)→中文 (sector_zh, industry_zh)。失敗則略過。"""
     if not syms:
         return {}
     try:
         import yfinance as yf
         from concurrent.futures import ThreadPoolExecutor
-        from patch_lite_sector import SECTOR_ZH
+        from patch_lite_sector import SECTOR_ZH, INDUSTRY_ZH
     except Exception:
         return {}
     out = {}
     def _one(s):
         try:
-            sec = (yf.Ticker(s).info or {}).get("sector")
-            return s, (SECTOR_ZH.get(sec, sec) if sec else None)
+            info = yf.Ticker(s).info or {}
+            sec = info.get("sector")
+            ind = info.get("industry")
+            sz = SECTOR_ZH.get(sec, sec) if sec else None
+            iz = INDUSTRY_ZH.get(ind, ind) if ind else None
+            return s, (sz, iz)
         except Exception:
-            return s, None
+            return s, (None, None)
     try:
         with ThreadPoolExecutor(max_workers=8) as ex:
-            for s, z in ex.map(_one, syms):
-                if z:
-                    out[s] = z
+            for s, (sz, iz) in ex.map(_one, syms):
+                if sz or iz:
+                    out[s] = (sz, iz)
     except Exception:
         pass
     return out
@@ -97,13 +109,17 @@ def _write_strong(rows, out_dir, cur):
     cand.sort(key=_rs, reverse=True)
     cand = cand[:CAND_TOPN]
     # 產業:先用上次同檔當快取,只補抓還沒有的(每次最多 300,逐步收斂;CI yf.info 不穩故 best-effort)
-    cache = _load_sector_cache(out_dir, cfg["file"])
-    missing = [r["sym"] for r in cand if r["sym"] not in cache][:300]
-    cache.update(_fetch_sectors(missing))
+    sec_cache = _load_sector_cache(out_dir, cfg["file"])
+    ind_cache = _load_industry_cache(out_dir, cfg["file"])
+    missing = [r["sym"] for r in cand if r["sym"] not in sec_cache and r["sym"] not in ind_cache][:300]
+    for s, (sz, iz) in _fetch_sector_info(missing).items():
+        if sz: sec_cache[s] = sz
+        if iz: ind_cache[s] = iz
     out = []
     for r in cand:
         out.append({
-            "sym": r["sym"], "name": r.get("name"), "sector_zh": cache.get(r["sym"]),
+            "sym": r["sym"], "name": r.get("name"),
+            "sector_zh": sec_cache.get(r["sym"]), "industry_zh": ind_cache.get(r["sym"]),
             "close": round(r["close"], 2), "adr": round(r.get("a20", 0), 1),
             "pal": round(r.get("pal", 0), 0),
             "p3m": round(r.get("p3m") or 0, 1), "p6m": round(r.get("p6m") or 0, 1),
@@ -128,7 +144,7 @@ def _write_strong(rows, out_dir, cur):
                 and r.get("a20", 0) >= defs["adr"] and r.get("dv30", 0) > defs["dv30"] * unit
                 and r.get("dv1", 0) > defs["dv1"] * unit and (r.get("p3m") or 0) > 0
                 and (r.get("p6m") or 0) > 0 and (r.get("p1y") or 0) > 0 and r.get("up821") and r.get("abv60")))
-    print(f"[strong] -> {fp}  (候選 {len(out)} 檔,預設條件命中 {n_def} 檔,產業 {sum(1 for r in out if r['sector_zh'])} 檔)", flush=True)
+    print(f"[strong] -> {fp}  (候選 {len(out)} 檔,預設條件命中 {n_def} 檔,細分產業 {sum(1 for r in out if r.get('industry_zh'))} 檔)", flush=True)
 
 def run_lite_pool(pool, label, min_price=0.0, min_dolvol=0.0, default_cur="USD",
                   buy_within=0, backtest=False, symbols=None, compute=None, out_dir=None, batch=300,

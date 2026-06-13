@@ -3297,8 +3297,8 @@ function strongFilterBar(f){
   const chk=(k,lab)=>'<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;cursor:pointer"><input type="checkbox" '+(f[k]?"checked":"")+' onchange="strongSetF(\''+k+'\',this.checked)">'+lab+'</label>';
   const suf=_dvSuf();
   const inds=_strongIndustries();
-  const indSel=inds.length>0?'<select style="height:28px;border:1px solid var(--line);border-radius:8px;padding:2px 6px;font-size:12px;background:var(--panel2);color:var(--ink);cursor:pointer" onchange="strongSetF('ind',this.value)">'+
-    '<option value="">全部產業</option>'+inds.map(i=>'<option value="'+esc(i)+'"'+( f.ind===i?' selected':')+'>'+esc(i)+'</option>').join("")+'</select>':'';
+  const indSel=inds.length>0?'<select style="height:28px;border:1px solid var(--line);border-radius:8px;padding:2px 6px;font-size:12px;background:var(--panel2);color:var(--ink);cursor:pointer" onchange="strongSetF(\'ind\',this.value)">'+
+    '<option value="">全部產業</option>'+inds.map(i=>'<option value="'+esc(i)+'"'+(f.ind===i?' selected':'')+'>'+esc(i)+'</option>').join("")+'</select>':'';
   return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px">'+
     num("pal","距52週低","%")+num("adr","ADR","%")+num("dv30","30日$量",suf)+num("dv1","當日$量",suf)+
     chk("p3m","3月漲>0")+chk("p6m","6月漲>0")+chk("p1y","1年漲>0")+chk("ema","EMA8≥21")+chk("e60","價>EMA60")+chk("buy","只看Buy金叉")+

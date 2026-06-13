@@ -1512,22 +1512,32 @@ function cotSpxBox(v){
       '<span><b style="color:#3b82f6">Leveraged (CTA代理)</b> '+_k(v.lev_cur)+_wow(v.lev_wow)+' · '+_pc(lp)+'</span>'+
       '<span><b style="color:#f59e0b">Asset Manager (機構)</b> '+_k(v.am_cur)+_wow(v.am_wow)+' · '+_pc(ap)+'</span>'+
     '</div>'+
+    '<div style="margin:6px 0 2px;display:flex;gap:6px;align-items:center">'+'<span style="font-size:11px;color:var(--dim)">期間：</span>'+['1Y','3Y','5Y','全部'].map(l=>'<button class="cot-rb" data-y="'+(l==='全部'?0:parseInt(l))+'" style="font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--fg)">'+(l)+'</button>').join('')+'</div>'+
     '<div id="cotSpxChart" class="m1m2-chart"></div>'+
     '<div class="ex">Leveraged Funds = 槓桿資金(主要為 CTA/對沖基金)；Asset Manager = 資產管理機構(養老金/主動基金)。'+
       '位數高(>80%)= 過度做多，歷史上易成拉回壓力；位數低(&lt;20%)= 過度做空，常為反彈觸發點。'+
       '數值為淨口數(多-空)，K=千口。資料：CFTC TFF Disaggregated Report。</div>'+
   '</div>';
 }
-function drawCotSpx(v){
+function drawCotSpx(v,years){
+  if(!v||!v.dates||!v.dates.length) return;
+  window._cotSpxData=v;
   const el=document.getElementById('cotSpxChart');
-  if(!el||!window.echarts||!v||!v.dates||!v.dates.length) return;
+  if(!el||!window.echarts) return;
+  document.querySelectorAll('.cot-rb').forEach(b=>{
+    b.style.fontWeight=((years||0)===(+b.dataset.y||0))?'bold':'normal';
+    b.onclick=()=>drawCotSpx(window._cotSpxData,+b.dataset.y||0);
+  });
   el.style.height='300px';
-  const dates=v.dates;
-  const lev=v.lev_net;
-  const am=v.am_net;
-  const spy=v.spy_prices||[];
-  const buySigs=(v.buy_sigs||[]).map(i=>[dates[i],lev[i]]);
-  const sellSigs=(v.sell_sigs||[]).map(i=>[dates[i],lev[i]]);
+  const cutoff=years?new Date(new Date().setFullYear(new Date().getFullYear()-years)).toISOString().slice(0,10):'';
+  const _d=cutoff?v.dates.filter(d=>d>=cutoff):v.dates;
+  const off=v.dates.length-_d.length;
+  const dates=_d;
+  const lev=v.lev_net.slice(off);
+  const am=v.am_net.slice(off);
+  const spy=(v.spy_prices||[]).slice(off);
+  const buySigs=(v.buy_sigs||[]).filter(i=>i>=off).map(i=>[dates[i-off],v.lev_net[i]]);
+  const sellSigs=(v.sell_sigs||[]).filter(i=>i>=off).map(i=>[dates[i-off],v.lev_net[i]]);
   const lo=v.lo_thresh!=null?v.lo_thresh:null;
   const hi=v.hi_thresh!=null?v.hi_thresh:null;
   const fmt=(n)=>n==null?'-':(n>=0?'+':'')+Math.round(n/1000)+'K';

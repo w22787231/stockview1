@@ -632,7 +632,9 @@ def fetch_cot_spx():
     try:
         import csv as _csv
         year = datetime.datetime.now().year
-        raw = _dl_year(year) + _dl_year(year - 1)
+        raw = ""
+        for y in range(year - 4, year + 1):
+            raw += _dl_year(y)
 
         def _int(v):
             try: return int(v.strip() or 0)
@@ -656,7 +658,7 @@ def fetch_cot_spx():
             })
 
         rows.sort(key=lambda r: r["date"])
-        rows = rows[-60:]
+        rows = rows[-260:]
         if not rows:
             return None
 
@@ -671,10 +673,55 @@ def fetch_cot_spx():
 
         lev_prev = lev_net[-2] if len(lev_net) >= 2 else lev_net[-1]
         am_prev  = am_net[-2]  if len(am_net)  >= 2 else am_net[-1]
+
+        _sorted = sorted(lev_net)
+        _n = len(_sorted)
+        lo_thresh = _sorted[max(0, int(_n * 0.20) - 1)]
+        hi_thresh = _sorted[min(_n - 1, int(_n * 0.80))]
+        buy_sigs, sell_sigs = [], []
+        for i in range(1, len(lev_net)):
+            if lev_net[i] <= lo_thresh and lev_net[i - 1] > lo_thresh:
+                buy_sigs.append(i)
+            elif lev_net[i] >= hi_thresh and lev_net[i - 1] < hi_thresh:
+                sell_sigs.append(i)
+
+        spy_prices = [None] * len(dates)
+        try:
+            import yfinance as yf
+            import datetime as _dt
+            _spy = yf.download("SPY", period="6y", interval="1wk", auto_adjust=True, progress=False)
+            _spy_map = {}
+            for idx, row in _spy.iterrows():
+                try:
+                    _spy_map[str(idx)[:10]] = round(float(row["Close"]), 2)
+                except Exception:
+                    pass
+            for i, d in enumerate(dates):
+                if d in _spy_map:
+                    spy_prices[i] = _spy_map[d]
+                    continue
+                _dt_obj = _dt.datetime.strptime(d, "%Y-%m-%d")
+                for delta in range(1, 6):
+                    for sign in (1, -1):
+                        nd = (_dt_obj + _dt.timedelta(days=delta * sign)).strftime("%Y-%m-%d")
+                        if nd in _spy_map:
+                            spy_prices[i] = _spy_map[nd]
+                            break
+                    else:
+                        continue
+                    break
+        except Exception as e:
+            print(f"[cot_spx] SPY 失敗: {e}")
+
         return {
             "dates":      dates,
             "lev_net":    lev_net,
             "am_net":     am_net,
+            "spy_prices": spy_prices,
+            "buy_sigs":   buy_sigs,
+            "sell_sigs":  sell_sigs,
+            "lo_thresh":  lo_thresh,
+            "hi_thresh":  hi_thresh,
             "lev_cur":    lev_net[-1],
             "lev_wow":    lev_net[-1] - lev_prev,
             "lev_pctile": _pctile(lev_net),

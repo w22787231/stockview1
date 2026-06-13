@@ -1521,43 +1521,59 @@ function cotSpxBox(v){
 function drawCotSpx(v){
   const el=document.getElementById('cotSpxChart');
   if(!el||!window.echarts||!v||!v.dates||!v.dates.length) return;
-  const n=Math.min(v.dates.length,60);
-  const dates=v.dates.slice(-n);
-  const lev=v.lev_net.slice(-n);
-  const am=v.am_net.slice(-n);
-  // 百分位帶計算
-  const _pct=(arr,p)=>{
-    const s=[...arr].sort((a,b)=>a-b);
-    return s[Math.floor((p/100)*(s.length-1))];
-  };
-  const lev80=_pct(lev,80), lev20=_pct(lev,20);
-  const fmt=(v)=>v==null?'-':(v>=0?'+':'')+Math.round(v/1000)+'K';
+  el.style.height='300px';
+  const dates=v.dates;
+  const lev=v.lev_net;
+  const am=v.am_net;
+  const spy=v.spy_prices||[];
+  const buySigs=(v.buy_sigs||[]).map(i=>[dates[i],lev[i]]);
+  const sellSigs=(v.sell_sigs||[]).map(i=>[dates[i],lev[i]]);
+  const lo=v.lo_thresh!=null?v.lo_thresh:null;
+  const hi=v.hi_thresh!=null?v.hi_thresh:null;
+  const fmt=(n)=>n==null?'-':(n>=0?'+':'')+Math.round(n/1000)+'K';
   const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:'canvas'});
   ch.setOption({
-    grid:{left:42,right:14,top:20,bottom:30},
-    legend:{data:['Leveraged (CTA)','Asset Manager'],top:0,right:0,itemWidth:14,itemHeight:8,textStyle:{fontSize:10}},
-    tooltip:{trigger:'axis',formatter:function(ps){
+    grid:{left:52,right:64,top:26,bottom:36},
+    legend:{data:['Leveraged (CTA)','Asset Manager','SPY','買訊','賣訊'],top:0,right:0,itemWidth:14,itemHeight:8,textStyle:{fontSize:10}},
+    tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:function(ps){
       if(!ps||!ps.length) return '';
-      let s=ps[0].axisValue;
-      ps.forEach(p=>{s+='<br>'+p.marker+p.seriesName+': '+fmt(p.value);});
+      let s='<b>'+ps[0].axisValue+'</b>';
+      ps.forEach(p=>{
+        const val=Array.isArray(p.value)?p.value[1]:p.value;
+        if(val==null) return;
+        const fv=p.seriesName==='SPY'?('$'+val.toFixed(0)):fmt(val);
+        s+='<br>'+p.marker+p.seriesName+': '+fv;
+      });
       return s;
     }},
-    dataZoom:[{type:'inside'}],
-    xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
-    yAxis:{type:'value',axisLabel:{fontSize:10,formatter:v=>Math.round(v/1000)+'K'},splitLine:{lineStyle:{opacity:.3}}},
+    dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:2,handleSize:8,textStyle:{fontSize:9}}],
+    xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/10))}},
+    yAxis:[
+      {type:'value',name:'口數(K)',nameTextStyle:{fontSize:9,padding:[0,0,0,30]},
+        axisLabel:{fontSize:10,formatter:n=>Math.round(n/1000)+'K'},splitLine:{lineStyle:{opacity:.25}}},
+      {type:'value',name:'SPY',nameTextStyle:{fontSize:9,padding:[0,30,0,0]},position:'right',
+        axisLabel:{fontSize:10,formatter:n=>'$'+n.toFixed(0)},splitLine:{show:false}},
+    ],
     series:[
-      {name:'Leveraged (CTA)',type:'line',data:lev,smooth:false,symbol:'none',
+      {name:'Leveraged (CTA)',type:'line',yAxisIndex:0,data:lev,smooth:false,symbol:'none',
         lineStyle:{width:2,color:'#3b82f6'},itemStyle:{color:'#3b82f6'},
-        areaStyle:{color:function(p){return p.data>=0?'rgba(59,130,246,0.12)':'rgba(239,68,68,0.12)';}},
+        areaStyle:{color:'rgba(239,68,68,0.10)'},
         markLine:{silent:true,symbol:'none',data:[
           {yAxis:0,lineStyle:{color:'#888',type:'solid',width:1.5},label:{show:false}},
-          {yAxis:lev80,lineStyle:{color:'#ef4444',type:'dashed',width:1},label:{formatter:'過多 '+Math.round(lev80/1000)+'K',fontSize:9,color:'#ef4444',position:'insideEndTop'}},
-          {yAxis:lev20,lineStyle:{color:'#16a34a',type:'dashed',width:1},label:{formatter:'過空 '+Math.round(lev20/1000)+'K',fontSize:9,color:'#16a34a',position:'insideEndBottom'}}
+          ...(hi!=null?[{yAxis:hi,lineStyle:{color:'#ef4444',type:'dashed',width:1},label:{formatter:'過多 '+Math.round(hi/1000)+'K',fontSize:9,color:'#ef4444',position:'insideEndTop'}}]:[]),
+          ...(lo!=null?[{yAxis:lo,lineStyle:{color:'#16a34a',type:'dashed',width:1},label:{formatter:'過空 '+Math.round(lo/1000)+'K',fontSize:9,color:'#16a34a',position:'insideEndBottom'}}]:[]),
         ]}},
-      {name:'Asset Manager',type:'line',data:am,smooth:false,symbol:'none',
-        lineStyle:{width:1.5,color:'#f59e0b',opacity:.85},itemStyle:{color:'#f59e0b'}},
+      {name:'Asset Manager',type:'line',yAxisIndex:0,data:am,smooth:false,symbol:'none',
+        lineStyle:{width:1.5,color:'#f59e0b',opacity:.75},itemStyle:{color:'#f59e0b'}},
+      {name:'SPY',type:'line',yAxisIndex:1,data:spy,smooth:false,symbol:'none',connectNulls:true,
+        lineStyle:{width:1.5,color:'#a855f7',opacity:.85},itemStyle:{color:'#a855f7'}},
+      {name:'買訊',type:'scatter',yAxisIndex:0,data:buySigs,symbol:'triangle',symbolSize:14,
+        itemStyle:{color:'#16a34a'},tooltip:{formatter:p=>'買訊 '+p.value[0]+'<br>'+fmt(p.value[1])}},
+      {name:'賣訊',type:'scatter',yAxisIndex:0,data:sellSigs,symbol:'triangle',symbolRotate:180,symbolSize:14,
+        itemStyle:{color:'#ef4444'},tooltip:{formatter:p=>'賣訊 '+p.value[0]+'<br>'+fmt(p.value[1])}},
     ],
   },true);
+  ch.resize();
   if(!el._ro){el._ro=()=>ch.resize();window.addEventListener('resize',el._ro);}
 }
 async function loadSentiment(){

@@ -1419,11 +1419,12 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+cotSpxBox(d.cot_spx)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+cotSpxBox(d.cot_spx)+cabinetBox()+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
+  loadCabinetTrades();
 }
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
 function sp500FwdPeBox(v){
@@ -1585,6 +1586,58 @@ function drawCotSpx(v,years){
   },true);
   ch.resize();
   if(!el._ro){el._ro=()=>ch.resize();window.addEventListener('resize',el._ro);}
+}
+function cabinetBox(){
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">美國內閣持倉異動 · <span style="font-size:11px;font-weight:normal;color:var(--dim)">川普政府官員申報交易</span></div>'+
+    '<div id="cabinetTrades"><div class="loading-screen" style="padding:10px 0;font-size:12px">載入內閣交易資料 …</div></div>'+
+    '<div class="ex">依美國倫理法，行政官員須在 30-45 天內申報 $1,000+ 股票交易。含川普、各部長等 36 人。資料來源：<a href="https://open-cabinet.org" target="_blank" rel="noopener" style="color:var(--link)">open-cabinet.org</a> / OGE。<b class="pos">綠＝買入</b>　<b class="neg">紅＝賣出</b>。非買賣建議。</div>'+
+  '</div>';
+}
+function loadCabinetTrades(){
+  const el=document.getElementById('cabinetTrades');
+  if(!el) return;
+  fetch('https://open-cabinet.org/data/full-dataset.json')
+    .then(r=>r.json())
+    .then(data=>{
+      const txs=[];
+      (data.officials||[]).forEach(o=>{
+        (o.transactions||[]).forEach(t=>{
+          if(!t.date) return;
+          txs.push({date:t.date,name:o.name,ticker:t.ticker||'—',type:t.type||'',amount:t.amount||''});
+        });
+      });
+      txs.sort((a,b)=>b.date.localeCompare(a.date));
+      const recent=txs.slice(0,20);
+      const nOff=data.officialCount||0, nTx=data.transactionCount||txs.length;
+      const upd=(data.exportedAt||'').slice(0,10);
+      const rows=recent.map(t=>{
+        const isBuy=t.type==='Purchase';
+        const shortName=t.name.split(',')[0];
+        return '<tr style="border-bottom:1px solid var(--border)">'+
+          '<td style="padding:3px 5px;white-space:nowrap;color:var(--dim)">'+esc(t.date)+'</td>'+
+          '<td style="padding:3px 5px;white-space:nowrap">'+esc(shortName)+'</td>'+
+          '<td style="padding:3px 5px"><b>'+esc(t.ticker)+'</b></td>'+
+          '<td style="padding:3px 5px" class="'+(isBuy?'pos':'neg')+'">'+(isBuy?'▲ 買入':'▼ 賣出')+'</td>'+
+          '<td style="padding:3px 5px;font-size:11px;color:var(--dim)">'+esc(t.amount)+'</td>'+
+          '</tr>';
+      }).join('');
+      el.innerHTML=
+        '<div style="font-size:11px;color:var(--dim);margin:4px 0 8px">追蹤 '+nOff+' 位官員 · 共 '+nTx.toLocaleString()+' 筆申報 · 資料截至 '+upd+'</div>'+
+        '<div style="overflow-x:auto">'+
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+          '<thead><tr style="color:var(--dim);border-bottom:1px solid var(--border)">'+
+            '<th style="text-align:left;padding:2px 5px;font-weight:500">日期</th>'+
+            '<th style="text-align:left;padding:2px 5px;font-weight:500">官員</th>'+
+            '<th style="text-align:left;padding:2px 5px;font-weight:500">代號</th>'+
+            '<th style="text-align:left;padding:2px 5px;font-weight:500">方向</th>'+
+            '<th style="text-align:left;padding:2px 5px;font-weight:500">金額範圍</th>'+
+          '</tr></thead>'+
+          '<tbody>'+rows+'</tbody>'+
+        '</table>'+
+        '</div>';
+    })
+    .catch(e=>{ if(el) el.innerHTML='<div class="legend" style="padding:8px 0">⚠️ 無法載入 open-cabinet.org（'+esc(e.message)+'）</div>'; });
 }
 async function loadSentiment(){
   try{

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-09",
+  "generated_at": "2026-06-14",
   "method": "AI 供應鏈瓶頸選股(bottleneck-hunter):逆向拆鏈找『卡脖子』環節 → 依『技術壁壘 / 商轉純度 / 防禦緩衝』三維度挑卡位股。每主題分 台股 / 美股 / 其他股。內容由 AI 研究維護,報價即時(Yahoo)。",
   "themes": [
     {
@@ -1204,6 +1204,70 @@
           "name": "STMicro(歐)",
           "role": "SiC 功率(車用)",
           "tag": "SiC"
+        }
+      ]
+    },
+    {
+      "key": "pam4",
+      "name": "PAM4 / 800G 光互連",
+      "bottleneck": "EML雷射供給全鎖至2027底(NVIDIA 2026-03簽)·LITE欠出貨30%·1.6T量產Q3 2026加速",
+      "note": "PAM4是400G/800G/1.6T收發器物理層基礎。800G 2025→2026年出貨量2.6×(24M→63M units)。LPO在800G可行但1.6T(200G/lane)物理挑戰讓DSP仍有命；EML需求不降反升。台股看800G設備商智邦2345、光纖零件易格斯6442。COHR 6吋InP轉型是LITE護城河的結構性野牌(12-24個月驗證)。",
+      "stocks": [
+        {
+          "code": "LITE",
+          "market": "us",
+          "name": "Lumentum",
+          "role": "EML雷射主瓶頸·~50-60%市佔·欠出貨30%·毛利急升7.5→25%",
+          "tag": "核心瓶頸"
+        },
+        {
+          "code": "COHR",
+          "market": "us",
+          "name": "Coherent",
+          "role": "垂直整合EML/SiPh/VCSEL·6吋InP量產(4×晶粒/片)·多客戶能見度至2028",
+          "tag": "垂直整合"
+        },
+        {
+          "code": "CRDO",
+          "market": "us",
+          "name": "Credo",
+          "role": "AEC+ZeroFlap LPO·5家超大規模·FY27光學TAM>",
+          "tag": "LPO轉型"
+        },
+        {
+          "code": "AAOI",
+          "market": "us",
+          "name": "Applied Optoelectronics",
+          "role": "首張1.6T大量訂單(2026-03)·Q3量產",
+          "tag": "早期optionality"
+        },
+        {
+          "code": "FN",
+          "market": "us",
+          "name": "Fabrinet",
+          "role": "光模組代工·不賭技術路線·隨量產費用成長",
+          "tag": "代工避風港"
+        },
+        {
+          "code": "MRVL",
+          "market": "us",
+          "name": "Marvell",
+          "role": "Alaska PAM4 DSP·1.6T主力·LPO滲透是風險",
+          "tag": "DSP龍頭"
+        },
+        {
+          "code": "2345",
+          "market": "tw",
+          "name": "智邦",
+          "role": "800G AI fabric交換機·光互連設備",
+          "tag": "800G設備"
+        },
+        {
+          "code": "6442",
+          "market": "tw",
+          "name": "易格斯",
+          "role": "光纖精密零件·Q1 2026淨利+89% YoY",
+          "tag": "光纖零件"
         }
       ]
     }

@@ -2508,7 +2508,6 @@ function switchView(v){
   else if(v==="calendar") loadCalendar();
   else if(v==="options") loadOptions();
   else if(v==="capital") loadCapital();
-  else if(v==="cabinet") loadCabinet();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 // ── 主分頁:動態渲染 + 可拖曳重排(順序存 localStorage navOrder)──
@@ -2525,7 +2524,6 @@ const NAV=[
   {view:"calendar",label:"財報/數據"},
   {view:"options", label:"選擇權"},
   {view:"news",    label:"新聞"},
-  {view:"cabinet", label:"內閣持倉"},
 ];
 function navOrder(){
   let saved=[];
@@ -2656,80 +2654,6 @@ function setNewsFeed(k){
   const box=document.getElementById("newsList");
   if(box) box.innerHTML='<div class="loading-screen">載入新聞 …</div>';
   fetchNews();
-}
-async function loadCabinet(){
-  for(const k in SORT_STATE) delete SORT_STATE[k];
-  $("#meta").innerHTML='<div><b>美國內閣持倉異動</b></div><div id="cabinetMeta">載入中…</div>';
-  $("#poolNote").innerHTML="";
-  $("#content").innerHTML=
-    '<section>'+
-      '<div class="sec-head"><h2>美國內閣持倉異動</h2><span class="tag">川普政府官員 OGE 申報交易 · 即時</span></div>'+
-      '<div id="cabinetFilter" class="news-tabs" style="margin-bottom:10px">'+
-        '<button class="ntab on" data-cf="all">全部</button>'+
-        '<button class="ntab" data-cf="buy">▲ 買入</button>'+
-        '<button class="ntab" data-cf="sell">▼ 賣出</button>'+
-      '</div>'+
-      '<div id="cabinetContent"><div class="loading-screen">載入內閣交易資料 …</div></div>'+
-      '<div class="legend">依美國倫理法，行政官員須在 30-45 天內申報 $1,000+ 股票交易。含川普、各部長等官員。資料來源：<a href="https://open-cabinet.org" target="_blank" rel="noopener" style="color:var(--link)">open-cabinet.org</a> / OGE。<b class="pos">綠＝買入</b>　<b class="neg">紅＝賣出</b>。非投資建議。</div>'+
-    '</section>';
-  let _allTxs=[], _cf='all';
-  function _renderCabinet(){
-    const el=document.getElementById('cabinetContent'); if(!el) return;
-    const list=_cf==='all'?_allTxs:_allTxs.filter(t=>_cf==='buy'?t.type==='Purchase':t.type==='Sale');
-    const top=list.slice(0,60);
-    if(!top.length){el.innerHTML='<div class="legend">無符合資料。</div>';return;}
-    const rows=top.map(t=>{
-      const isBuy=t.type==='Purchase';
-      return '<tr style="border-bottom:1px solid var(--border)">'+
-        '<td style="padding:4px 8px;white-space:nowrap;color:var(--dim)">'+esc(t.date)+'</td>'+
-        '<td style="padding:4px 8px;white-space:nowrap;font-weight:500">'+esc(t.shortName)+'</td>'+
-        '<td style="padding:4px 8px;font-size:11px;color:var(--dim);white-space:nowrap">'+esc(t.title)+'</td>'+
-        '<td style="padding:4px 8px">'+(t.ticker?'<b>'+esc(t.ticker)+'</b>':'<span style="color:var(--dim)">—</span>')+'</td>'+
-        '<td style="padding:4px 8px" class="'+(isBuy?'pos':'neg')+'">'+(isBuy?'▲ 買入':'▼ 賣出')+'</td>'+
-        '<td style="padding:4px 8px;font-size:11px;color:var(--dim)">'+esc(t.amount)+'</td>'+
-        '</tr>';
-    }).join('');
-    el.innerHTML=
-      '<div style="overflow-x:auto">'+
-      '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
-        '<thead><tr style="color:var(--dim);border-bottom:1px solid var(--border)">'+
-          '<th style="text-align:left;padding:4px 8px;font-weight:500">日期</th>'+
-          '<th style="text-align:left;padding:4px 8px;font-weight:500">官員</th>'+
-          '<th style="text-align:left;padding:4px 8px;font-weight:500">職位</th>'+
-          '<th style="text-align:left;padding:4px 8px;font-weight:500">代號</th>'+
-          '<th style="text-align:left;padding:4px 8px;font-weight:500">方向</th>'+
-          '<th style="text-align:left;padding:4px 8px;font-weight:500">金額範圍</th>'+
-        '</tr></thead>'+
-        '<tbody>'+rows+'</tbody>'+
-      '</table>'+
-      '</div>'+
-      (list.length>60?'<div class="legend" style="margin-top:6px">顯示最近 60 筆，共 '+list.length+' 筆</div>':'');
-  }
-  document.getElementById('cabinetFilter').querySelectorAll('.ntab').forEach(b=>{
-    b.onclick=()=>{
-      _cf=b.dataset.cf;
-      document.querySelectorAll('#cabinetFilter .ntab').forEach(x=>x.classList.toggle('on',x.dataset.cf===_cf));
-      _renderCabinet();
-    };
-  });
-  try{
-    const r=await fetch('https://open-cabinet.org/data/full-dataset.json');
-    const data=await r.json();
-    (data.officials||[]).forEach(o=>{
-      (o.transactions||[]).forEach(t=>{
-        if(!t.date) return;
-        _allTxs.push({date:t.date,shortName:o.name.split(',')[0],title:o.title||'',ticker:t.ticker||'',desc:t.description||'',type:t.type||'',amount:t.amount||''});
-      });
-    });
-    _allTxs.sort((a,b)=>b.date.localeCompare(a.date));
-    const nOff=data.officialCount||0,nTx=data.transactionCount||_allTxs.length,upd=(data.exportedAt||'').slice(0,10);
-    const m=document.getElementById('cabinetMeta');
-    if(m) m.innerHTML='追蹤 '+nOff+' 位官員 · 共 '+nTx.toLocaleString()+' 筆申報 · 截至 '+upd;
-    _renderCabinet();
-  }catch(e){
-    const el=document.getElementById('cabinetContent');
-    if(el) el.innerHTML='<div class="legend">⚠️ 無法載入 open-cabinet.org（'+esc(e.message)+'）</div>';
-  }
 }
 function loadNewsFeed(){
   for(const k in SORT_STATE) delete SORT_STATE[k];

@@ -2684,7 +2684,7 @@ async function loadCabinet(){
         '<td style="padding:4px 8px;white-space:nowrap;color:var(--dim)">'+esc(t.date)+'</td>'+
         '<td style="padding:4px 8px;white-space:nowrap;font-weight:500">'+esc(t.shortName)+'</td>'+
         '<td style="padding:4px 8px;font-size:11px;color:var(--dim);white-space:nowrap">'+esc(t.title)+'</td>'+
-        '<td style="padding:4px 8px"><b>'+esc(t.ticker)+'</b></td>'+
+        '<td style="padding:4px 8px">'+(t.ticker?'<b>'+esc(t.ticker)+'</b>'+'<span style="font-size:10px;color:var(--dim);margin-left:4px">'+esc(t.desc.length>20?t.desc.slice(0,20)+'…':t.desc)+'</span>':'<span style="font-size:11px;color:var(--dim)">'+esc(t.desc.length>22?t.desc.slice(0,22)+'…':t.desc||'—')+'</span>')+'</td>'+
         '<td style="padding:4px 8px" class="'+(isBuy?'pos':'neg')+'">'+(isBuy?'▲ 買入':'▼ 賣出')+'</td>'+
         '<td style="padding:4px 8px;font-size:11px;color:var(--dim)">'+esc(t.amount)+'</td>'+
         '</tr>';
@@ -2718,7 +2718,7 @@ async function loadCabinet(){
     (data.officials||[]).forEach(o=>{
       (o.transactions||[]).forEach(t=>{
         if(!t.date) return;
-        _allTxs.push({date:t.date,shortName:o.name.split(',')[0],title:o.title||'',ticker:t.ticker||'—',type:t.type||'',amount:t.amount||''});
+        _allTxs.push({date:t.date,shortName:o.name.split(',')[0],title:o.title||'',ticker:t.ticker||'',desc:t.description||'',type:t.type||'',amount:t.amount||''});
       });
     });
     _allTxs.sort((a,b)=>b.date.localeCompare(a.date));

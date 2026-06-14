@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>太空產業 Chokepoint 穿透地圖 — N-3 深度版</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300&display=swap');
+
+  :root {
+    --bg:        #07090d;
+    --bg2:       #0e1218;
+    --bg3:       #151b24;
+    --border:    #1d2532;
+    --border2:   #2a3445;
+    --text:      #c8d4e0;
+    --text2:     #7a8fa0;
+    --text3:     #46566a;
+    --accent:    #4db8ff;   /* 太空藍 */
+    --accent2:   #9d7bff;   /* 星雲紫 */
+    --warn:      #f0a020;
+    --danger:    #e04545;
+    --safe:      #30c060;
+    --locked:    #c45bff;
+    --gold:      #ffd25e;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background:
+      radial-gradient(ellipse at 80% -10%, #131a2e 0%, transparent 50%),
+      radial-gradient(ellipse at 10% 110%, #100a1e 0%, transparent 45%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .hdr {
+    padding: 26px 32px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .hdr-left h1 {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .hdr-left p {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 4px;
+  }
+  .l0-banner {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--gold);
+    border: 1px solid #4a3a10;
+    background: #1a140533;
+    padding: 5px 12px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-family: var(--mono); color: var(--text2); }
+  .leg-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    padding: 0 32px;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    cursor: pointer;
+    border: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    background: none;
+    letter-spacing: 0.04em;
+    transition: color .2s, border-color .2s;
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .main { display: grid; grid-template-columns: 330px 1fr; min-height: calc(100vh - 128px); }
+
+  .tree-panel {
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    overflow-y: auto;
+    max-height: calc(100vh - 128px);
+    position: sticky;
+    top: 0;
+  }
+  .tree-layer {
+    padding: 10px 16px 10px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-left: 3px solid transparent;
+    transition: background .15s, border-color .15s;
+  }
+  .tree-layer:hover { background: var(--bg2); }
+  .tree-layer.active { background: var(--bg3); border-left-color: var(--accent); }
+  .layer-badge {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 2px 6px; border-radius: 3px; flex-shrink: 0;
+  }
+  .layer-name { font-size: 12px; color: var(--text); flex: 1; }
+  .score-badge {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 2px 7px; border-radius: 10px; flex-shrink: 0;
+  }
+  .tree-sub {
+    padding: 7px 16px 7px 46px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    border-left: 3px solid transparent;
+    transition: background .15s;
+  }
+  .tree-sub:hover { background: var(--bg2); }
+  .tree-sub.active { background: var(--bg3); border-left-color: var(--accent2); }
+  .sub-name { font-size: 11px; color: var(--text2); flex: 1; }
+  .divider { height: 1px; background: var(--border); margin: 7px 20px; }
+
+  .detail-panel { padding: 26px 32px; overflow-y: auto; max-height: calc(100vh - 128px); }
+  .detail-header { margin-bottom: 22px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .detail-header h2 { font-family: var(--mono); font-size: 19px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+  .detail-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .meta-tag { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 3px; border: 1px solid; letter-spacing: 0.04em; }
+
+  .section-title {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    color: var(--accent2); letter-spacing: 0.1em; text-transform: uppercase;
+    margin: 20px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+
+  .score-grid { display: grid; grid-template-columns: 170px 1fr 40px; gap: 8px 12px; align-items: center; }
+  .score-label { font-family: var(--mono); font-size: 10px; color: var(--text2); }
+  .score-bar-wrap { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; border: 1px solid var(--border); }
+  .score-bar-fill { height: 100%; border-radius: 3px; transition: width .6s ease; }
+  .score-val { font-family: var(--mono); font-size: 11px; font-weight: 600; text-align: right; }
+
+  .insight-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    line-height: 1.75;
+    color: var(--text2);
+  }
+  .insight-box strong { color: var(--text); }
+  .insight-box.gold { border-left-color: var(--gold); }
+  .insight-box.danger { border-left-color: var(--danger); }
+
+  .stocks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: 10px; }
+  .stock-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 13px 15px;
+    transition: border-color .2s, background .2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .stock-card:hover { border-color: var(--border2); background: var(--bg3); }
+  .stock-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
+  .stock-card.pure::before { background: var(--accent); }
+  .stock-card.partial::before { background: var(--warn); }
+  .stock-card.locked::before { background: var(--locked); }
+  .stock-card.structural::before { background: var(--danger); }
+  .stock-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+  .stock-ticker { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+  .stock-exch { font-family: var(--mono); font-size: 9px; color: var(--text3); margin-top: 2px; }
+  .stock-type { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; margin-top: 2px; }
+  .stock-name { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+  .stock-role { font-size: 11px; color: var(--text); line-height: 1.55; margin-bottom: 8px; }
+  .stock-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+  .stag { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border2); color: var(--text2); }
+  .stag.safe { border-color: var(--safe); color: var(--safe); }
+  .stag.warn { border-color: var(--warn); color: var(--warn); }
+  .stag.locked { border-color: var(--locked); color: var(--locked); }
+
+  /* Quadrant chart */
+  .quad-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 16px; }
+  .quad-svg { width: 100%; height: auto; display: block; }
+  .q-dot { cursor: pointer; }
+  .q-dot circle { transition: r .15s; }
+  .q-dot:hover circle { r: 9; }
+  .q-label { font-family: var(--mono); font-size: 10px; fill: var(--text2); }
+  .q-axis { font-family: var(--mono); font-size: 10px; fill: var(--text3); }
+  .q-zone { font-family: var(--mono); font-size: 11px; font-weight: 600; opacity: 0.55; }
+
+  .ipo-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .ipo-table th { text-align: left; padding: 8px 12px; font-family: var(--mono); font-size: 10px; color: var(--text3); border-bottom: 1px solid var(--border); font-weight: 400; }
+  .ipo-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: top; }
+  .ipo-table tr:hover td { background: var(--bg2); }
+  .ipo-table td:first-child { font-family: var(--mono); color: var(--text); font-weight: 600; }
+
+  .falsify-list { list-style: none; }
+  .falsify-list li {
+    display: flex; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--text2); align-items: flex-start;
+  }
+  .falsify-list li::before { content: '□'; font-family: var(--mono); color: var(--accent2); flex-shrink: 0; font-size: 13px; }
+  .falsify-list li.hot::before { content: '◉'; color: var(--gold); }
+  .falsify-list li strong { color: var(--text); }
+
+  .xlink-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .xlink-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 16px; border-top: 2px solid var(--accent2);
+  }
+  .xlink-card h4 { font-family: var(--mono); font-size: 12px; color: var(--accent2); margin-bottom: 7px; }
+  .xlink-card p { font-size: 11px; color: var(--text2); line-height: 1.6; }
+  .xlink-card p strong { color: var(--text); }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  @media (max-width: 800px) {
+    .main { grid-template-columns: 1fr; }
+    .tree-panel { position: static; max-height: none; border-right: none; border-bottom: 1px solid var(--border); padding: 14px 0; }
+    .detail-panel { max-height: none; padding: 18px 16px; }
+    .hdr { padding: 16px; }
+    .tabs { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-left">
+    <h1>太空產業 Chokepoint 穿透地圖</h1>
+    <p>/chokepoint-scan · N-3 原料穿透 · 2026.06.12 更新</p>
+  </div>
+  <div class="l0-banner">◉ L0 事件：SpaceX 今日（6/12）IPO 掛牌 — 全產業估值參照系重置中</div>
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:var(--accent)"></div>純標的</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--warn)"></div>混合暴露</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--locked)"></div>私有/母體鎖定</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--danger)"></div>結構洞</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab(event,'overview')">L0 總覽</button>
+  <button class="tab" onclick="switchTab(event,'quad')">瓶頸×滲透象限</button>
+  <button class="tab" onclick="switchTab(event,'L3')">L3 太空電池</button>
+  <button class="tab" onclick="switchTab(event,'ge')">N-2 鍺/鎵</button>
+  <button class="tab" onclick="switchTab(event,'L4')">L4 Rad-Hard</button>
+  <button class="tab" onclick="switchTab(event,'L5')">L5 OISL 雷射</button>
+  <button class="tab" onclick="switchTab(event,'L6')">L6 SRM 推進</button>
+  <button class="tab" onclick="switchTab(event,'L7')">L7 台股主場</button>
+  <button class="tab" onclick="switchTab(event,'xlink')">跨賽道交叉</button>
+  <button class="tab" onclick="switchTab(event,'ipo')">IPO 埋伏</button>
+  <button class="tab" onclick="switchTab(event,'falsify')">證偽日曆</button>
+</div>
+
+<div class="main">
+  <div class="tree-panel">
+    <div class="tree-layer" onclick="showDetail('overview',this)">
+      <span class="layer-badge" style="background:#1a2030;color:var(--gold)">L0</span>
+      <span class="layer-name">SpaceX 單點 / 發射通縮</span>
+      <span class="score-badge" style="background:#1a2030;color:var(--gold)">IPO</span>
+    </div>
+    <div class="divider"></div>
+    <div class="tree-layer" onclick="showDetail('ge',this)">
+      <span class="layer-badge" style="background:#2a1515;color:var(--danger)">N-2</span>
+      <span class="layer-name">鍺基板（地緣加權）</span>
+      <span class="score-badge" style="background:#2a1515;color:var(--danger)">24</span>
+    </div>
+    <div class="tree-layer" onclick="showDetail('L3',this)">
+      <span class="layer-badge" style="background:#251525;color:var(--locked)">L3</span>
+      <span class="layer-name">III-V 太空太陽能電池</span>
+      <span class="score-badge" style="background:#251525;color:var(--locked)">23</span>
+    </div>
+    <div class="tree-sub" onclick="showDetail('ga',this)">
+      <span class="sub-name">↳ 鎵：中國 98%（11/27 死線）</span>
+      <span class="score-badge" style="background:#2a1515;color:var(--danger);font-size:9px">N-3</span>
+    </div>
+    <div class="tree-sub" onclick="showDetail('mocvd',this)">
+      <span class="sub-name">↳ MOCVD：三賽道匯流設備</span>
+      <span class="score-badge" style="background:#1a1a2a;color:var(--text3);font-size:9px">N-3</span>
+    </div>
+    <div class="divider"></div>
+    <div class="tree-layer" onclick="showDetail('L5',this)">
+      <span class="layer-badge" style="background:#202015;color:var(--warn)">L5</span>
+      <span class="layer-name">OISL 雷射星間鏈路</span>
+      <span class="score-badge" style="background:#202015;color:var(--warn)">21</span>
+    </div>
+    <div class="tree-layer" onclick="showDetail('L6',this)">
+      <span class="layer-badge" style="background:#202015;color:var(--warn)">L6</span>
+      <span class="layer-name">固態火箭推進 SRM</span>
+      <span class="score-badge" style="background:#202015;color:var(--warn)">21</span>
+    </div>
+    <div class="tree-sub" onclick="showDetail('energetics',this)">
+      <span class="sub-name">↳ 含能材料：共用脆弱地基</span>
+      <span class="score-badge" style="background:#2a1515;color:var(--danger);font-size:9px">爆炸已發生</span>
+    </div>
+    <div class="divider"></div>
+    <div class="tree-layer" onclick="showDetail('L4',this)">
+      <span class="layer-badge" style="background:#1a2020;color:var(--warn)">L4</span>
+      <span class="layer-name">輻射硬化電子</span>
+      <span class="score-badge" style="background:#1a2020;color:var(--warn)">20</span>
+    </div>
+    <div class="tree-layer" onclick="showDetail('L7',this)">
+      <span class="layer-badge" style="background:#102018;color:var(--safe)">L7</span>
+      <span class="layer-name">地面段/RF/PCB（台股）</span>
+      <span class="score-badge" style="background:#102018;color:var(--safe)">14</span>
+    </div>
+  </div>
+
+  <div class="detail-panel" id="detailPanel"></div>
+</div>
+
+<script>
+const DATA = {
+
+overview: {
+  title: 'L0 — SpaceX 單點結構 & 今日 IPO',
+  meta: [
+    {text:'最大瓶頸＝最大通縮力＝同一家公司', color:'var(--gold)'},
+    {text:'2026 衛星發射 5,100+ 顆', color:'var(--accent)'},
+    {text:'2035 市場規模 $1,080 億', color:'var(--accent2)'},
+  ],
+  scores: [
+    {label:'SpaceX 垂直整合度', val:5, color:'var(--gold)'},
+    {label:'發射運力緊俏度', val:2, color:'var(--safe)'},
+    {label:'非SpaceX需求爆發度', val:5, color:'var(--danger)'},
+    {label:'供應鏈準備度', val:1, color:'var(--danger)'},
+  ],
+  insight: `<strong>太空產業與 800VDC 的最大結構差異</strong>：800VDC 瓶頸分散在材料層；太空的瓶頸先集中於單點（SpaceX），再分散到子系統。SpaceX 同時是最大發射商（運力通縮者）、最大衛星製造商、最大太陽能電池買家、OISL 終端完全自製（9,000 顆衛星 × 每顆 3-4 具）。<br><br>
+  <strong>含義</strong>：以下所有層的瓶頸只適用「非 SpaceX 需求」——SDA 軍用星座、Amazon Leo/Kuiper、歐洲主權星座。而這塊需求正在爆炸：2025 年 4,235 顆 → 2026 年 5,100+ 顆 → 高盛預估 5 年 7 萬顆新衛星，市場 2024 年 $150 億 → 2035 年 $1,080 億。<br><br>
+  <strong>供給側判決</strong>：「瓶頸不再是資金或意圖，而是製造產能、勞動力與供應鏈深度——2027 緊縮將在 2028 變成危機」。勞工瓶頸與 800VDC 掃描的 Goldman 結論完全同構。<br><br>
+  <strong class="gold">◉ 今日事件：SpaceX IPO 掛牌（6/12）。上市後 S-1/財報將首次揭露 Starlink 單位經濟與供應鏈成本結構——全產業估值參照系被重寫。對台股供應鏈：採購量可見化（利多）vs 議價權透明化（利空）。</strong>`,
+  stocks: []
+},
+
+quad: {
+  title: '瓶頸強度 × 定價滲透度 — 全標的象限圖',
+  meta: [
+    {text:'橫軸：定價滲透度 0-100%', color:'var(--text2)'},
+    {text:'縱軸：瓶頸/含量分 0-25', color:'var(--text2)'},
+    {text:'左上 = 黃金象限', color:'var(--gold)'},
+  ],
+  scores: [],
+  insight: '',
+  quad: true,
+  stocks: []
+},
+
+L3: {
+  title: 'L3 — III-V 太空太陽能電池：本賽道的「奈米晶磁芯」',
+  meta: [
+    {text:'瓶頸分 23/25', color:'var(--locked)'},
+    {text:'全球產能僅個位數 MW/年', color:'var(--danger)'},
+    {text:'$200+/W · 市場 $1.5B/年', color:'var(--warn)'},
+  ],
+  scores: [
+    {label:'供應商集中度', val:5, color:'var(--danger)'},
+    {label:'認證門檻（ITAR+太空質保）', val:5, color:'var(--danger)'},
+    {label:'產能緊俏', val:5, color:'var(--danger)'},
+    {label:'不可替代性', val:4, color:'var(--warn)'},
+    {label:'擴產前置期', val:4, color:'var(--warn)'},
+  ],
+  insight: `寡占三雄：<strong>Spectrolab（Boeing 內，~30%）、SolAero（Rocket Lab 內，~25%）、Azur Space（德國私有）</strong>。SolAero 是美國僅有兩家太空級 GaAs 電池廠之一，ITAR 限制美國計畫使用外國電池。<br><br>
+  <strong>需求衝擊已到、供給不動</strong>：Azur 2026/2 擴產只是個位數百分比增量；Spectrolab 未宣布符合新需求曲線的擴產。SpaceX 是最大買家但尚未自製——<strong>若 SpaceX 收購電池廠或自建工廠，外部市場供給瞬間再砍一塊</strong>（高機率事件，因馬斯克的軌道資料中心言論）。<br><br>
+  <strong>與 800VDC L3 磁芯完全同構</strong>：寡占＋賣到缺貨＋最純標的藏在母體或私有。`,
+  stocks: [
+    {ticker:'RKLB', name:'Rocket Lab（SolAero 母體）', exch:'Nasdaq ✅', role:'SolAero：全球最大 GaAs/Ge 太陽能陣列裝機產能，~$50M+/年太空電力營收。RKLB 整體 = 瓶頸聚合器', type:'partial', tags:['✅ Nasdaq','瓶頸聚合器','SolAero+Mynaric+Sinclair']},
+    {ticker:'BA', name:'Boeing（Spectrolab 母體）', exch:'NYSE ✅', role:'Spectrolab：累計交付 650 萬+ 片多接面電池，~30% 市占，XTE+ 達 33% 效率。被波音龐大本體完全稀釋', type:'locked', tags:['✅ NYSE','極度稀釋','母體鎖定']},
+    {ticker:'Azur Space', name:'Azur Space Solar Power', exch:'德國 — 私有', role:'歐洲對應極，3G28/3G30 系列覆蓋商用/軍用星座。2026/2 宣布 MOVPE 擴產', type:'locked', tags:['⚠️ 私有','IPO/出售監測','MOVPE擴產中']},
+  ]
+},
+
+ge: {
+  title: 'N-2 — 鍺基板：本掃描最高分（24），地緣武器化進行式',
+  meta: [
+    {text:'瓶頸分 24/25 全場最高', color:'var(--danger)'},
+    {text:'市場僅 $125M（2024）', color:'var(--warn)'},
+    {text:'◉ 2026/11/27 禁令暫停到期', color:'var(--gold)'},
+  ],
+  scores: [
+    {label:'供應商集中度', val:5, color:'var(--danger)'},
+    {label:'中國供應控制度', val:5, color:'var(--danger)'},
+    {label:'替代認證時間（3-5年）', val:5, color:'var(--danger)'},
+    {label:'市場規模 vs 系統重要性失衡', val:5, color:'var(--danger)'},
+    {label:'產能緊俏', val:4, color:'var(--warn)'},
+  ],
+  insight: `所有 GaAs 三接面電池都建立在鍺晶圓上。整個太空用鍺基板市場 2024 年僅 <strong>$1.25 億美元——比一家中型國防分包商營收還小，卻要支撐 16,900 顆衛星＋SBI 星座＋多個主權星座</strong>。<br><br>
+  <strong>地緣時間軸</strong>：2023/8 中國對鎵鍺出口許可制 → 2024/12 對美全面禁鎵 → 2025/11 暫停禁令至 <strong>2026/11/27（明示為談判工具）</strong>。替代供應商認證需 3-5 年；Umicore 北美有鍺精煉、5N Plus 有太空級鍺晶圓能力，但產量均未證實可對等中國輸出。<br><br>
+  <strong class="danger">AXT 反向警示</strong>：所有晶圓在中國製造，美國關稅升至 70%，北美營收占比從 8% 掉到 2%——AXT 是地緣風險承受方而非受益方（需更新 Chen 既有 InP 研究的風險標注）。`,
+  stocks: [
+    {ticker:'UMI.BR', name:'Umicore', exch:'布魯塞爾 ⚠️', role:'鍺基板市場領導者（epi-ready 無錯位鍺基板，90年代中期至今），北美有精煉產能。被電池材料/觸媒業務稀釋', type:'partial', tags:['⚠️ 後綴待驗','鍺龍頭','西方替代核心']},
+    {ticker:'VNP.TO', name:'5N Plus', exch:'多倫多 ⚠️', role:'加拿大太空級鍺晶圓能力持有者，西方供應鏈去風險受益候選', type:'partial', tags:['⚠️ 後綴待驗','北美替代','小型股']},
+    {ticker:'AXTI', name:'AXT Inc.', exch:'Nasdaq ✅', role:'⚠️ 反向暴露：晶圓全在中國製造，70%美國關稅+中國出口管制雙殺，北美營收8%→2%。Tongmei STAR IPO 待批', type:'structural', tags:['✅ Nasdaq','地緣承受方','Tongmei IPO變數']},
+  ]
+},
+
+ga: {
+  title: 'N-3 — 鎵：中國 98% 的雙賽道共同咽喉',
+  meta: [
+    {text:'中國控制 ~98% 原生鎵', color:'var(--danger)'},
+    {text:'GaN（800VDC）+ 太空電池共用', color:'var(--accent2)'},
+    {text:'◉ 11/27 死線', color:'var(--gold)'},
+  ],
+  scores: [
+    {label:'單一國家控制度', val:5, color:'var(--danger)'},
+    {label:'跨賽道暴露廣度', val:5, color:'var(--danger)'},
+    {label:'西方替代產能', val:1, color:'var(--danger)'},
+  ],
+  insight: `中國控制全球約 98% 原生鎵供應。鎵同時是：<strong>太空 GaAs 電池（本賽道 L3）、GaN 功率半導體（800VDC L6）、GaAs RF（台股穩懋/宏捷科）、InP 旁路（CPO 賽道）</strong>的共同上游。<br><br>
+  2024/12 對美禁鎵 → 2025/11 有條件暫停至 <strong>2026/11/27</strong>。這個日期是四條賽道的共同事件日：禁令恢復 = 太空電池、GaN 轉單、台股 GaAs 代工同步受擊；永久豁免 = 風險溢價釋放。<br><br>
+  西方替代：鎵是鋁土礦/鋅冶煉副產品，西方重啟需數年（Rio Tinto、Nyrstar 有試點計畫——推論，未本輪重驗）。`,
+  stocks: [
+    {ticker:'穩懋 3105', name:'Win Semiconductors', exch:'TWSE ✅', role:'全球最大 GaAs 代工，LEO RF + CPO 雙暴露，鎵原料依賴中國', type:'partial', tags:['✅ TWSE','鎵下游','LEO+CPO雙題材']},
+    {ticker:'宏捷科 8086', name:'AWSC', exch:'TPEx ⚠️', role:'利基 GaAs PA 代工，地面站終端訂單', type:'partial', tags:['⚠️ 後綴待驗','GaAs PA','地面段']},
+  ]
+},
+
+mocvd: {
+  title: 'N-3 — MOCVD/MOVPE：三賽道匯流的設備咽喉',
+  meta: [{text:'GaN + InP + 太空 III-V 共用', color:'var(--accent2)'}],
+  scores: [
+    {label:'設備商集中度', val:4, color:'var(--warn)'},
+    {label:'跨賽道匯流度', val:5, color:'var(--danger)'},
+  ],
+  insight: `Azur 2026/2 擴產公告直接指明 <strong>MOVPE 反應爐是磊晶層級約束</strong>。MOCVD 設備同時是：太空 III-V 電池、GaN 功率（800VDC）、InP 雷射（CPO）三條賽道的共同擴產前提。<br><br>
+  設備商：Aixtron（AIXA.DE，III-V MOCVD 主導——產業常識，未本輪重驗）、Veeco（VECO）。<strong>三條賽道同時擴產 = MOCVD 訂單的疊加效應</strong>，但 Aixtron 股價受 GaN/SiC 資本開支週期影響大，需確認太空/InP 占比。`,
+  stocks: [
+    {ticker:'AIXA.DE', name:'Aixtron SE', exch:'XETRA ⚠️', role:'III-V MOCVD 設備主導廠，三賽道擴產共同受益（標注：主導地位為產業常識，未本輪重驗）', type:'partial', tags:['⚠️ 待深驗','三賽道匯流','設備週期股']},
+    {ticker:'VECO', name:'Veeco Instruments', exch:'Nasdaq ✅', role:'MOCVD 第二供應商，化合物半導體設備', type:'partial', tags:['✅ Nasdaq','設備二供']},
+  ]
+},
+
+L4: {
+  title: 'L4 — 輻射硬化電子：三座孤島＋一個被 PE 鎖住的純標的',
+  meta: [
+    {text:'瓶頸分 20/25', color:'var(--warn)'},
+    {text:'美國僅 3 家 Trusted Foundry', color:'var(--danger)'},
+    {text:'Frontgrade = 本賽道的 VAC', color:'var(--locked)'},
+  ],
+  scores: [
+    {label:'供應商集中度（3家）', val:5, color:'var(--danger)'},
+    {label:'認證門檻（QML-V 重認證數年）', val:5, color:'var(--danger)'},
+    {label:'產能緊俏', val:3, color:'var(--warn)'},
+    {label:'不可替代性（rad-tolerant降級）', val:3, color:'var(--warn)'},
+    {label:'勞工瓶頸（輻射工程師老化）', val:4, color:'var(--warn)'},
+  ],
+  insight: `美國 rad-hard 集中於 <strong>BAE Manassas、Honeywell Plymouth、Microchip Colorado Springs 三家 Trusted Foundry</strong>——任一中斷影響美國太空計畫數年（替代廠需 MIL-STD-883 Class S / QML-V 全面重認證）。隱憂：rad-hard SOI 晶圓僅占 Soitec 主導市場的極小份額、<strong>輻射響應工程師老化且學術管道有限</strong>（又一個無法用資本加速的勞工瓶頸）。<br><br>
+  <strong>替代路徑緩衝</strong>：NewSpace 星座衛星壽命短（5年），用商規 rad-tolerant 降級替代（Frontgrade×Lattice 路線）。瓶頸只鎖在深空/軍用/GEO 高端。<br><br>
+  GlobalFoundries 與 BAE 合作美國本土太空半導體——GFS 在 800VDC（GaN承接）與太空兩個掃描中二度出現，「美國本土化承接者」角色成形。`,
+  stocks: [
+    {ticker:'Frontgrade', name:'Frontgrade Technologies', exch:'Veritas Capital — 私有', role:'rad-hard 純標的唯一候選（記憶體+FPGA+電源），本賽道的 VAC。PE 退出窗口監測', type:'locked', tags:['⚠️ PE持有','IPO埋伏一級','rad-hard純度最高']},
+    {ticker:'BA.L / BAESY', name:'BAE Systems', exch:'LSE ⚠️', role:'Manassas Trusted Foundry + RH12 12nm 製程，rad-hard ASIC 領導者。被防務本體稀釋', type:'partial', tags:['⚠️ 後綴待驗','12nm rad-hard','稀釋']},
+    {ticker:'MCHP', name:'Microchip Technology', exch:'Nasdaq ✅', role:'Colorado Springs Trusted Foundry，rad-hard MCU/FPGA。占整體營收小', type:'partial', tags:['✅ Nasdaq','三孤島之一','稀釋']},
+    {ticker:'LSCC', name:'Lattice Semiconductor', exch:'Nasdaq ✅', role:'rad-tolerant FPGA 路線（Certus-NX-RT 與 Frontgrade 合作），NewSpace 降級替代受益者', type:'partial', tags:['✅ Nasdaq','rad-tolerant','NewSpace路線']},
+    {ticker:'GFS', name:'GlobalFoundries', exch:'Nasdaq ✅', role:'與 BAE 合作美國本土太空半導體；雙掃描出現（GaN承接+太空），本土化承接者', type:'partial', tags:['✅ Nasdaq','雙賽道出現','美國本土化']},
+    {ticker:'Soitec', name:'Soitec SA', exch:'巴黎 ⚠️', role:'SOI 晶圓主導廠，rad-hard SOI 是其市場的小眾部分', type:'partial', tags:['⚠️ 後綴待驗','SOI上游','小眾暴露']},
+  ]
+},
+
+L5: {
+  title: 'L5 — OISL 雷射星間鏈路：官方認證的瓶頸＋Mynaric 死亡案例',
+  meta: [
+    {text:'瓶頸分 21/25', color:'var(--warn)'},
+    {text:'SDA 署長公開承認瓶頸', color:'var(--danger)'},
+    {text:'4 家認證商 → 收購後剩 3 家獨立', color:'var(--warn)'},
+  ],
+  scores: [
+    {label:'供應商集中度（4家認證）', val:5, color:'var(--danger)'},
+    {label:'SDA 認證門檻', val:4, color:'var(--warn)'},
+    {label:'產能落差（CACI 21 vs Tesat 42）', val:5, color:'var(--danger)'},
+    {label:'替代性（RF fallback）', val:3, color:'var(--warn)'},
+    {label:'二級零組件脆弱度', val:4, color:'var(--warn)'},
+  ],
+  insight: `<strong>官方蓋章認證的瓶頸</strong>：SDA 代理署長公開表示光學終端是部署大型星座的持續瓶頸——「我們還沒達到需要的數量」。同批發射 Tesat 交付 42 具 vs CACI 21 具 = 2:1 產能落差。<br><br>
+  <strong class="danger">Mynaric 之死（必修案例）</strong>：曾為 Tranche 1 交付 100+ 具 CONDOR Mk3，但規模化失敗（二級零組件短缺）→ 2026/4 Rocket Lab 以 ~$155M 收購，<strong>原股東一無所獲</strong>。教訓：在瓶頸層，「拿到大訂單」≠「能交付」——訂單積壓對產能受限公司是負債。此規則直接適用台股所有「接單暴增」敘事的壓力測試。<br><br>
+  SpaceX 完全自製（9,000 顆 × 3-4 具/顆），不參與外部市場。`,
+  stocks: [
+    {ticker:'RKLB', name:'Rocket Lab（Mynaric 母體）', exch:'Nasdaq ✅', role:'收購 Mynaric 後成為唯一垂直整合發射+衛星+OISL 的上市公司。CONDOR Mk3 量產 + Mk3.1（100Gbps）開發中', type:'pure', tags:['✅ Nasdaq','唯一上市OISL prime','整合風險監測']},
+    {ticker:'CACI', name:'CACI International', exch:'NYSE ✅', role:'SDA 四家認證商之一，但產能落後（21 vs Tesat 42），被 IT 服務本體稀釋', type:'partial', tags:['✅ NYSE','產能落後','稀釋']},
+    {ticker:'Tesat', name:'Tesat-Spacecom', exch:'Airbus 子公司', role:'產能最強認證商（單批42具），累計交付數百具，Kepler 新單。鎖在 Airbus 內', type:'locked', tags:['⚠️ 母體鎖定','產能王','Airbus分拆監測']},
+    {ticker:'Skyloom', name:'Skyloom Global', exch:'私有', role:'SDA 第四家認證商，私有', type:'locked', tags:['⚠️ 私有','融資輪監測']},
+  ]
+},
+
+L6: {
+  title: 'L6 — 固態火箭推進 SRM：雙寡頭＋已經爆炸過的地基',
+  meta: [
+    {text:'瓶頸分 21/25', color:'var(--warn)'},
+    {text:'6 家 → 2 家（1995-2017）', color:'var(--danger)'},
+    {text:'Golden Dome 2028 壓時程', color:'var(--gold)'},
+  ],
+  scores: [
+    {label:'Prime 集中度（雙寡頭）', val:5, color:'var(--danger)'},
+    {label:'共用次級供應商脆弱度', val:5, color:'var(--danger)'},
+    {label:'飛彈+太空需求競搶', val:5, color:'var(--danger)'},
+    {label:'新進者稀釋（Anduril等）', val:2, color:'var(--safe)'},
+    {label:'含能材料地基', val:5, color:'var(--danger)'},
+  ],
+  insight: `美國 SRM 工業基礎從 6 家縮至 2 家：Northrop（收 Orbital ATK）+ L3Harris（收 Aerojet）。兩家「被拴在少數共用供應商上」——任一次級商中斷將<strong>同時癱瘓整個 SRM 企業</strong>。<br><br>
+  <strong class="danger">這不是假設</strong>：2025/10 Accurate Energetic Systems 田納西廠爆炸，16 人死亡，2.4-2.8 萬磅炸藥引爆——該廠正是 SRM 含能材料次級供應商。<br><br>
+  新進者湧入（Anduril、Ursa Major、X-Bow、GD）會稀釋 prime 層集中度，但 <strong>N-2 含能材料地基共用不變</strong>——真正的卡點在化學品層。Golden Dome SBI 2028 演示 + 飛彈補庫需求同搶一個產能池。`,
+  stocks: [
+    {ticker:'NOC', name:'Northrop Grumman', exch:'NYSE ✅', role:'SRM 雙寡頭之一（前 Orbital ATK），擴產中。被防務本體稀釋', type:'partial', tags:['✅ NYSE','雙寡頭','稀釋']},
+    {ticker:'LHX', name:'L3Harris（Aerojet）', exch:'NYSE ✅', role:'SRM 雙寡頭之二（2023 收 Aerojet Rocketdyne），擴產中', type:'partial', tags:['✅ NYSE','雙寡頭','稀釋']},
+    {ticker:'Anduril / Ursa Major / X-Bow', name:'SRM 新進者群', exch:'私有', role:'瞄準 DoD 新彈藥資金的新進者，可能垂直整合含能材料', type:'locked', tags:['⚠️ 私有','IPO候選群','Anduril最大']},
+  ]
+},
+
+energetics: {
+  title: 'N-2 — 含能材料：已經爆炸過的共用地基',
+  meta: [{text:'結構洞：私有+分散+已出事', color:'var(--danger)'}],
+  scores: [
+    {label:'物理風險（爆炸已發生）', val:5, color:'var(--danger)'},
+    {label:'供應商可見度', val:1, color:'var(--danger)'},
+    {label:'上市標的存在性', val:1, color:'var(--danger)'},
+  ],
+  insight: `SRM 的推進劑原料（AP 過氯酸銨、HTPB 黏結劑、特種炸藥）供應商多為私有小廠且 Northrop/L3Harris 共用。Accurate Energetic Systems 爆炸（16死）證明：<strong>單一私有小廠的物理事故可同時打擊整個國家的 SRM 產能</strong>。<br><br>
+  上市可及性接近零——AP 主要供應商 American Pacific 已被 PE 私有化多年。這是太空版的「退火爐」：看得見的瓶頸，買不到的標的。`,
+  stocks: [
+    {ticker:'（無上市標的）', name:'含能材料供應群', exch:'—', role:'American Pacific（AP，私有）、Accurate Energetic（已爆炸）等。結構洞', type:'structural', tags:['結構洞','PE持有','物理風險已實現']},
+  ]
+},
+
+L7: {
+  title: 'L7 — 地面段/RF/PCB：台股主場（含量型）',
+  meta: [
+    {text:'含量分 14（非瓶頸型）', color:'var(--safe)'},
+    {text:'1月七檔漲停 = 滲透飽和信號', color:'var(--danger)'},
+    {text:'SpaceX IPO 今日 = 題材最高潮', color:'var(--gold)'},
+  ],
+  scores: [
+    {label:'瓶頸強度', val:2, color:'var(--safe)'},
+    {label:'含量成長（衛星世代升級）', val:4, color:'var(--warn)'},
+    {label:'定價滲透（族群平均）', val:4, color:'var(--danger)'},
+    {label:'華通衛星板準壟斷（90%）', val:5, color:'var(--accent)'},
+  ],
+  insight: `<strong>與 800VDC L4 同款結論：台股全數位於含量層，賺 ASP×滲透率，不賺稀缺定價權。</strong><br><br>
+  滲透度分層（關鍵判讀）：<br>
+  ◆ <strong>~90% 飽和</strong>：昇達科——血統最純（2026Q1 衛星營收占比 8 成、毛利率 6 成、營收成長目標 9 成）但已充分定價，處於「光寶科型」風險位置。1月 SpaceX 訪台 7 檔漲停 + 今日 IPO = 雙重飽和信號。<br>
+  ◆ <strong>~50-60% 中段（媒體已點名低估）</strong>：啟碁 PE 13x 雙底、華通 PE 14x、台燿 22x。同欣電被媒體明示「低基期」= 滲透快速回填中，窗口以週計。<br>
+  ◆ <strong>華通的特殊性</strong>：衛星 HDI 板市占 90%+ = 含量層中罕見的準壟斷，含量×市占雙引擎。但必須通過 <strong>Mynaric 交付測試</strong>：泰國廠產能爬坡才是真證偽點。`,
+  stocks: [
+    {ticker:'昇達科 3491', name:'Universal Microwave', exch:'TWSE ✅', role:'濾波器/波導管，Starlink+Kuiper 雙供應。2026 衛星營收占比 80%、GM 60%+。純度王但已飽和定價', type:'pure', tags:['✅ TWSE','純度最高','滲透~90% 慎追']},
+    {ticker:'華通 2313', name:'Compeq Manufacturing', exch:'TWSE ✅', role:'衛星 HDI 板全球市占 90%+，四大 LEO 業者通吃。2026E EPS 6.5 元、PE ~14x。準壟斷+低估值', type:'pure', tags:['✅ TWSE','準壟斷90%','PE 14x','Mynaric測試對象']},
+    {ticker:'啟碁 6285', name:'Wistron NeWeb', exch:'TWSE ✅', role:'相位陣列天線+地面站，2026E EPS 8元+、PE ~13x，雙底型態。兼 800GbE 交換器/OCS 題材', type:'pure', tags:['✅ TWSE','PE 13x 最低','LEO+AI雙題材']},
+    {ticker:'同欣電 6271', name:'Tong Hsing', exch:'TWSE ✅', role:'高頻陶瓷封裝 RF 收發模組（SpaceX 衛星本體），媒體明示「低基期」後漲停——滲透回填中', type:'partial', tags:['✅ TWSE','低基期已被點名','窗口以週計']},
+    {ticker:'穩懋 3105', name:'Win Semiconductors', exch:'TWSE ✅', role:'GaAs 代工龍頭，星間高頻連結+手機直連，早期參與 SpaceX', type:'partial', tags:['✅ TWSE','GaAs+鎵風險','CPO交叉']},
+    {ticker:'全訊 5222', name:'Transcom', exch:'TPEx ⚠️', role:'軍工級 GaAs PA，直接供應衛星酬載', type:'partial', tags:['⚠️ 後綴待驗','軍工PA','酬載直供']},
+    {ticker:'台揚 2314', name:'Microelectronics Tech', exch:'TWSE ✅', role:'寬頻衛星地面站設備，供應 SpaceX/OneWeb/Kymeta', type:'partial', tags:['✅ TWSE','地面站','多客戶']},
+    {ticker:'金寶 2312', name:'Kinpo Electronics', exch:'TWSE ✅', role:'SpaceX 地面接收站整機組裝', type:'partial', tags:['✅ TWSE','整機組裝','低毛利環節']},
+    {ticker:'台光電 2383', name:'EMC', exch:'TWSE ✅', role:'衛星板 CCL 最優供應商（天上+地面雙吃）', type:'partial', tags:['✅ TWSE','CCL材料','AI+LEO雙題材']},
+    {ticker:'群創 3481', name:'Innolux', exch:'TWSE ✅', role:'FOPLP 面板級封裝 Chip-First 切入 SpaceX，最新封裝新兵', type:'partial', tags:['✅ TWSE','FOPLP新切入','驗證早期']},
+  ]
+},
+
+xlink: {
+  title: '跨賽道交叉點 — 太空 × 800VDC × CPO 匯流圖',
+  meta: [{text:'三條賽道在 N-3 層匯合', color:'var(--accent2)'}],
+  scores: [],
+  insight: '',
+  xlink: true,
+  stocks: []
+},
+
+ipo: {
+  title: 'IPO 埋伏監測 — 太空版',
+  meta: [{text:'瓶頸層最純標的幾乎全部私有/母體鎖定', color:'var(--locked)'}],
+  scores: [],
+  insight: `太空瓶頸層的可投資性比 800VDC 更差：<strong>L3 藏在 Boeing/RKLB 母體、L4 被 PE 鎖住、L5 藏在 Airbus/私有、L6 N-2 私有且已出事</strong>。RKLB 是唯一系統性收購瓶頸的上市載體。SpaceX 今日掛牌打開第一個缺口。`,
+  ipo_table: true,
+  stocks: []
+},
+
+falsify: {
+  title: '證偽日曆 — 太空版',
+  meta: [{text:'◉ = 日曆型硬催化', color:'var(--gold)'}],
+  scores: [],
+  insight: '每一項都是可觀察事實。結果決定維持/加倉/退出。',
+  falsify: true,
+  stocks: []
+},
+};
+
+const QUAD_DOTS = [
+  // x: penetration 0-100, y: score 0-25
+  {x:10, y:24, label:'鍺基板', color:'var(--danger)', note:'最高分+幾乎未定價，但無純標的'},
+  {x:12, y:23, label:'L3太空電池', color:'var(--locked)', note:'藏在Boeing/RKLB母體'},
+  {x:15, y:20, label:'L4 Rad-Hard', color:'var(--locked)', note:'Frontgrade私有'},
+  {x:30, y:21, label:'L5 OISL', color:'var(--warn)', note:'RKLB=唯一上市載體'},
+  {x:35, y:21, label:'L6 SRM', color:'var(--warn)', note:'防務需求已部分定價'},
+  {x:45, y:17, label:'L2衛星酬載', color:'var(--warn)', note:'同欣電/全訊'},
+  {x:55, y:16, label:'華通(準壟斷)', color:'var(--accent)', note:'PE 14x+90%市占'},
+  {x:55, y:14, label:'啟碁', color:'var(--accent)', note:'PE 13x 雙底'},
+  {x:60, y:13, label:'同欣電', color:'var(--warn)', note:'低基期已被點名'},
+  {x:90, y:14, label:'昇達科', color:'var(--danger)', note:'純度王/已飽和'},
+  {x:88, y:18, label:'L1發射(SpaceX)', color:'var(--gold)', note:'今日IPO=滲透頂點'},
+  {x:25, y:15, label:'MOCVD設備', color:'var(--accent2)', note:'三賽道匯流'},
+];
+
+const IPO_DATA = [
+  {name:'SpaceX', layer:'L0/L1', holder:'◉ 今日掛牌', timeline:'2026/6/12', trigger:'—', signal:'S-1 供應鏈成本揭露 = 全產業參照系'},
+  {name:'Frontgrade', layer:'L4 rad-hard', holder:'Veritas Capital', timeline:'PE退出窗口 2026-2028', trigger:'Golden Dome 太空電子需求', signal:'rad-hard 唯一純標的候選'},
+  {name:'Azur Space', layer:'L3 電池', holder:'德國私有', timeline:'不明', trigger:'歐洲主權星座需求+擴產資金需求', signal:'出售/上市傳聞'},
+  {name:'Anduril', layer:'L6+多層', holder:'VC（最大私有防務新創）', timeline:'市場長期預期 2026-2027', trigger:'SRM/反無人機放量', signal:'S-1 提交'},
+  {name:'Skyloom', layer:'L5 OISL', holder:'私有', timeline:'不明', trigger:'Tranche 2 交付實績', signal:'融資輪/被收購'},
+  {name:'Tesat-Spacecom', layer:'L5 OISL', holder:'Airbus', timeline:'Airbus 防務重組相關', trigger:'歐洲防務整合', signal:'分拆討論'},
+  {name:'Ursa Major / X-Bow', layer:'L6 SRM', holder:'VC', timeline:'2027+', trigger:'DoD 彈藥資金落地', signal:'大額合約公告'},
+];
+
+const FALSIFY_DATA = [
+  {date:'◉ 今日 6/12', event:'SpaceX 掛牌首日 + 後續 S-1 揭露', target:'L0 全產業', action:'估值參照系重寫；台股供應鏈採購量可見化 vs 議價權透明化雙刃', hot:true},
+  {date:'2026 年中', event:'Amazon Leo（Kuiper）商業服務正式上線', target:'第二需求引擎', action:'上線 → 非SpaceX需求證實，台股雙客戶敘事兌現；延期 → 昇達科 Kuiper 占比承壓', hot:false},
+  {date:'每月 10 日', event:'昇達科/華通/同欣電月營收', target:'L7 台股', action:'「接單敘事」vs「交付現實」的 Mynaric 壓力測試——尤其華通泰國廠爬坡', hot:false},
+  {date:'◉ 2026/11/27', event:'中國對美鎵禁令暫停到期', target:'L3/N-2 + GaN + GaAs', action:'恢復禁令 → 四賽道同步受擊（太空電池/GaN/穩懋/InP）；永久豁免 → 風險溢價釋放', hot:true},
+  {date:'SDA Tranche 2', event:'四家 OISL 商產能落差是否收斂', target:'RKLB/L5', action:'RKLB-Mynaric 交付達標 → 收購整合成功證明；持續落後 → 整合風險實現', hot:false},
+  {date:'持續', event:'Spectrolab/Azur 擴產公告規模', target:'L3', action:'出現「符合需求曲線」級 capex → 瓶頸鬆動倒數；維持小幅 → 缺口延續', hot:false},
+  {date:'持續', event:'SpaceX 是否收購太陽能電池廠', target:'L3', action:'發生 → 外部供給瞬間收縮，Azur/RKLB SolAero 價值跳升', hot:false},
+  {date:'2028', event:'Golden Dome SBI 演示', target:'L6 SRM', action:'時程壓力 → SRM 與含能材料缺口擴大', hot:false},
+  {date:'持續', event:'台股 LEO 族群第二次集體漲停', target:'L7', action:'出現 → 滲透完成信號，停止建倉/開始減碼', hot:false},
+];
+
+const XLINKS = [
+  {title:'鎵 — 四線匯流咽喉', body:'中國 98% 原生鎵 = <strong>太空 GaAs 電池（L3）+ GaN 功率（800VDC L6）+ 台股 GaAs 代工（穩懋/宏捷科）+ InP 旁路（CPO）</strong>的共同上游。11/27 是四條賽道的共同事件日。'},
+  {title:'MOCVD — 三賽道設備瓶頸', body:'太空 III-V、GaN、InP 同時擴產 = Aixtron 系設備訂單疊加。Azur 擴產公告直接指明 MOVPE 反應爐為磊晶層約束。'},
+  {title:'CBMM 鈮 — 二度現身', body:'奈米晶磁芯（800VDC L3）的晶粒穩定劑 + 火箭噴嘴 C-103 鈮合金（推論）共用巴西 CBMM 壟斷源（全球 ~80%）。'},
+  {title:'GFS — 美國本土化承接者', body:'雙掃描出現：取得台積電 GaN 授權（800VDC L6）+ 與 BAE 合作太空半導體（太空 L4）。「去風險化承接」是其結構性角色。'},
+  {title:'RKLB — 瓶頸聚合器', body:'SolAero（L3 電池）+ Sinclair（元件）+ Mynaric（L5 OISL）——全球唯一以上市公司形態系統性收購瓶頸層。<strong>RKLB 估值 = 瓶頸組合 + Neutron 期權</strong>。它做的事就是這份掃描的投資版。'},
+  {title:'勞工瓶頸 — 跨賽道同構', body:'變壓器繞線工（800VDC L1）、輻射響應工程師（太空 L4）、光學工程師（太空 L5）——三個都無法用資本加速，都是 Goldman「技術勞工是下一個瓶頸」論點的實例。'},
+  {title:'含量層 = 台股宿命', body:'兩次掃描相同結論：<strong>台股 100% 位於含量層（800VDC 的 busbar/BBU、太空的地面段/PCB/RF），瓶頸層 0% 台股</strong>。台股策略本質 = 賭時間差與含量，非定價權。此約束應寫入 12 模組台股版前提。'},
+];
+
+function renderStocks(stocks) {
+  if (!stocks || !stocks.length) return '';
+  const tc = {pure:'var(--accent)', partial:'var(--warn)', locked:'var(--locked)', structural:'var(--danger)'};
+  const tl = {pure:'純標的', partial:'混合', locked:'鎖定', structural:'結構洞'};
+  let h = `<div class="section-title">可投資映射</div><div class="stocks-grid">`;
+  for (const s of stocks) {
+    h += `<div class="stock-card ${s.type}">
+      <div class="stock-top">
+        <div><div class="stock-ticker">${s.ticker}</div><div class="stock-exch">${s.exch}</div></div>
+        <div class="stock-type" style="background:${tc[s.type]}22;color:${tc[s.type]};border:1px solid ${tc[s.type]}44">${tl[s.type]}</div>
+      </div>
+      <div class="stock-name">${s.name}</div>
+      <div class="stock-role">${s.role}</div>
+      <div class="stock-tags">${s.tags.map(t => {
+        let c = t.startsWith('✅') ? 'safe' : t.startsWith('⚠️') ? 'warn' : (t.includes('私有')||t.includes('結構洞')||t.includes('鎖定')) ? 'locked' : '';
+        return `<span class="stag ${c}">${t}</span>`;
+      }).join('')}</div>
+    </div>`;
+  }
+  return h + `</div>`;
+}
+
+function renderQuad() {
+  const W = 760, H = 480, P = 55;
+  const px = x => P + (x/100)*(W-2*P);
+  const py = y => (H-P) - (y/25)*(H-2*P);
+  let dots = '';
+  for (const d of QUAD_DOTS) {
+    dots += `<g class="q-dot">
+      <circle cx="${px(d.x)}" cy="${py(d.y)}" r="6.5" fill="${d.color}" opacity="0.9"></circle>
+      <text x="${px(d.x)+10}" y="${py(d.y)+4}" class="q-label">${d.label}</text>
+      <title>${d.label}：${d.note}</title>
+    </g>`;
+  }
+  return `
+  <div class="quad-wrap">
+    <svg class="quad-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gz" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#ffd25e" stop-opacity="0.07"/>
+          <stop offset="100%" stop-color="transparent"/>
+        </linearGradient>
+      </defs>
+      <rect x="${P}" y="${P}" width="${(W-2*P)/2}" height="${(H-2*P)/2}" fill="url(#gz)"/>
+      <line x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}" stroke="var(--border2)" stroke-width="1"/>
+      <line x1="${P}" y1="${P}" x2="${P}" y2="${H-P}" stroke="var(--border2)" stroke-width="1"/>
+      <line x1="${(W)/2}" y1="${P}" x2="${W/2}" y2="${H-P}" stroke="var(--border)" stroke-dasharray="4 4"/>
+      <line x1="${P}" y1="${H/2}" x2="${W-P}" y2="${H/2}" stroke="var(--border)" stroke-dasharray="4 4"/>
+      <text x="${P+12}" y="${P+24}" class="q-zone" fill="var(--gold)">黃金象限：高瓶頸 × 低滲透</text>
+      <text x="${W/2+12}" y="${P+24}" class="q-zone" fill="var(--danger)">已定價：高瓶頸 × 高滲透</text>
+      <text x="${P+12}" y="${H-P-14}" class="q-zone" fill="var(--text3)">不急：低瓶頸 × 低滲透</text>
+      <text x="${W/2+12}" y="${H-P-14}" class="q-zone" fill="var(--danger)">避開：低瓶頸 × 高滲透</text>
+      <text x="${W/2}" y="${H-14}" class="q-axis" text-anchor="middle">定價滲透度 →（0% 至 100%）</text>
+      <text x="16" y="${H/2}" class="q-axis" transform="rotate(-90 16 ${H/2})" text-anchor="middle">瓶頸/含量分 →（0 至 25）</text>
+      ${dots}
+    </svg>
+  </div>
+  <div class="insight-box gold"><strong>判讀</strong>：左上黃金象限被「鍺基板、L3 電池、L4 rad-hard」佔據——但三者全部無純上市標的（懸停查看註記）。可實際買到且最接近黃金格的：<strong>RKLB（L5 載體）、華通（準壟斷+PE 14x）、啟碁（PE 13x）</strong>。右下「昇達科」是純度與滲透同高的典型——基本面最強但風險報酬比最差的位置。鍺/鎵的價值需透過 11/27 事件以「期權思維」操作而非持股。</div>`;
+}
+
+function renderXlink() {
+  let h = `<div class="xlink-grid">`;
+  for (const x of XLINKS) h += `<div class="xlink-card"><h4>${x.title}</h4><p>${x.body}</p></div>`;
+  return h + `</div>`;
+}
+
+function renderIPO() {
+  let h = `<table class="ipo-table"><thead><tr><th>名稱</th><th>層</th><th>持有者</th><th>時間窗</th><th>觸發條件</th><th>監測信號</th></tr></thead><tbody>`;
+  for (const r of IPO_DATA) {
+    h += `<tr><td>${r.name}</td><td><span style="font-family:var(--mono);font-size:10px;color:var(--accent2)">${r.layer}</span></td><td>${r.holder}</td><td style="color:var(--warn)">${r.timeline}</td><td>${r.trigger}</td><td style="color:var(--accent)">${r.signal}</td></tr>`;
+  }
+  return h + `</tbody></table>`;
+}
+
+function renderFalsify() {
+  let h = `<ul class="falsify-list">`;
+  for (const f of FALSIFY_DATA) {
+    h += `<li class="${f.hot?'hot':''}"><div style="flex:1">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:4px;flex-wrap:wrap">
+        <span style="font-family:var(--mono);font-size:10px;color:${f.hot?'var(--gold)':'var(--accent2)'};white-space:nowrap">${f.date}</span>
+        <strong>${f.event}</strong>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text3);background:var(--bg3);padding:2px 6px;border-radius:3px">${f.target}</span>
+      </div>
+      <div style="color:var(--text2)">${f.action}</div>
+    </div></li>`;
+  }
+  return h + `</ul>`;
+}
+
+function showDetail(id, el) {
+  const d = DATA[id];
+  if (!d) return;
+  document.querySelectorAll('.tree-layer,.tree-sub').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  let scoreHTML = '';
+  if (d.scores && d.scores.length) {
+    scoreHTML = `<div class="section-title">維度評分</div><div class="score-grid">`;
+    for (const s of d.scores) {
+      scoreHTML += `<div class="score-label">${s.label}</div>
+        <div class="score-bar-wrap"><div class="score-bar-fill" style="width:${(s.val/5)*100}%;background:${s.color}"></div></div>
+        <div class="score-val" style="color:${s.color}">${s.val}/5</div>`;
+    }
+    scoreHTML += `</div>`;
+  }
+
+  const metaHTML = (d.meta||[]).map(m => `<span class="meta-tag" style="color:${m.color};border-color:${m.color}44;background:${m.color}11">${m.text}</span>`).join('');
+
+  let extra = '';
+  if (d.quad) extra = renderQuad();
+  if (d.xlink) extra = renderXlink();
+  if (d.ipo_table) extra = renderIPO();
+  if (d.falsify) extra = renderFalsify();
+
+  document.getElementById('detailPanel').innerHTML = `
+    <div class="detail-header"><h2>${d.title}</h2><div class="detail-meta">${metaHTML}</div></div>
+    ${scoreHTML}
+    ${d.insight ? `<div class="section-title">分析洞察</div><div class="insight-box">${d.insight}</div>` : ''}
+    ${renderStocks(d.stocks)}
+    ${extra}
+  `;
+}
+
+function switchTab(ev, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  ev.target.classList.add('active');
+  showDetail(id, null);
+}
+
+showDetail('overview', document.querySelector('.tree-layer'));
+</script>
+</body>
+</html>

@@ -788,71 +788,178 @@
     },
     {
       "key": "leo",
-      "name": "低軌衛星",
-      "bottleneck": "瓶頸=衛星地面設備/相位陣列天線/PA、衛星製造與發射;Starlink 主導,台廠卡地面終端/PCB/微波元件。",
-      "note": "選股邏輯:地面設備/終端(台揚/啟碁/中磊)、微波元件(昇達科)、衛星用 PCB(金像電);美股看衛星營運/製造(ASTS/Rocket Lab/Iridium),其他=歐系衛星營運(Eutelsat-OneWeb)。",
+      "name": "低軌衛星 / 太空供應鏈",
+      "bottleneck": "瓶頸=III-V 太空太陽能電池（L3、23/25 分）→ 鍺基板 N-2（24/25 全場最高，中國禁出口）→ 衛星用抗輻射 IC（L2）→ OISL 光電模組（L1）；SpaceX IPO（2026/6）首揭 Starlink 供應成本，全產業估值參照系重寫。",
+      "note": "選股邏輯：台股卡位地面終端/PA/PCB（穩懋/昇達科/啟碁/台揚/華通/同欣電）；美股看發射+製造聚合器（RKLB）、抗輻射 IC（MCHP/LSCC）、太空電子/OISL（NOC/LHX）；鍺基板（Umicore）私有/稀釋警示。點「太空 Chokepoint 穿透圖」展開 N-3 互動地圖。",
+      "map": "/maps/space_chokepoint.html",
+      "map_title": "太空產業 Chokepoint 穿透地圖（N-3 深度版）",
       "stocks": [
         {
-          "code": "2314",
+          "code": "3105",
           "market": "tw",
-          "name": "台揚",
-          "role": "衛星通訊地面設備/天線",
-          "tag": "地面設備"
+          "name": "穩懋",
+          "role": "GaAs PA（衛星酬載/地面終端）+ III-V 太空太陽能電池卡位；最接近 L3 電池瓶頸的台股",
+          "tag": "PA+太陽能L3"
+        },
+        {
+          "code": "8086",
+          "market": "tw",
+          "name": "宏捷科",
+          "role": "III-V 化合物半導體磊晶/代工；GaAs/GaN 衛星 RF 元件",
+          "tag": "III-V磊晶"
         },
         {
           "code": "3491",
           "market": "tw",
           "name": "昇達科",
-          "role": "衛星/微波被動元件",
+          "role": "衛星/微波被動元件（濾波器/隔離器）；太空用 RF 路徑關鍵器件",
           "tag": "微波元件"
         },
         {
           "code": "6285",
           "market": "tw",
           "name": "啟碁",
-          "role": "衛星地面終端/網通",
+          "role": "衛星地面終端/相位陣列天線；Starlink 地面站生態供應商",
           "tag": "地面終端"
+        },
+        {
+          "code": "2314",
+          "market": "tw",
+          "name": "台揚",
+          "role": "衛星通訊地面設備/天線；VSAT 系統整合",
+          "tag": "地面設備"
+        },
+        {
+          "code": "2313",
+          "market": "tw",
+          "name": "華通",
+          "role": "高階衛星用 PCB；太空/軍規 HDI 板",
+          "tag": "太空PCB"
+        },
+        {
+          "code": "6271",
+          "market": "tw",
+          "name": "同欣電",
+          "role": "衛星電子 SiP/CSP 封裝；衛星酬載電子模組",
+          "tag": "SiP封裝"
+        },
+        {
+          "code": "5222",
+          "market": "tw",
+          "name": "全訊",
+          "role": "衛星 RF 前端模組；L 波段/Ka 波段元件",
+          "tag": "衛星RF"
+        },
+        {
+          "code": "2312",
+          "market": "tw",
+          "name": "金寶",
+          "role": "衛星/防務 PCB；高可靠性板材",
+          "tag": "PCB"
+        },
+        {
+          "code": "2383",
+          "market": "tw",
+          "name": "台光電",
+          "role": "高速/高頻 CCL 覆銅板；衛星通訊 PCB 基材",
+          "tag": "CCL基材"
         },
         {
           "code": "2368",
           "market": "tw",
           "name": "金像電",
-          "role": "高階 PCB(衛星/AI 伺服器)",
+          "role": "高階 PCB（衛星/AI 伺服器）",
           "tag": "PCB"
-        },
-        {
-          "code": "5388",
-          "market": "tw",
-          "name": "中磊",
-          "role": "網通/衛星地面設備",
-          "tag": "網通"
-        },
-        {
-          "code": "ASTS",
-          "market": "us",
-          "name": "AST SpaceMobile",
-          "role": "衛星直連手機(D2C)",
-          "tag": "衛星營運"
         },
         {
           "code": "RKLB",
           "market": "us",
           "name": "Rocket Lab",
-          "role": "火箭發射+衛星製造",
-          "tag": "發射+製造"
+          "role": "發射+衛星製造+SolAero（太空太陽能電池 L3）三合一瓶頸聚合器；SDA 軍星主要承包商",
+          "tag": "瓶頸聚合器"
+        },
+        {
+          "code": "MCHP",
+          "market": "us",
+          "name": "Microchip Technology",
+          "role": "抗輻射 FPGA/MCU（L2）；SpaceFlight Pro 系列；太空計算不可或缺",
+          "tag": "抗輻射IC"
+        },
+        {
+          "code": "LSCC",
+          "market": "us",
+          "name": "Lattice Semiconductor",
+          "role": "抗輻射 FPGA（L2）；ITAR 管制，美制衛星首選",
+          "tag": "抗輻射FPGA"
+        },
+        {
+          "code": "NOC",
+          "market": "us",
+          "name": "Northrop Grumman",
+          "role": "OISL 光學星間鏈路（L1）+太空電子系統；SDA 三角衛星 OISL 主要建造商",
+          "tag": "OISL/太空電子"
+        },
+        {
+          "code": "LHX",
+          "market": "us",
+          "name": "L3Harris Technologies",
+          "role": "OISL 終端+太空電子（L1）；軍規衛星酬載關鍵分包商",
+          "tag": "OISL終端"
+        },
+        {
+          "code": "GFS",
+          "market": "us",
+          "name": "GlobalFoundries",
+          "role": "抗輻射半導體代工（L2）；FD-SOI 製程；SiGe 衛星晶片代工",
+          "tag": "抗輻射代工"
+        },
+        {
+          "code": "VECO",
+          "market": "us",
+          "name": "Veeco Instruments",
+          "role": "MOVPE 設備（N-2 製程工具）；III-V 太陽能電池與 GaN PA 磊晶爐龍頭",
+          "tag": "MOVPE設備"
+        },
+        {
+          "code": "AXTI",
+          "market": "us",
+          "name": "AXT Inc.",
+          "role": "III-V 半導體基板（GaAs/Ge/InP）；太空太陽能電池 Ge 基板直接供應",
+          "tag": "Ge/GaAs基板"
+        },
+        {
+          "code": "ASTS",
+          "market": "us",
+          "name": "AST SpaceMobile",
+          "role": "衛星直連手機（D2C）；BlueBird 星座量產部署",
+          "tag": "衛星D2C"
         },
         {
           "code": "IRDM",
           "market": "us",
           "name": "Iridium",
-          "role": "低軌衛星通訊營運",
+          "role": "低軌衛星通訊營運；全球覆蓋 M2M/IoT",
           "tag": "衛星營運"
+        },
+        {
+          "code": "UMI.BR",
+          "market": "other",
+          "name": "Umicore（比）",
+          "role": "N-2 鍺基板 4N+ 精煉；中國禁出口後全球最關鍵替代來源（但亦稀釋在大業務）",
+          "tag": "鍺基板N-2"
+        },
+        {
+          "code": "VNP.TO",
+          "market": "other",
+          "name": "5N Plus（加）",
+          "role": "N-2 太空級 Ge 基板；4N+ 精煉，North American 替代鍺來源",
+          "tag": "Ge精煉N-2"
         },
         {
           "code": "ETL.PA",
           "market": "other",
-          "name": "Eutelsat(歐)",
-          "role": "衛星營運(整併 OneWeb)",
+          "name": "Eutelsat（法）",
+          "role": "衛星營運（整併 OneWeb）；LEO 星座補充",
           "tag": "衛星營運"
         }
       ]

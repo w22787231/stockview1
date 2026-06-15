@@ -97,6 +97,12 @@ jobs:
           cd engine
           python export_chain.py
 
+      - name: Install Playwright Chromium (for 群益 SPA)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        run: |
+          pip install playwright
+          playwright install chromium --with-deps
+
       - name: Export active ETF holdings change
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

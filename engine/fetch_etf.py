@@ -59,20 +59,80 @@ def fetch_tongyi(etf, info):
     return rows
 
 def fetch_capital(etf, info):
-    """群益 capitalfund buyback:SSR HTML div.tr,欄序=代碼/名稱/權重%/張數。"""
-    op=U.build_opener(_H()); op.addheaders=_UA
-    t=_get(op, f"https://www.capitalfund.com.tw/etf/product/detail/{info['path']}/buyback")
-    rows=[]; seen=set()
-    for tr in re.findall(r'class="tr show-for-medium">(.*?)(?=<div[^>]*class="tr|$)', t, re.S):
-        cells=[_clean(c) for c in re.findall(r'class="t[hd][^"]*">(.*?)</div>', tr, re.S)]
-        cells=[c for c in cells if c]
-        if len(cells)>=4 and re.match(r'^[0-9A-Z]{4,6}$', cells[0]) and cells[0] not in seen:
-            seen.add(cells[0])
-            code,name=cells[0],cells[1]
-            w=next((c for c in cells[2:] if '%' in c), "")
-            # 張數=不含%的純數字(排除代碼本身)
-            q=next((c for c in cells[2:] if re.match(r'^[\d,]+$', c) and '%' not in c), "")
-            rows.append(_rec(etf,info,code,name,w,q))
+    """群益 capitalfund:Angular SPA + Incapsula → Playwright 渲染後攔截 API JSON。"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print(f"  {etf}: playwright 未安裝,跳過")
+        return []
+
+    json_resps = []  # (url, body)
+
+    def _on_resp(resp):
+        if resp.status != 200:
+            return
+        if "json" not in resp.headers.get("content-type", ""):
+            return
+        try:
+            body = resp.json()
+            if isinstance(body, (list, dict)):
+                json_resps.append((resp.url, body))
+        except Exception:
+            pass
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage",
+                  "--disable-blink-features=AutomationControlled"],
+        )
+        ctx = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            extra_http_headers={"Accept-Language": "zh-TW,zh;q=0.9"},
+        )
+        page = ctx.new_page()
+        page.on("response", _on_resp)
+        try:
+            page.goto(
+                f"https://www.capitalfund.com.tw/etf/product/detail/{info['path']}/buyback",
+                wait_until="networkidle",
+                timeout=60000,
+            )
+            page.wait_for_timeout(3000)  # 額外等 Angular 初始化
+        except Exception as e:
+            print(f"  {etf}: PW err {type(e).__name__}: {str(e)[:80]}")
+        browser.close()
+
+    # 從攔截到的 /CFWeb/api/etf/buyback 中解析持股
+    # 結構: body["data"]["pcf"]["stocks"][]{stocNo, stocName, weight, share}
+    rows = []; seen = set()
+    for url, body in json_resps:
+        if not isinstance(body, dict) or body.get("code") != 200:
+            continue
+        data = body.get("data", {})
+        if not isinstance(data, dict):
+            continue
+        stocks = data.get("stocks", [])
+        if not stocks:
+            continue
+        for item in stocks:
+            code = str(item.get("stocNo", "")).strip()
+            name = str(item.get("stocName", "")).strip()
+            w = str(item.get("weight", "")).strip()
+            share = item.get("share") or 0
+            q = str(int(float(share) // 1000)) if share else ""
+            if not code or code in seen:
+                continue
+            if not re.match(r"^[0-9A-Z]{4,6}$", code):
+                continue
+            seen.add(code)
+            rows.append(_rec(etf, info, code, name, w, q))
+        if rows:
+            break
     return rows
 
 def fetch_yuanta(etf, info):

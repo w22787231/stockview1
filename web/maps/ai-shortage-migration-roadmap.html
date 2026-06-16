@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 缺貨遷移路線圖 · 雙軸 (矽晶後段 × 電子)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d1014; --panel:#161b22; --panel2:#1c232c; --line:#283139; --line-soft:#1e2630;
+    --ink:#e9eef3; --dim:#9aa7b3; --faint:#64727f;
+    --now:#ff6f61;   /* 現在最緊 */
+    --next:#e8b84b;  /* 下一棒·可布局 */
+    --late:#5fb3c9;  /* 較遠·觀察 */
+    --si:#8aa0ff;    /* 矽晶後段軸 lane tint */
+    --el:#f0a866;    /* 電子軸 lane tint */
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:"Archivo","Noto Sans TC",system-ui,sans-serif;
+    --body:"Noto Sans TC","Inter",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1100px 520px at 15% -8%, rgba(138,160,255,.05), transparent 60%),
+      radial-gradient(1100px 520px at 85% 108%, rgba(240,168,102,.05), transparent 60%),
+      var(--bg);
+    color:var(--ink); font-family:var(--body); -webkit-font-smoothing:antialiased; line-height:1.5;
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:26px 18px 60px}
+
+  header{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel),#12171d);padding:20px 22px;position:relative;overflow:hidden}
+  header::before{content:"";position:absolute;inset:0;background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);background-size:32px 32px;opacity:.3;mask:linear-gradient(90deg,#000,transparent 70%)}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:var(--faint);text-transform:uppercase}
+  h1{font-family:var(--disp);font-weight:800;font-size:clamp(21px,3.2vw,31px);line-height:1.12;margin:8px 0 7px;letter-spacing:-.01em;position:relative}
+  .thesis{color:var(--dim);font-size:13.5px;max-width:78ch;position:relative}
+  .thesis b{color:var(--ink)}
+
+  .controls{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:15px 2px 4px}
+  .ctl-group{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .ctl-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase;margin-right:2px}
+  .pill{font-family:var(--body);font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer;transition:.14s;user-select:none;display:inline-flex;align-items:center;gap:6px}
+  .pill:hover{color:var(--ink);border-color:var(--faint)}
+  .pill .sw{width:9px;height:9px;border-radius:50%}
+  .pill.on{color:var(--ink);background:var(--panel2)}
+  .pill.on.s-now{border-color:var(--now)} .pill.on.s-next{border-color:var(--next)} .pill.on.s-late{border-color:var(--late)}
+  .pill.on.a-si{border-color:var(--si)} .pill.on.a-el{border-color:var(--el)}
+  .sw.now{background:var(--now)} .sw.next{background:var(--next)} .sw.late{background:var(--late)}
+  .sw.si{background:var(--si)} .sw.el{background:var(--el)}
+
+  /* hint */
+  .howto{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin:4px 2px 0}
+
+  /* ---------- timeline ---------- */
+  .scroll{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#11161c,#0f141a)}
+  .tl{min-width:1020px;padding:8px 14px 14px}
+  .lanehdr{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:10px 4px 6px}
+  .lanehdr .dot{width:10px;height:10px;border-radius:3px}
+  .lanehdr.si{color:var(--si)} .lanehdr.si .dot{background:var(--si)}
+  .lanehdr.el{color:var(--el)} .lanehdr.el .dot{background:var(--el)}
+  .lanehdr .desc{color:var(--faint);font-family:var(--body);letter-spacing:0;text-transform:none;font-size:11.5px}
+
+  .band{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  .band.si{background:linear-gradient(180deg,rgba(138,160,255,.05),transparent)}
+  .band.el{background:linear-gradient(0deg,rgba(240,168,102,.05),transparent)}
+  .col{display:flex;flex-direction:column;gap:8px;padding:8px 4px;min-width:150px}
+  .band.si .col{justify-content:flex-end}
+  .band.el .col{justify-content:flex-start}
+
+  .axis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;position:relative;margin:3px 0}
+  .axis::before{content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;background:linear-gradient(90deg,var(--now),var(--next),var(--late));transform:translateY(-50%);border-radius:2px;opacity:.55}
+  .tick{display:flex;flex-direction:column;align-items:center;gap:5px;padding:7px 0;position:relative}
+  .tick .yr{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--ink);background:#0f141a;padding:2px 9px;border-radius:6px;border:1px solid var(--line)}
+  .tick .ph{font-family:var(--mono);font-size:9.5px;color:var(--faint);letter-spacing:.08em}
+
+  .card{border:1px solid var(--line);border-left-width:3px;border-radius:9px;background:#171d25;padding:9px 11px;cursor:pointer;transition:.14s;position:relative}
+  .card:hover{transform:translateY(-2px);background:#1b222b;border-color:var(--faint)}
+  .card.sel{box-shadow:0 0 0 1px currentColor inset, 0 8px 22px rgba(0,0,0,.45)}
+  .card.dim{opacity:.2;pointer-events:none}
+  .card.s-now{border-left-color:var(--now)} .card.s-now.sel{color:var(--now)}
+  .card.s-next{border-left-color:var(--next)} .card.s-next.sel{color:var(--next)}
+  .card.s-late{border-left-color:var(--late)} .card.s-late.sel{color:var(--late)}
+  .card .ttl{font-family:var(--body);font-weight:700;font-size:13px;line-height:1.25;color:var(--ink)}
+  .card .sub{font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-top:2px}
+  .card .tag{display:inline-block;font-family:var(--mono);font-size:8.5px;letter-spacing:.05em;padding:1px 5px;border-radius:4px;margin-top:6px}
+  .card.s-now .tag{background:rgba(255,111,97,.14);color:var(--now)}
+  .card.s-next .tag{background:rgba(232,184,75,.14);color:var(--next)}
+  .card.s-late .tag{background:rgba(95,179,201,.14);color:var(--late)}
+  .card .star{position:absolute;top:7px;right:9px;color:var(--next);font-size:12px}
+
+  /* ---------- detail ---------- */
+  .detail{margin-top:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden}
+  .dhead{padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel2);display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between}
+  .dhead .lft .dttl{font-family:var(--disp);font-weight:800;font-size:19px;letter-spacing:-.01em}
+  .dhead .lft .dmeta{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:5px;display:flex;gap:12px;flex-wrap:wrap}
+  .dhead .lft .dmeta .k{color:var(--faint)}
+  .dstat{font-family:var(--mono);font-size:11px;padding:6px 12px;border-radius:999px;white-space:nowrap}
+  .dstat.s-now{background:rgba(255,111,97,.14);color:var(--now);border:1px solid rgba(255,111,97,.4)}
+  .dstat.s-next{background:rgba(232,184,75,.14);color:var(--next);border:1px solid rgba(232,184,75,.4)}
+  .dstat.s-late{background:rgba(95,179,201,.14);color:var(--late);border:1px solid rgba(95,179,201,.4)}
+  .dbody{padding:16px 20px}
+  .driver{font-size:13.5px;color:var(--ink);line-height:1.6;margin:0 0 14px;padding-left:13px;border-left:2px solid var(--line)}
+  .stockrow{margin-top:12px}
+  .stockrow h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:0 0 8px;display:flex;align-items:center;gap:7px}
+  .stockrow h4 .flag{font-size:11px}
+  .chips{display:flex;gap:7px;flex-wrap:wrap}
+  .chip{font-family:var(--body);font-size:12.5px;padding:5px 10px;border-radius:7px;border:1px solid var(--line);background:#12171d;color:var(--ink);display:inline-flex;gap:6px;align-items:center}
+  .chip .t{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .chip.tw{border-color:rgba(138,160,255,.3)} .chip.us{border-color:rgba(240,168,102,.3)}
+  .dnote{margin-top:14px;font-size:12px;color:var(--dim);line-height:1.55;background:#12171d;border:1px solid var(--line-soft);border-radius:9px;padding:11px 13px}
+  .dnote b{color:var(--ink)}
+  .hidden-tw .chip.us{display:none}
+
+  /* callout + footer */
+  .callout{margin-top:16px;border:1px solid rgba(232,184,75,.35);border-radius:12px;background:rgba(232,184,75,.05);padding:14px 18px;font-size:13px;color:var(--ink);line-height:1.6}
+  .callout b{color:var(--next)}
+  footer{margin-top:18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:15px 18px;font-size:12px;color:var(--dim);line-height:1.6}
+  footer h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  footer .warn{color:var(--now)}
+  .credit{margin-top:16px;text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">AI Supply-Chain · Bottleneck Migration Roadmap · Dual-Axis</div>
+    <h1>AI 缺貨遷移路線圖 — 矽晶後段軸 × 電子軸</h1>
+    <p class="thesis"><b>缺貨沿著「機櫃功耗曲線」往下游走。</b>上方是封裝/記憶體/光學/冷卻（X 貼文那條軸）；下方是電力電子與發電（那張圖漏掉、但現在更硬的天花板）。顏色＝<b style="color:var(--now)">現在最緊</b> / <b style="color:var(--next)">下一棒可布局</b> / <b style="color:var(--late)">較遠觀察</b>；★＝低基期框架最該切入的位置。</p>
+  </header>
+
+  <div class="controls">
+    <div class="ctl-group"><span class="ctl-label">狀態</span>
+      <button class="pill s-now on" data-f="status" data-v="now"><span class="sw now"></span>現在最緊</button>
+      <button class="pill s-next on" data-f="status" data-v="next"><span class="sw next"></span>下一棒</button>
+      <button class="pill s-late on" data-f="status" data-v="late"><span class="sw late"></span>較遠</button>
+    </div>
+    <div class="ctl-group"><span class="ctl-label">軸</span>
+      <button class="pill a-si on" data-f="axis" data-v="si"><span class="sw si"></span>矽晶後段</button>
+      <button class="pill a-el on" data-f="axis" data-v="el"><span class="sw el"></span>電子軸</button>
+    </div>
+    <div class="ctl-group"><span class="ctl-label">標的</span>
+      <button class="pill" id="twonly">只看台股</button>
+    </div>
+  </div>
+  <div class="howto">點任一卡片 → 下方顯示驅動邏輯與台美股對應 · 橫向可捲動</div>
+
+  <div class="scroll">
+    <div class="tl">
+      <div class="lanehdr si"><span class="dot"></span>矽晶後段軸<span class="desc">封裝 · 記憶體 · 光學 · 冷卻（KAIST/封裝實驗室視角）</span></div>
+      <div class="band si" id="bandSi"></div>
+      <div class="axis" id="axis"></div>
+      <div class="band el" id="bandEl"></div>
+      <div class="lanehdr el"><span class="dot"></span>電子軸<span class="desc">電力電子 · 發電 · 電網（X 貼文漏掉的一軸）</span></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>★ 重點看這裡：</b>市場現在主要在定價「現在最緊」那一層（記憶體、電力設備、CoWoS）。<b>真正還沒被完全定價的「下一棒」是 2027 刀口的 SiC / GaN / SST / CPO</b>——這正是你低基期方法論該優先掃描的位置。
+  </div>
+
+  <div class="detail" id="detail"></div>
+
+  <footer>
+    <h4>讀法與聲明</h4>
+    時間軸依各廠商公布的<b style="color:var(--ink)">產品路線圖</b>（NVIDIA Rubin 2026／Rubin Ultra 2027／Feynman 2028、800VDC 2027、CoPoS 2028–29、玻璃基板 2026–2030、SMR 2030+）；「哪些東西因此變稀缺」為架構推論。<span class="warn">⚠ HBM5 之後（HBM6/7、3D DRAM）為 KAIST 學術外推，非確定規格；報價請查即時盤；代號數字已查證，少數市場別請依 .TW／.TWO SOP 再確認。</span>本圖為研究框架，非投資建議。
+  </footer>
+
+  <div class="credit">雙軸缺貨遷移路線圖 · 接續低基期框架 / capex 接收池使用 · 非投資建議</div>
+</div>
+
+<script>
+/* ---------------- DATA ---------------- */
+const COLS=[
+  {key:'now',  yr:'現在', ph:'2026'},
+  {key:'y27',  yr:'2027', ph:'刀口'},
+  {key:'y28',  yr:'2028', ph:''},
+  {key:'y29',  yr:'2029', ph:''},
+  {key:'y3031',yr:'2030–31', ph:''},
+  {key:'y3235',yr:'2032–35', ph:'外推'},
+];
+// axis: 'si' | 'el'  ;  status: 'now'|'next'|'late'
+const ITEMS=[
+  /* ===== 矽晶後段軸 (si) ===== */
+  {id:'mem', axis:'si', col:'now', status:'now', title:'記憶體 HBM4 + DDR5',
+   driver:'AI 排擠商用 DRAM（HBM 對 DDR5 約 3:1 晶圓比），HBM4 基底 die 改用 TSMC 邏輯製程→記憶體與 GPU 搶同一批先進產能。DRAM 價一季漲約 90%、售罄到 2026–28。',
+   tw:[['南亞科','2408'],['華邦電','2344'],['力積電','6770'],['群聯','8299'],['威剛','3260'],['京元電','2449'],['力成','6239'],['穎崴','6515']],
+   us:[['Micron','MU'],['SK Hynix','000660.KS'],['Samsung','005930.KS']],
+   note:'純 HBM 龍頭在韓＋美光；台廠切點是<b>測試介面/封測（京元電、力成、穎崴、精測）</b>與利基 DRAM。'},
+  {id:'opt', axis:'si', col:'now', status:'now', title:'光收發器 / 光模組',
+   driver:'scale-out 網路頻寬需求；800G→1.6T 收發器吃緊。',
+   tw:[['聯亞','3081'],['光聖','6442'],['眾達-KY','4977'],['華星光','4979'],['聯鈞','3450'],['上詮','3363'],['波若威','3163']],
+   us:[['Coherent','COHR'],['Lumentum','LITE'],['Marvell','MRVL'],['Fabrinet','FN'],['Credo','CRDO']]},
+  {id:'cowos', axis:'si', col:'now', status:'now', title:'CoWoS 先進封裝',
+   driver:'所有 AI 加速器必經；TSMC CoWoS 仍售罄、交期 50–104 週；reticle 5.5x→9.5x(2027)→14x(2028)。',
+   tw:[['台積電','2330'],['日月光','3711'],['辛耘','3583'],['弘塑','3131'],['萬潤','6187'],['志聖','2467'],['均豪','5443']],
+   us:[['Amkor','AMKR'],['ASE(ADR)','ASX'],['BESI','BESI.AS']]},
+  {id:'cpo', axis:'si', col:'y27', status:'next', star:true, title:'CPO 共封裝光學（早期）',
+   driver:'電氣 I/O 達極限→封裝內整合光學。NVIDIA/Broadcom 已於 ISSCC 2026 展示；Feynman(2028) 主流化、2028 起擴展。',
+   tw:[['台積電','2330'],['穩懋','3105'],['全新','2455'],['聯亞','3081'],['光聖','6442'],['華星光','4979'],['聯鈞','3450']],
+   us:[['Broadcom','AVGO'],['Marvell','MRVL'],['Coherent','COHR'],['GlobalFoundries','GFS'],['Lumentum','LITE']],
+   note:'你已在追的 CPO 軸；磊晶（穩懋/全新/聯亞）＋矽光子代工（TSMC COUPE、GFS）是卡點。'},
+  {id:'plp', axis:'si', col:'y28', status:'next', title:'PLP / CoPoS 面板級封裝',
+   driver:'逃離 300mm 圓晶 reticle 限制，面板利用率>75%。TSMC CoPoS 試產線 2026 年中完成、2028–29 量產（隨 Rubin Ultra 9.5x）。',
+   tw:[['台積電','2330'],['日月光','3711'],['力成','6239'],['精測','6510'],['辛耘','3583'],['牧德','3563'],['由田','3455']],
+   us:[['Amkor','AMKR'],['ASE(ADR)','ASX'],['Applied Materials','AMAT']]},
+  {id:'glass', axis:'si', col:'y28', status:'next', title:'玻璃基板 / TGV',
+   driver:'取代矽中介層、降本增大封裝。Intel 2026–2030、Rapidus 2028（600×600mm）、SK Absolics 2026–27、DNP FY2028。玻璃材料 for HBM/邏輯 CAGR ~33%。',
+   tw:[['欣興','3037'],['南電','8046'],['景碩','3189']],
+   us:[['Corning','GLW'],['Intel','INTC'],['Applied Materials','AMAT'],['SKC/Absolics','011790.KS']],
+   note:'台廠載板三雄（欣興/南電/景碩）的 glass/FOPLP 轉型是觀察重點。'},
+  {id:'hbm5', axis:'si', col:'y29', status:'next', title:'HBM5（Feynman）',
+   driver:'4096-bit IO、16-Hi、PIM、浸沒式冷卻成標準。KAIST 列 2029（NVIDIA 官方 Feynman 為 2028）。',
+   tw:[['京元電','2449'],['穎崴','6515'],['精測','6510'],['日月光','3711']],
+   us:[['SK Hynix','000660.KS'],['Samsung','005930.KS'],['Micron','MU']]},
+  {id:'embcool', axis:'si', col:'y3031', status:'late', title:'嵌入式 / 微流道冷卻',
+   driver:'熱流密度超越冷板極限→晶片內微通道。KAIST 把微通道列在 HBM5 導入、嵌入式在 HBM7。',
+   tw:[['奇鋐','3017'],['雙鴻','3324'],['高力','8996'],['建準','2421']],
+   us:[['Vertiv','VRT'],['nVent','NVT'],['Boyd(私)','—']]},
+  {id:'3ddram', axis:'si', col:'y3031', status:'late', title:'3D DRAM',
+   driver:'平面 DRAM 微縮終結→垂直堆疊 DRAM；研究級、約 2030+。',
+   tw:[['—（製程設備間接）','—']],
+   us:[['Samsung','005930.KS'],['SK Hynix','000660.KS'],['Micron','MU'],['Lam Research','LRCX']]},
+  {id:'hbm6', axis:'si', col:'y3235', status:'late', title:'HBM6（HBM Town / 玻璃中介層）',
+   driver:'多 HBM 堆疊「HBM Town」、玻璃中介層導入、BSPDN；KAIST 列約 2032。純市場預期。',
+   tw:[['—','—']],
+   us:[['SK Hynix','000660.KS'],['Samsung','005930.KS'],['Micron','MU']]},
+  {id:'hbm7', axis:'si', col:'y3235', status:'late', title:'HBM7 + HBF（高頻寬 Flash）',
+   driver:'8192 IO、24TB/s、HBF 補 DRAM 容量上限、嵌入式冷卻；KAIST 列約 2035。純市場預期。',
+   tw:[['—','—']],
+   us:[['SK Hynix','000660.KS'],['Samsung','005930.KS'],['Micron','MU'],['SanDisk/WDC','WDC']]},
+
+  /* ===== 電子軸 (el) ===== */
+  {id:'pwr', axis:'el', col:'now', status:'now', title:'電力設備：變壓器 / 開關 / 機櫃電源',
+   driver:'蓋好機房沒電可用；高壓變壓器交期 36–48 個月、約 30% 短缺；併網排隊達 4 年。',
+   tw:[['台達電','2308'],['光寶科','2301'],['群電','6412'],['華城','1519'],['中興電','1513'],['亞力','1514'],['士電','1503']],
+   us:[['Eaton','ETN'],['Vertiv','VRT'],['GE Vernova','GEV'],['Hubbell','HUBB'],['Schneider','SU.PA']]},
+  {id:'liquid', axis:'el', col:'now', status:'now', title:'液冷（冷板 / CDU / 快接）',
+   driver:'Blackwell 導入液冷、Rubin 全液冷成強制；Rubin Ultra 全液冷＋800VDC。',
+   tw:[['奇鋐','3017'],['雙鴻','3324'],['高力','8996'],['建準','2421'],['卓越','2496']],
+   us:[['Vertiv','VRT'],['nVent','NVT']]},
+  {id:'turbine', axis:'el', col:'now', status:'now', title:'燃氣輪機 / 橋接發電',
+   driver:'自帶電力(BYOP)；全球僅三雄(GE Vernova/Siemens Energy/三菱)，backlog 賣到 2030。注意 OEM 已大幅 re-rate（缺貨 now，但股價偏 late）。',
+   tw:[['—（台廠直接曝險少）','—']],
+   us:[['GE Vernova','GEV'],['Siemens Energy','ENR.DE'],['三菱重工','7011.T'],['Cummins','CMI'],['Caterpillar','CAT']]},
+  {id:'sic', axis:'el', col:'y27', status:'next', star:true, title:'SiC 功率元件（HV 前端 / SST）',
+   driver:'13.8kV→800VDC 與固態變壓器需 1200V+ SiC；EV 低潮釋出產能被 AI 吸收，2027 高壓 SiC 需求估數百萬顆/年、轉向 3.3–6.5kV。★ 低基轉折候選。',
+   tw:[['漢磊','3707'],['嘉晶','3016'],['環球晶','6488'],['朋程','8255'],['強茂','2481'],['台半','5425']],
+   us:[['Wolfspeed','WOLF'],['onsemi','ON'],['Infineon','IFX'],['STMicro','STM'],['Navitas','NVTS']],
+   note:'台廠多在 SiC 磊晶/基板/分立元件；純度與美歐日大廠不同，須逐檔看 design-in 與 AI 營收占比。'},
+  {id:'gan', axis:'el', col:'y27', status:'next', star:true, title:'GaN 功率元件（機內 DC/DC）',
+   driver:'800V→54V→12V 高頻轉換，MHz 切換、體積小。ST 與 NVIDIA 已合作 12kW 電源板（650V GaN，98% 效率）。★ 低基轉折候選。',
+   tw:[['穩懋','3105'],['漢磊','3707'],['世界先進','5347']],
+   us:[['Navitas','NVTS'],['Power Integrations','POWI'],['Infineon','IFX'],['Texas Instruments','TXN'],['STMicro','STM']]},
+  {id:'sst', axis:'el', col:'y27', status:'next', star:true, title:'SST 固態變壓器',
+   driver:'以 SiC/GaN 取代笨重磁性變壓器（傳統變壓器約 30% 短缺）；800VDC 量產與 Kyber 同步 2027。★',
+   tw:[['台達電','2308'],['中興電','1513'],['華城','1519']],
+   us:[['Wolfspeed','WOLF'],['Eaton','ETN'],['Vertiv','VRT'],['Hitachi Energy(私)','—']]},
+  {id:'bess', axis:'el', col:'y27', status:'next', title:'BESS 儲能 / 電網級電池',
+   driver:'緩衝 GPU 次秒級功率波動（負載小時內波動約 40%）；800VDC 架構內含儲能。',
+   tw:[['台達電','2308'],['新普','6121'],['順達','3211']],
+   us:[['Tesla','TSLA'],['Fluence','FLNC'],['GE Vernova','GEV']],
+   note:'台系電池模組（新普/順達）對資料中心 BESS 的具體 design-in 較不明確，先列台達電為主、其餘觀察。'},
+  {id:'grid', axis:'el', col:'y29', status:'next', title:'電網 / 輸配電 / HVDC',
+   driver:'併網要 4 年、HVDC 長距輸電；銅是底層限制（MW 級機櫃用低壓不可行）。',
+   tw:[['華城','1519'],['中興電','1513'],['大亞','1609'],['華新','1605'],['宏泰','1612']],
+   us:[['Quanta Services','PWR'],['GE Vernova','GEV'],['Prysmian','PRY.MI'],['Nexans','NEX.PA']]},
+  {id:'smr', axis:'el', col:'y3031', status:'late', star:true, title:'核能 / SMR + HALEU',
+   driver:'AI 2030 用電估 945 TWh；首批 SMR 供電約 2030、商業化中 2030s；瓶頸是 HALEU 燃料（仰賴俄羅斯）。短期靠燃氣橋接＋既有核電重啟（如微軟 2028 重啟三哩島）。★ 選擇權性質。',
+   tw:[['—（鈾/核料無台廠）','—']],
+   us:[['Centrus(濃縮)','LEU'],['Cameco(鈾)','CCJ'],['Oklo','OKLO'],['NuScale','SMR'],['GE Vernova','GEV'],['Constellation','CEG'],['BWX Tech','BWXT']]},
+];
+
+/* ---------------- STATE ---------------- */
+const active={status:new Set(['now','next','late']), axis:new Set(['si','el'])};
+let selId=null, twOnly=false;
+
+/* ---------------- RENDER TIMELINE ---------------- */
+function visible(it){return active.status.has(it.status)&&active.axis.has(it.axis);}
+function buildBand(axisKey,mount){
+  mount.innerHTML='';
+  COLS.forEach(c=>{
+    const col=document.createElement('div');col.className='col';
+    ITEMS.filter(it=>it.axis===axisKey&&it.col===c.key).forEach(it=>{
+      const card=document.createElement('div');
+      card.className=`card s-${it.status}`+(selId===it.id?' sel':'')+(visible(it)?'':' dim');
+      const statTxt=it.status==='now'?'現在最緊':it.status==='next'?'下一棒':'較遠';
+      const twC=it.tw.filter(x=>x[1]!=='—').length, usC=it.us.filter(x=>x[1]!=='—').length;
+      card.innerHTML=`${it.star?'<span class="star">★</span>':''}
+        <div class="ttl">${it.title}</div>
+        <div class="sub">台 ${twC} · 美 ${usC}</div>
+        <span class="tag">${statTxt}</span>`;
+      card.onclick=()=>{selId=it.id;renderAll();openDetail(it.id);};
+      col.appendChild(card);
+    });
+    mount.appendChild(col);
+  });
+}
+function buildAxis(){
+  const ax=document.getElementById('axis');ax.innerHTML='';
+  COLS.forEach(c=>{
+    const t=document.createElement('div');t.className='tick';
+    t.innerHTML=`<span class="yr">${c.yr}</span>${c.ph?`<span class="ph">${c.ph}</span>`:''}`;
+    ax.appendChild(t);
+  });
+}
+function renderAll(){buildBand('si',document.getElementById('bandSi'));buildBand('el',document.getElementById('bandEl'));}
+
+/* ---------------- DETAIL ---------------- */
+function chipHTML(arr,cls){return arr.map(s=>`<span class="chip ${cls}">${s[0]}${s[1]!=='—'?`<span class="t">${s[1]}</span>`:''}</span>`).join('');}
+function openDetail(id){
+  const it=ITEMS.find(x=>x.id===id);if(!it)return;
+  const axisLabel=it.axis==='si'?'矽晶後段軸':'電子軸';
+  const statTxt=it.status==='now'?'現在最緊':it.status==='next'?'下一棒 · 可布局':'較遠 · 觀察';
+  const col=COLS.find(c=>c.key===it.col);
+  const d=document.getElementById('detail');
+  d.className='detail'+(twOnly?' hidden-tw':'');
+  d.innerHTML=`
+    <div class="dhead">
+      <div class="lft">
+        <div class="dttl">${it.star?'★ ':''}${it.title}</div>
+        <div class="dmeta"><span><span class="k">軸</span> ${axisLabel}</span><span><span class="k">時點</span> ${col.yr}${col.ph?'（'+col.ph+'）':''}</span></div>
+      </div>
+      <div class="dstat s-${it.status}">${statTxt}</div>
+    </div>
+    <div class="dbody">
+      <p class="driver">${it.driver}</p>
+      <div class="stockrow"><h4><span class="flag" style="color:var(--si)">●</span> 台股對應</h4><div class="chips">${chipHTML(it.tw,'tw')}</div></div>
+      <div class="stockrow"><h4><span class="flag" style="color:var(--el)">●</span> 美 / 海外</h4><div class="chips">${chipHTML(it.us,'us')}</div></div>
+      ${it.note?`<div class="dnote">${it.note}</div>`:''}
+    </div>`;
+  d.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+/* ---------------- FILTERS ---------------- */
+document.querySelectorAll('.pill[data-f]').forEach(p=>{
+  p.onclick=()=>{
+    const f=p.dataset.f,v=p.dataset.v;
+    if(active[f].has(v)){active[f].delete(v);p.classList.remove('on');}
+    else{active[f].add(v);p.classList.add('on');}
+    renderAll();
+  };
+});
+document.getElementById('twonly').onclick=function(){
+  twOnly=!twOnly;this.classList.toggle('on',twOnly);this.textContent=twOnly?'顯示全部':'只看台股';
+  if(selId)openDetail(selId);
+};
+
+/* ---------------- INIT ---------------- */
+buildAxis();renderAll();openDetail('sic');  // 預設打開 SiC（下一棒重點）
+</script>
+</body>
+</html>

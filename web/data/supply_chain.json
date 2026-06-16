@@ -3,6 +3,169 @@
   "method": "AI 供應鏈瓶頸選股(bottleneck-hunter):逆向拆鏈找『卡脖子』環節 → 依『技術壁壘 / 商轉純度 / 防禦緩衝』三維度挑卡位股。每主題分 台股 / 美股 / 其他股。內容由 AI 研究維護,報價即時(Yahoo)。",
   "themes": [
     {
+      "name": "AI 缺貨遷移路線圖",
+      "bottleneck": "矽半後段(HBM4→5、CoWoS→CoPoS、CPO)與電子軸(電力設備→SiC/GaN→SST→SMR)兩條缺貨長廊；每條軸的瓶頸依時序遷移，卡位機會隨轉折點浮現",
+      "note": "雙軸時間軸互動圖：點任一卡片查看台/美持股清單與投資邏輯。矽半後段軸(藍)→ HBM/光收發器/CoWoS 現在最緊；電子軸(橘)→ SiC/GaN/SST 2027 是下一個甜蜜點。★ = 下一個甜蜜點(最可布局)",
+      "map": "maps/ai-shortage-migration-roadmap.html",
+      "map_title": "AI 缺貨遷移路線圖 · 矽半後段 × 電子軸",
+      "stocks": [
+        {
+          "code": "2330",
+          "name": "台積電",
+          "role": "CoWoS/CoPoS 封裝龍頭；CPO 製程平台 COUPE",
+          "tag": "CoWoS/CPO",
+          "market": "tw"
+        },
+        {
+          "code": "2308",
+          "name": "台達電",
+          "role": "SST 系統整合核心；800VDC 電力設備全棧布局",
+          "tag": "電力/SST",
+          "market": "tw"
+        },
+        {
+          "code": "2408",
+          "name": "南亞科",
+          "role": "HBM4 底部 die 後段測試；DRAM 供應鏈直接受益",
+          "tag": "HBM記憶體",
+          "market": "tw"
+        },
+        {
+          "code": "3711",
+          "name": "日月光",
+          "role": "CoWoS/PLP/CoPoS 先進封裝；HBM5 測試介面",
+          "tag": "先進封裝",
+          "market": "tw"
+        },
+        {
+          "code": "3081",
+          "name": "聯亞",
+          "role": "光收發器 800G 拉升；CPO 光引擎關鍵供應商",
+          "tag": "光收發器",
+          "market": "tw"
+        },
+        {
+          "code": "3707",
+          "name": "漢磊科技",
+          "role": "SiC MOSFET/二極體台廠；HV 前端 800VDC 受益",
+          "tag": "SiC L2",
+          "market": "tw"
+        },
+        {
+          "code": "3105",
+          "name": "穩懋",
+          "role": "GaN-on-SiC PA；CPO 光引擎 DFB laser 代工",
+          "tag": "GaN/CPO",
+          "market": "tw"
+        },
+        {
+          "code": "3017",
+          "name": "奇鋐",
+          "role": "液冷/CDU；Rubin 強制液冷受益",
+          "tag": "液冷散熱",
+          "market": "tw"
+        },
+        {
+          "code": "6442",
+          "name": "元心",
+          "role": "光收發器/CPO 光引擎模組",
+          "tag": "光收發器",
+          "market": "tw"
+        },
+        {
+          "code": "3324",
+          "name": "雙鴻",
+          "role": "液冷散熱板/快掛；AI 機架直接受益",
+          "tag": "液冷散熱",
+          "market": "tw"
+        },
+        {
+          "code": "1513",
+          "name": "中興電",
+          "role": "L1 重電變壓器；800VDC 資料中心超高壓設備",
+          "tag": "重電L1",
+          "market": "tw"
+        },
+        {
+          "code": "1519",
+          "name": "華城",
+          "role": "超高壓輸電設備；電網 HVDC 瓶頸直接受益",
+          "tag": "重電/電網",
+          "market": "tw"
+        },
+        {
+          "code": "MU",
+          "name": "Micron",
+          "role": "HBM4/5 最大美股純正標的；CoWoS 最大客戶",
+          "tag": "HBM",
+          "market": "us"
+        },
+        {
+          "code": "AVGO",
+          "name": "Broadcom",
+          "role": "CPO 光引擎 ASIC；Feynman 2028 主流化核心夥伴",
+          "tag": "CPO",
+          "market": "us"
+        },
+        {
+          "code": "MRVL",
+          "name": "Marvell",
+          "role": "CPO DSP/光引擎 IC；scale-out 800G/1.6T 受益",
+          "tag": "CPO/光收",
+          "market": "us"
+        },
+        {
+          "code": "VRT",
+          "name": "Vertiv",
+          "role": "SST 系統整合/液冷 CDU；AI 資料中心電力管理龍頭",
+          "tag": "SST/液冷",
+          "market": "us"
+        },
+        {
+          "code": "ETN",
+          "name": "Eaton",
+          "role": "重電/SSCB/SST 三層全棧；800VDC 布局最完整上市公司",
+          "tag": "電力全棧",
+          "market": "us"
+        },
+        {
+          "code": "GEV",
+          "name": "GE Vernova",
+          "role": "燃氣輪機/重電變壓器全球龍頭；backlog 賣到 2030",
+          "tag": "發電/重電",
+          "market": "us"
+        },
+        {
+          "code": "WOLF",
+          "name": "Wolfspeed",
+          "role": "SiC 晶錠/磊晶全球龍頭(~30%市占)；SST 供應鏈關鍵",
+          "tag": "SiC純正",
+          "market": "us"
+        },
+        {
+          "code": "NVTS",
+          "name": "Navitas",
+          "role": "GaN/SiC 控制IC純正標的；GaNFast 技術",
+          "tag": "GaN純正",
+          "market": "us"
+        },
+        {
+          "code": "COHR",
+          "name": "Coherent",
+          "role": "光收發器 800G/1.6T + SiC 磊晶代工(前II-VI)",
+          "tag": "光收/SiC",
+          "market": "us"
+        },
+        {
+          "code": "ON",
+          "name": "onsemi",
+          "role": "SiC MOSFET 最大供應商之一(EliteSiC)；EV轉AI需求",
+          "tag": "SiC L2",
+          "market": "us"
+        }
+      ]
+    },
+    {
       "key": "cpo",
       "name": "CPO / 矽光子",
       "bottleneck": "瓶頸=光耦合對準(<1μm 次微米)與『電/光/熱』四合一測試;2026 為商轉元年,台積電 COUPE 平台主導、Broadcom 推 CPO 交換機。",

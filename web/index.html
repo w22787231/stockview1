@@ -1419,12 +1419,10 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+qqqFwdPeBox(d.qqq_fwd_pe)+smhFwdPeBox(d.smh_fwd_pe)+cotSpxBox(d.cot_spx)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
-  if(d.qqq_fwd_pe)   drawEtfFwdPe("qqq",d.qqq_fwd_pe);
-  if(d.smh_fwd_pe)   drawEtfFwdPe("smh",d.smh_fwd_pe);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
 }
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
@@ -1494,88 +1492,6 @@ function _renderFwdPe(){
     yAxis:yAxes,
     series:series,
   }, true);
-  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
-}
-
-// ── QQQ / SMH (SOX) Forward P/E ──────────────────────────────────────────────
-const _ETF_PE_RANGE={qqq:"3y",smh:"3y"};
-const _ETF_CFG={
-  qqq:{title:"QQQ (NDX100)",etfSym:"QQQ",color:"#0ea5e9",chartId:"qqqPeChart",rangeId:"qqqPeRange",
-       note:"Invesco QQQ top-20 成分股 harmonic-mean forward EPS ÷ QQQ 價。逐週快照累積(首次建立前以當前 EPS 回推)。"},
-  smh:{title:"SOX/SMH (半導體)",etfSym:"SMH",color:"#f59e0b",chartId:"smhPeChart",rangeId:"smhPeRange",
-       note:"VanEck SMH top-15 成分股(NVDA/TSM/AVGO…) harmonic-mean forward EPS ÷ SMH 價。逐週快照累積。"},
-};
-function _etfPeVdict(cur,t){
-  return cur>=t.high?{t:"偏高",c:"neg"}:(cur<t.oversold?{t:"超賣",c:"pos"}:(cur<t.low?{t:"偏低",c:"pos"}:{t:"中性",c:"dim"}));
-}
-function qqqFwdPeBox(v){ return _etfFwdPeBox("qqq",v); }
-function smhFwdPeBox(v){ return _etfFwdPeBox("smh",v); }
-function _etfFwdPeBox(key,v){
-  if(!v||!v.pe||!v.pe.length) return '';
-  const cfg=_ETF_CFG[key], t=Object.assign({high:30,low:25,oversold:20},v.thr||{});
-  const vd=_etfPeVdict(v.cur,t);
-  const _rb=(k,lab)=>'<button class="ntab'+(_ETF_PE_RANGE[key]===k?" on":"")+'" data-fr="'+k+'">'+lab+'</button>';
-  return '<div class="guide" style="margin-top:12px">'+
-    '<div class="gtitle">'+cfg.title+' Forward P/E · <b class="'+vd.c+'">'+v.cur+'x（'+vd.t+'）</b></div>'+
-    '<div id="'+cfg.chartId+'" class="m1m2-chart"></div>'+
-    '<div id="'+cfg.rangeId+'" class="news-tabs" style="margin:4px 0 2px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+'</div>'+
-    '<div class="ex">'+cfg.note+
-      ' <b class="neg">&gt;'+t.high+' 偏高</b> · <b class="pos">&lt;'+t.low+' 偏低</b> · <b class="pos">&lt;'+t.oversold+' 超賣</b>'+
-      ' · <b style="color:#9333ea">紫線='+cfg.etfSym+' 收盤(右軸)</b>。</div>'+
-    '</div>';
-}
-function drawEtfFwdPe(key,v){
-  window["_etfpe_"+key]=v;
-  const cfg=_ETF_CFG[key];
-  const rb=document.getElementById(cfg.rangeId);
-  if(rb) rb.querySelectorAll(".ntab").forEach(b=>b.onclick=()=>{
-    _ETF_PE_RANGE[key]=b.dataset.fr;
-    rb.querySelectorAll(".ntab").forEach(x=>x.classList.toggle("on",x.dataset.fr===_ETF_PE_RANGE[key]));
-    _renderEtfFwdPe(key);
-  });
-  _renderEtfFwdPe(key);
-}
-function _renderEtfFwdPe(key){
-  const v=window["_etfpe_"+key], cfg=_ETF_CFG[key];
-  const el=document.getElementById(cfg.chartId);
-  if(!el||!window.echarts||!v||!v.pe||!v.pe.length) return;
-  const t=Object.assign({high:30,low:25,oversold:20},v.thr||{});
-  const n={"1y":52,"3y":156,"5y":260,"all":v.pe.length}[_ETF_PE_RANGE[key]]||v.pe.length;
-  const dates=v.dates.slice(-n), pe=v.pe.slice(-n);
-  const etfPx=(Array.isArray(v.etf_px)&&v.etf_px.length)?v.etf_px.slice(-n):null;
-  const lo=Math.min(t.oversold,Math.min.apply(null,pe)), hi=Math.max(t.high,Math.max.apply(null,pe));
-  const series=[{name:"Forward P/E",type:"line",data:pe,smooth:true,symbol:"none",yAxisIndex:0,
-      lineStyle:{width:2,color:cfg.color},itemStyle:{color:cfg.color},areaStyle:{color:cfg.color+"18"},
-      markLine:{silent:true,symbol:"none",data:[
-        {yAxis:t.high,lineStyle:{color:"#e11d48",type:"dashed"},label:{formatter:"偏高 "+t.high,fontSize:10,color:"#e11d48",position:"insideEndTop"}},
-        {yAxis:t.low,lineStyle:{color:"#16a34a",type:"dashed"},label:{formatter:"偏低 "+t.low,fontSize:10,color:"#16a34a",position:"insideEndBottom"}},
-        {yAxis:t.oversold,lineStyle:{color:"#0a7d3a",type:"dashed"},label:{formatter:"超賣 "+t.oversold,fontSize:10,color:"#0a7d3a",position:"insideEndBottom"}}]},
-      markArea:{silent:true,data:[
-        [{yAxis:t.high,itemStyle:{color:"#e11d480e"}},{yAxis:1000}],
-        [{yAxis:0,itemStyle:{color:"#16a34a0e"}},{yAxis:t.low}]]},
-  }];
-  const yAxes=[{type:"value",min:Math.floor(lo-0.5),max:Math.ceil(hi+0.5),axisLabel:{fontSize:10,formatter:"{value}x"},splitLine:{lineStyle:{opacity:.3}}}];
-  if(etfPx){
-    yAxes.push({type:"value",scale:true,position:"right",name:cfg.etfSym,nameTextStyle:{fontSize:10,color:"#9333ea"},
-      axisLabel:{fontSize:10,color:"#9333ea",formatter:"{value}"},splitLine:{show:false}});
-    series.push({name:cfg.etfSym+" 價",type:"line",data:etfPx,smooth:true,symbol:"none",yAxisIndex:1,
-      lineStyle:{width:1.4,color:"#9333ea",opacity:.85}});
-  }
-  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
-  ch.setOption({
-    grid:{left:38,right:etfPx?44:14,top:14,bottom:30},
-    legend:etfPx?{data:["Forward P/E",cfg.etfSym+" 價"],top:-2,right:0,itemWidth:14,itemHeight:8,textStyle:{fontSize:10}}:undefined,
-    tooltip:{trigger:"axis",formatter:function(ps){
-      if(!ps||!ps.length) return "";
-      let s=ps[0].axisValueLabel||ps[0].axisValue;
-      ps.forEach(p=>{ s+="<br>"+p.marker+p.seriesName+": "+(p.value==null?"-":(p.seriesName==="Forward P/E"?p.value+"x":"$"+p.value)); });
-      return s;
-    }},
-    dataZoom:[{type:"inside"}],
-    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
-    yAxis:yAxes,
-    series:series,
-  },true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 

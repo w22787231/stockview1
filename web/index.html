@@ -1440,6 +1440,10 @@ function sp500FwdPeBox(v){
       (v.avg5?(' · FactSet 5年均 '+v.avg5+'／10年均 '+v.avg10):'')+
       ((Array.isArray(v.spy)&&v.spy.length)?' · <b style="color:#9333ea">紫線=SPY 收盤(右軸)</b>,對照估值 vs 價格走勢':'')+
       '。forward＝用未來12個月預估EPS,故低於 trailing。</div>'+
+    '<div class="ex" style="margin-top:4px">延伸參考 →'+
+      ' <a href="https://www.macromicro.me/charts/148300/NASDAQ-100-Index-Forward-PE-Ratio" target="_blank" rel="noopener" style="color:var(--acc)">QQQ (NDX100) Forward P/E ↗</a>'+
+      ' · <a href="https://www.macromicro.me/charts/148308/Information-Technology-Sector-Forward-PE-Ratio" target="_blank" rel="noopener" style="color:var(--acc)">科技類股 Forward P/E ↗</a>'+
+      ' <span style="color:var(--dim);font-size:10px">（MacroMicro）</span></div>'+
     '</div>';
 }
 function drawSp500FwdPe(v){

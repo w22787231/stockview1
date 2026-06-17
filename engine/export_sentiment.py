@@ -437,6 +437,102 @@ def _factset_week(dd, _io):
     return None
 
 
+# ── QQQ / SMH forward P/E via constituent harmonic-mean ──────────────────────
+# 權重來源：Invesco / VanEck 公開持倉（2026 Q2 近似值），每季人工更新一次即可。
+_QQQ_HOLDINGS = [
+    ("MSFT",8.5),("AAPL",8.1),("NVDA",8.4),("AMZN",5.5),("META",5.1),
+    ("GOOGL",3.9),("GOOG",3.5),("TSLA",3.2),("AVGO",3.1),("COST",2.7),
+    ("NFLX",2.5),("ASML",1.9),("AMD",1.8),("AZN",1.6),("LIN",1.5),
+    ("QCOM",1.4),("MELI",1.3),("INTU",1.2),("CSCO",1.2),("AMGN",1.1),
+]
+_SMH_HOLDINGS = [
+    ("NVDA",24.5),("TSM",11.8),("AVGO",8.2),("ASML",6.1),("QCOM",4.8),
+    ("AMD",4.7),("TXN",3.9),("AMAT",3.8),("MU",3.6),("KLAC",2.8),
+    ("LRCX",2.5),("ADI",2.4),("MRVL",2.1),("INTC",2.2),("ON",1.8),
+]
+
+def _etf_fwd_pe(etf_sym, holdings, prev_key, thr_dict, label):
+    """QQQ/SMH forward PE:逐週對 top holdings 取 forwardEps+price → harmonic-mean PE，
+    存 eps_hist(implied EPS unit = ETF price / PE)，配歷史 ETF 日收盤回推歷史 PE。"""
+    prev = {}
+    try:
+        pj = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://stockview1.pages.dev/data/sentiment.json",
+            headers={"User-Agent":"Mozilla/5.0"}), timeout=10).read().decode("utf-8","ignore"))
+        prev = pj.get(prev_key) or {}
+    except Exception:
+        pass
+    eps_hist = dict(prev.get("eps_hist") or {})
+    today_iso = datetime.date.today().isoformat()
+    last_date = max(eps_hist) if eps_hist else ""
+    # 每週至多算一次
+    if last_date < (datetime.date.today() - datetime.timedelta(days=6)).isoformat():
+        total_w = 0; total_ey = 0; ok = 0
+        for sym, w in holdings:
+            try:
+                inf = yf.Ticker(sym).info
+                feps = inf.get("forwardEps"); px = inf.get("currentPrice") or inf.get("regularMarketPrice")
+                if feps and feps > 0 and px and px > 0:
+                    total_ey += w * (feps / px); total_w += w; ok += 1
+            except Exception:
+                pass
+        if total_w and total_ey:
+            pe_now = round(total_w / total_ey, 1)
+            try:
+                etf_px = (yf.Ticker(etf_sym).info.get("currentPrice") or
+                          yf.Ticker(etf_sym).info.get("regularMarketPrice"))
+            except Exception:
+                etf_px = None
+            if etf_px and pe_now:
+                eps_hist[today_iso] = round(etf_px / pe_now, 4)
+                print(f"  [{etf_sym} FwdPE] {pe_now}x  coverage {ok}/{len(holdings)}")
+    if not eps_hist:
+        return None
+    eps_hist = dict(sorted(eps_hist.items())[-156:])   # ~3年週快照
+    sorted_eps = sorted(eps_hist.items())
+    def eps_at(day):
+        e = sorted_eps[0][1]
+        for dt, val in sorted_eps:
+            if dt <= day: e = val
+            else: break
+        return e
+    earliest = sorted_eps[0][0]
+    try:
+        ch = json.loads(urllib.request.urlopen(urllib.request.Request(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{etf_sym}?interval=1d&range=5y",
+            headers={"User-Agent":"Mozilla/5.0"}), timeout=15).read().decode("utf-8","ignore"))
+        res = ch["chart"]["result"][0]
+        ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
+        rows = []
+        for t, c in zip(ts, cl):
+            if c is None: continue
+            ds = datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d")
+            if ds >= earliest: rows.append((ds, c))
+        live_px = (res.get("meta") or {}).get("regularMarketPrice") or (rows[-1][1] if rows else None)
+    except Exception:
+        return None
+    if not rows: return None
+    samp = rows[::5]
+    if samp[-1] != rows[-1]: samp.append(rows[-1])
+    dates = [d for d, _ in samp]
+    pe = [round(c / eps_at(d), 1) for d, c in samp]
+    cur_eps = eps_at(today_iso)
+    cur = round(live_px / cur_eps, 1) if live_px and cur_eps else pe[-1]
+    etf_prices = [round(c, 2) for _, c in samp]
+    return {"label": label, "cur": cur, "eps_hist": eps_hist,
+            "dates": dates, "pe": pe, "etf_px": etf_prices,
+            "thr": thr_dict,
+            "src": f"yfinance top holdings harmonic-mean forward EPS ÷ {etf_sym} 即時價，逐週快照累積"}
+
+def fetch_qqq_fwd_pe():
+    return _etf_fwd_pe("QQQ", _QQQ_HOLDINGS, "qqq_fwd_pe",
+                        {"high":30,"low":25,"oversold":20}, "QQQ (NDX100) Forward P/E")
+
+def fetch_smh_fwd_pe():
+    return _etf_fwd_pe("SMH", _SMH_HOLDINGS, "smh_fwd_pe",
+                        {"high":30,"low":24,"oversold":18}, "SOX/SMH (半導體) Forward P/E")
+
+
 def fetch_sp500_fwd_pe():
     """S&P500 forward P/E:逐「週」抓 FactSet Earnings Insight 取「當週」forward EPS(反推),
     配 ^GSPC 日收盤 → 每天用「該日所屬週的實際 EPS」算 forward P/E(歷史準確,非用現值近似)。
@@ -772,6 +868,8 @@ def build():
         "fear_greed": fng,
         "leverage": leverage,
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
+        "qqq_fwd_pe":   fetch_qqq_fwd_pe(),
+        "smh_fwd_pe":   fetch_smh_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,
     }

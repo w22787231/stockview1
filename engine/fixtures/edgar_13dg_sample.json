@@ -1,0 +1,263 @@
+{
+  "hits": {
+    "hits": [
+      {
+        "_index": "edgar_file",
+        "_id": "0001273087-24-000119:MEG_SC13G.htm",
+        "_score": null,
+        "_source": {
+          "ciks": [
+            "0001643615",
+            "0001273087"
+          ],
+          "period_ending": null,
+          "file_num": [
+            "005-92095"
+          ],
+          "display_names": [
+            "Montrose Environmental Group, Inc.  (MEG)  (CIK 0001643615)",
+            "MILLENNIUM MANAGEMENT LLC  (CIK 0001273087)"
+          ],
+          "xsl": null,
+          "sequence": 1,
+          "root_forms": [
+            "SC 13G"
+          ],
+          "file_date": "2024-12-17",
+          "biz_states": [
+            "CA",
+            "NY"
+          ],
+          "sics": [
+            "8742"
+          ],
+          "form": "SC 13G",
+          "adsh": "0001273087-24-000119",
+          "film_num": [
+            "241555938"
+          ],
+          "biz_locations": [
+            "Irvine, CA",
+            "New York, NY"
+          ],
+          "file_type": "SC 13G",
+          "file_description": null,
+          "inc_states": [
+            "DE",
+            "DE"
+          ],
+          "items": []
+        },
+        "sort": [
+          1734393600000,
+          "0001273087-24-000119:MEG_SC13G.htm"
+        ]
+      },
+      {
+        "_index": "edgar_file",
+        "_id": "0001193125-24-280636:d865689dsc13g.htm",
+        "_score": null,
+        "_source": {
+          "ciks": [
+            "0001456772",
+            "0001514334"
+          ],
+          "period_ending": null,
+          "file_num": [
+            "005-85197"
+          ],
+          "display_names": [
+            "OFFICE PROPERTIES INCOME TRUST  (OPI, OPINL)  (CIK 0001456772)",
+            "MSD Partners, L.P.  (CIK 0001514334)"
+          ],
+          "xsl": null,
+          "sequence": 1,
+          "root_forms": [
+            "SC 13G"
+          ],
+          "file_date": "2024-12-17",
+          "biz_states": [
+            "MA",
+            "NY"
+          ],
+          "sics": [
+            "6500"
+          ],
+          "form": "SC 13G",
+          "adsh": "0001193125-24-280636",
+          "film_num": [
+            "241557362"
+          ],
+          "biz_locations": [
+            "Newton, MA",
+            "New York, NY"
+          ],
+          "file_type": "SC 13G",
+          "file_description": "SC 13G",
+          "inc_states": [
+            "MD",
+            "DE"
+          ],
+          "items": []
+        },
+        "sort": [
+          1734393600000,
+          "0001193125-24-280636:d865689dsc13g.htm"
+        ]
+      },
+      {
+        "_index": "edgar_file",
+        "_id": "0001104659-24-129449:tm2431372d1_sc13g.htm",
+        "_score": null,
+        "_source": {
+          "ciks": [
+            "0001830188",
+            "0001331875"
+          ],
+          "period_ending": null,
+          "file_num": [
+            "005-92056"
+          ],
+          "display_names": [
+            "United Homes Group, Inc.  (UHG, UHGWW)  (CIK 0001830188)",
+            "Fidelity National Financial, Inc.  (CIK 0001331875)"
+          ],
+          "xsl": null,
+          "sequence": 1,
+          "root_forms": [
+            "SC 13G"
+          ],
+          "file_date": "2024-12-17",
+          "biz_states": [
+            "SC",
+            "FL"
+          ],
+          "sics": [
+            "1531",
+            "6361"
+          ],
+          "form": "SC 13G",
+          "adsh": "0001104659-24-129449",
+          "film_num": [
+            "241556975"
+          ],
+          "biz_locations": [
+            "Chapin, SC",
+            "Jacksonville, FL"
+          ],
+          "file_type": "SC 13G",
+          "file_description": "SC 13G",
+          "inc_states": [
+            "DE"
+          ],
+          "items": []
+        },
+        "sort": [
+          1734393600000,
+          "0001104659-24-129449:tm2431372d1_sc13g.htm"
+        ]
+      },
+      {
+        "_index": "edgar_file",
+        "_id": "0001104659-24-129285:tm2431336d1_sc13g.htm",
+        "_score": null,
+        "_source": {
+          "ciks": [
+            "0001841387",
+            "0001649553"
+          ],
+          "period_ending": null,
+          "file_num": [
+            "005-93359"
+          ],
+          "display_names": [
+            "Candel Therapeutics, Inc.  (CADL)  (CIK 0001841387)",
+            "CVI Investments, Inc.  (CIK 0001649553)"
+          ],
+          "xsl": null,
+          "sequence": 1,
+          "root_forms": [
+            "SC 13G"
+          ],
+          "file_date": "2024-12-17",
+          "biz_states": [
+            "MA",
+            "E9"
+          ],
+          "sics": [
+            "2836"
+          ],
+          "form": "SC 13G",
+          "adsh": "0001104659-24-129285",
+          "film_num": [
+            "241554350"
+          ],
+          "biz_locations": [
+            "Needham, MA",
+            "Grand Cayman, E9"
+          ],
+          "file_type": "SC 13G",
+          "file_description": "SC 13G",
+          "inc_states": [
+            "DE",
+            "E9"
+          ],
+          "items": []
+        },
+        "sort": [
+          1734393600000,
+          "0001104659-24-129285:tm2431336d1_sc13g.htm"
+        ]
+      },
+      {
+        "_index": "edgar_file",
+        "_id": "0001234567-24-000999:no_ticker_fund.htm",
+        "_score": null,
+        "_source": {
+          "ciks": [
+            "0009999999",
+            "0001234567"
+          ],
+          "period_ending": null,
+          "file_num": [
+            "005-00001"
+          ],
+          "display_names": [
+            "PRIVATE FUND LLC  (CIK 0009999999)",
+            "SOME FILER INC  (CIK 0001234567)"
+          ],
+          "xsl": null,
+          "sequence": 1,
+          "root_forms": [
+            "SC 13G"
+          ],
+          "file_date": "2024-12-10",
+          "biz_states": [
+            "NY"
+          ],
+          "sics": [
+            "6726"
+          ],
+          "form": "SC 13G",
+          "adsh": "0001234567-24-000999",
+          "film_num": [
+            "241500001"
+          ],
+          "biz_locations": [
+            "New York, NY"
+          ],
+          "file_type": "SC 13G",
+          "file_description": null,
+          "inc_states": [
+            "DE"
+          ],
+          "items": []
+        },
+        "sort": [
+          1733788800000,
+          "0001234567-24-000999:no_ticker_fund.htm"
+        ]
+      }
+    ]
+  }
+}

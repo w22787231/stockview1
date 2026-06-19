@@ -2,6 +2,7 @@
 """聰明錢各來源抓取(網路 fetch_*)+ 純解析(parse_*)+ 聚合(build_json)。"""
 import re, json, html as _html
 import os
+import datetime
 import urllib.request
 import urllib.error
 
@@ -386,6 +387,44 @@ def _http_get(url: str, headers: dict | None = None, timeout: int = 30) -> bytes
         return resp.read()
 
 
+def _http_post_json(url: str, body: dict, ua: str, timeout: int = 30) -> list:
+    """POST JSON body，回傳解析後的 list（FINRA API）；空回應回 []；不捕捉例外。"""
+    data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": ua,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read()
+    if not raw or not raw.strip():
+        return []
+    return json.loads(raw.decode("utf-8"))
+
+
+def _filter_latest_week(rows: list) -> list:
+    """從 FINRA rows 中只保留 weekStartDate 最大（最新）那一週的記錄。
+
+    輸入: list[dict]，每筆含 weekStartDate 欄位（str YYYY-MM-DD）。
+    輸出: list[dict]，只含最大 weekStartDate 的記錄。
+    純函式；空輸入回 []；任何解析錯誤的列被跳過（不丟例外）。
+    """
+    if not rows:
+        return []
+    # 找最大 weekStartDate
+    latest = ""
+    for r in rows:
+        w = (r.get("weekStartDate") or "").strip()
+        if w > latest:
+            latest = w
+    if not latest:
+        return []
+    return [r for r in rows if (r.get("weekStartDate") or "").strip() == latest]
+
+
 def fetch_openinsider() -> list | None:
     """抓取 OpenInsider 最近內部人交易頁，回傳 parse_openinsider 結果。
     失敗時 print 錯誤並回 None。
@@ -472,28 +511,83 @@ def fetch_edgar() -> list | None:
 
 
 def fetch_finra() -> dict | None:
-    """抓取 FINRA ATS 週報，回傳 parse_finra_ats 結果。
+    """抓取 FINRA ATS 週報（最新一週），回傳 parse_finra_ats 結果。
     需要環境變數 SEC_UA（User-Agent header）。
     失敗時 print 錯誤並回 None。
+
+    實作說明:
+    - FINRA GET API 預設回傳舊週資料（非最新）。
+    - 改用 POST JSON body + dateRangeFilters，以 7 天滑動窗口探測最新可得週。
+    - 找到 weekStartDate 後，分頁抓該週全部 ATS_W_SMBL_FIRM 記錄（每頁 5000）。
+    - 純標準庫（urllib/json/datetime），不用第三方套件。
     """
+    FINRA_API = "https://api.finra.org/data/group/otcMarket/name/weeklySummary"
+    PAGE = 5000
     sec_ua = os.environ.get("SEC_UA", "stockview research admin@example.com").strip()
-    # FINRA ATS weekly summary API
-    url = (
-        "https://api.finra.org/data/group/otcMarket/name/weeklySummary"
-        "?limit=2000&offset=0"
-    )
+
     try:
-        raw = _http_get(
-            url,
-            headers={
-                "User-Agent": sec_ua,
-                "Accept": "application/json",
-            },
-        )
-        data = json.loads(raw.decode("utf-8"))
-        result = parse_finra_ats(data)
-        print(f"[fetch_finra] OK — {len(result)} tickers")
+        today = datetime.date.today()
+
+        # ── Step 1: 用 7 天滑動窗口探測最新可得 weekStartDate ──────────────
+        # FINRA 通常在週結束後 2~4 週發布資料；從最近 7 天往前每次移 7 天
+        latest_week = None
+        for end_offset in range(0, 90, 7):
+            end_date = (today - datetime.timedelta(days=end_offset)).isoformat()
+            start_date = (today - datetime.timedelta(days=end_offset + 7)).isoformat()
+            probe = _http_post_json(FINRA_API, {
+                "limit": 10,
+                "dateRangeFilters": [
+                    {"startDate": start_date, "endDate": end_date, "fieldName": "weekStartDate"}
+                ],
+                "compareFilters": [
+                    {"compareType": "EQUAL", "fieldName": "summaryTypeCode", "fieldValue": "ATS_W_SMBL_FIRM"}
+                ],
+            }, ua=sec_ua)
+            if probe:
+                latest_week = max((r.get("weekStartDate") or "") for r in probe)
+                if latest_week:
+                    print(f"[fetch_finra] 最新週: {latest_week}（窗口 {start_date}~{end_date}）")
+                    break
+
+        if not latest_week:
+            print("[fetch_finra] FAILED: 90 天內找不到可用的 weekStartDate")
+            return None
+
+        # ── Step 2: 分頁抓完整的最新週資料 ─────────────────────────────────
+        all_rows: list = []
+        offset = 0
+        max_pages = 50
+        page_count = 0
+        while True:
+            page = _http_post_json(FINRA_API, {
+                "limit": PAGE,
+                "offset": offset,
+                "dateRangeFilters": [
+                    {"startDate": latest_week, "endDate": latest_week, "fieldName": "weekStartDate"}
+                ],
+                "compareFilters": [
+                    {"compareType": "EQUAL", "fieldName": "summaryTypeCode", "fieldValue": "ATS_W_SMBL_FIRM"}
+                ],
+            }, ua=sec_ua)
+            if not page:
+                break
+            all_rows.extend(page)
+            page_count += 1
+            if len(page) < PAGE:
+                break
+            if page_count >= max_pages:
+                print(f"[fetch_finra] 已達分頁上限 {max_pages} 頁，停止繼續抓取")
+                break
+            offset += PAGE
+
+        print(f"[fetch_finra] 共取得 {len(all_rows)} 筆（week={latest_week}）")
+
+        # ── Step 3: 安全過濾只保留最新週，再彙整 ───────────────────────────
+        filtered = _filter_latest_week(all_rows)
+        result = parse_finra_ats(filtered)
+        print(f"[fetch_finra] OK — {len(result)} tickers, week={latest_week}")
         return result
+
     except Exception as e:
         print(f"[fetch_finra] FAILED: {e}")
         return None

@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """聰明錢各來源抓取(網路 fetch_*)+ 純解析(parse_*)+ 聚合(build_json)。"""
 import re, json, html as _html
+import os
+import urllib.request
+import urllib.error
 
 
 def _num(s):
@@ -370,3 +373,134 @@ def parse_congress(data):
             continue
 
     return rows
+
+
+# ─────────────────────────────────────────────
+#  網路 fetch 層（任何例外都 print 後回 None）
+# ─────────────────────────────────────────────
+
+def _http_get(url: str, headers: dict | None = None, timeout: int = 30) -> bytes:
+    """發出 GET 請求，回傳 bytes；不捕捉例外（由呼叫層捕捉）。"""
+    req = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def fetch_openinsider() -> list | None:
+    """抓取 OpenInsider 最近內部人交易頁，回傳 parse_openinsider 結果。
+    失敗時 print 錯誤並回 None。
+    """
+    url = "http://openinsider.com/latest-insider-trading"
+    try:
+        raw = _http_get(url, headers={"User-Agent": "Mozilla/5.0"})
+        html_text = raw.decode("utf-8", errors="replace")
+        result = parse_openinsider(html_text)
+        print(f"[fetch_openinsider] OK — {len(result)} rows")
+        return result
+    except Exception as e:
+        print(f"[fetch_openinsider] FAILED: {e}")
+        return None
+
+
+def fetch_congress() -> list | None:
+    """抓取 Quiver Quant 國會交易 API，回傳 parse_congress 結果。
+    需要環境變數 QUIVER_API_KEY；無 key 時 print 提示並回 None。
+    失敗時 print 錯誤並回 None。
+    """
+    api_key = os.environ.get("QUIVER_API_KEY", "").strip()
+    if not api_key:
+        print("[fetch_congress] SKIPPED: QUIVER_API_KEY 未設定，跳過國會交易資料")
+        return None
+    url = "https://api.quiverquant.com/beta/live/congresstrading"
+    try:
+        raw = _http_get(
+            url,
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Token {api_key}",
+            },
+        )
+        data = json.loads(raw.decode("utf-8"))
+        result = parse_congress(data)
+        print(f"[fetch_congress] OK — {len(result)} rows")
+        return result
+    except Exception as e:
+        print(f"[fetch_congress] FAILED: {e}")
+        return None
+
+
+def fetch_edgar() -> list | None:
+    """抓取 EDGAR full-text search 近期 13D/13G 申報，回傳 parse_edgar_fulltext 結果合併。
+    需要環境變數 SEC_UA（User-Agent header）。
+    失敗時 print 錯誤並回 None。
+    """
+    sec_ua = os.environ.get("SEC_UA", "stockview research admin@example.com").strip()
+    headers = {
+        "User-Agent": sec_ua,
+        "Accept": "application/json",
+    }
+    base = (
+        "https://efts.sec.gov/LATEST/search-index?q=%221%22"
+        "&dateRange=custom&startdt={start}&enddt={end}"
+        "&forms={form}&hits.hits.total.value=true&hits.hits._source.period_of_report=true"
+        "&hits.hits._source.file_date=true&hits.hits._source.display_names=true"
+        "&hits.hits._source.ciks=true&hits.hits._id=true&_source=true&from=0&size=40"
+    )
+    # 用更簡潔的 EDGAR EFTS endpoint
+    urls = {
+        "13G": (
+            "https://efts.sec.gov/LATEST/search-index?forms=SC+13G&dateRange=custom"
+            "&startdt=2026-01-01&hits.hits._source.file_date=true"
+            "&hits.hits._source.display_names=true&hits.hits._source.ciks=true"
+            "&_source=true&from=0&size=40"
+        ),
+        "13D": (
+            "https://efts.sec.gov/LATEST/search-index?forms=SC+13D&dateRange=custom"
+            "&startdt=2026-01-01&hits.hits._source.file_date=true"
+            "&hits.hits._source.display_names=true&hits.hits._source.ciks=true"
+            "&_source=true&from=0&size=40"
+        ),
+    }
+    all_rows: list = []
+    any_ok = False
+    for form_label, url in urls.items():
+        try:
+            raw = _http_get(url, headers=headers)
+            data = json.loads(raw.decode("utf-8"))
+            rows = parse_edgar_fulltext(data, form_label)
+            print(f"[fetch_edgar/{form_label}] OK — {len(rows)} rows")
+            all_rows.extend(rows)
+            any_ok = True
+        except Exception as e:
+            print(f"[fetch_edgar/{form_label}] FAILED: {e}")
+    if not any_ok:
+        return None
+    return all_rows
+
+
+def fetch_finra() -> dict | None:
+    """抓取 FINRA ATS 週報，回傳 parse_finra_ats 結果。
+    需要環境變數 SEC_UA（User-Agent header）。
+    失敗時 print 錯誤並回 None。
+    """
+    sec_ua = os.environ.get("SEC_UA", "stockview research admin@example.com").strip()
+    # FINRA ATS weekly summary API
+    url = (
+        "https://api.finra.org/data/group/otcMarket/name/weeklySummary"
+        "?limit=2000&offset=0"
+    )
+    try:
+        raw = _http_get(
+            url,
+            headers={
+                "User-Agent": sec_ua,
+                "Accept": "application/json",
+            },
+        )
+        data = json.loads(raw.decode("utf-8"))
+        result = parse_finra_ats(data)
+        print(f"[fetch_finra] OK — {len(result)} tickers")
+        return result
+    except Exception as e:
+        print(f"[fetch_finra] FAILED: {e}")
+        return None

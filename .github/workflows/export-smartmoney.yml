@@ -21,7 +21,9 @@ jobs:
       - name: Install deps
         run: python -m pip install --upgrade pip
       - name: Pull existing live smartmoney data (首次無檔則略過)
-        run: curl -fsS "https://stockview1.pages.dev/data/smartmoney.json" -o data/smartmoney.json || echo "smartmoney.json 尚無(首次,略過)"
+        run: |
+          mkdir -p data
+          curl -fsS "https://stockview1.pages.dev/data/smartmoney.json" -o data/smartmoney.json || echo "smartmoney.json 尚無(首次,略過)"
       - name: Export smartmoney
         env:
           PYTHONUTF8: "1"

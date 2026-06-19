@@ -88,6 +88,101 @@ def parse_openinsider(html):
     return rows
 
 
+def _edgar_extract_ticker(display_names):
+    """從 EDGAR display_names 第一筆提取 ticker。
+    格式: 'Company Name  (TICK1, TICK2)  (CIK 0001234567)'
+    括號內容若非 CIK 開頭，視為 ticker 列表；取第一個。
+    無可辨識 ticker 時回傳空字串。
+    """
+    if not display_names:
+        return ""
+    first = display_names[0]
+    matches = re.findall(r'\(([^)]+)\)', first)
+    for m in matches:
+        m = m.strip()
+        if not m.upper().startswith("CIK"):
+            # 可能有多個 ticker 用逗號分隔，取第一個
+            return m.split(",")[0].strip()
+    return ""
+
+
+def _edgar_extract_filer(display_names):
+    """從 EDGAR display_names 提取申報人（filer）名稱。
+    申報人通常是最後一個 display_name；剔除括號內的 CIK 部分。
+    """
+    if not display_names:
+        return ""
+    # 取最後一筆（申報人），移除括號內容後取純文字
+    last = display_names[-1]
+    name = re.sub(r'\s*\([^)]*\)', '', last).strip()
+    return name
+
+
+def _edgar_build_url(hit_id, ciks):
+    """組出 EDGAR Archives 完整文件 URL。
+    hit_id 格式: 'ADSH:filename.ext'，例: '0001273087-24-000119:MEG_SC13G.htm'
+    URL 格式: https://www.sec.gov/Archives/edgar/data/{CIK}/{adsh_nodash}/{filename}
+    若組不出來則退回 https://www.sec.gov/
+    """
+    try:
+        adsh, filename = hit_id.split(":", 1)
+        adsh_nodash = adsh.replace("-", "")
+        # 取第一個 CIK（被投資公司），去掉前導零
+        cik = str(int(ciks[0])) if ciks else None
+        if cik and adsh_nodash and filename:
+            return f"https://www.sec.gov/Archives/edgar/data/{cik}/{adsh_nodash}/{filename}"
+    except Exception:
+        pass
+    return "https://www.sec.gov/"
+
+
+def parse_edgar_fulltext(data, form_label):
+    """EDGAR full-text search 回應 JSON → 13D/13G 申報列。
+
+    輸入: dict，EDGAR efts.sec.gov/LATEST/search-index API 回應。
+    輸出: list[dict]，每筆含:
+      ticker     str  — 股票代號(從 display_names 第一筆括號提取；缺時空字串)
+      filer      str  — 申報人名稱(display_names 最後一筆，去除 CIK 括號)
+      form       str  — 等於傳入的 form_label(如 "13G" / "13D")
+      date       str  — 申報日期(file_date 欄位)
+      url        str  — EDGAR Archives 完整文件 URL；組不出時退回 https://www.sec.gov/
+
+    安全處理:
+      - hits 缺失/空時回傳 []，不丟例外。
+      - 各欄缺失時以空字串/預設值填補。
+    純函式、不連網。
+    """
+    rows = []
+    try:
+        hits = data.get("hits", {}).get("hits", [])
+    except (AttributeError, TypeError):
+        return rows
+
+    for hit in hits:
+        try:
+            src = hit.get("_source", {})
+            hit_id = hit.get("_id", "")
+            ciks = src.get("ciks", [])
+            display_names = src.get("display_names", [])
+            file_date = (src.get("file_date") or "").strip()
+
+            ticker = _edgar_extract_ticker(display_names)
+            filer = _edgar_extract_filer(display_names)
+            url = _edgar_build_url(hit_id, ciks)
+
+            rows.append({
+                "ticker": ticker,
+                "filer": filer,
+                "form": form_label,
+                "date": file_date,
+                "url": url,
+            })
+        except Exception:
+            continue
+
+    return rows
+
+
 def parse_congress(data):
     """Quiver /beta/live/congresstrading JSON 陣列 → 國會交易列。
 

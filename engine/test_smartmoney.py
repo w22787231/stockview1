@@ -131,3 +131,85 @@ def test_parse_congress_fixture_skips_bad_entries():
     assert "AAPL" in tickers
     # Exchange 那筆不應出現
     assert all(r["trade_type"] in ("buy", "sell") for r in rows)
+
+
+# ── Task 3: parse_edgar_fulltext ────────────────────────────────────────────
+
+EDGAR_REQUIRED_KEYS = {"ticker", "filer", "form", "date", "url"}
+
+def test_parse_edgar_fulltext_returns_list():
+    """parse_edgar_fulltext 對合法 fixture 應回傳 list。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    assert isinstance(rows, list)
+
+def test_parse_edgar_fulltext_required_keys():
+    """每筆輸出都必須含 ticker/filer/form/date/url 五個鍵。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    assert len(rows) >= 2
+    for r in rows:
+        assert EDGAR_REQUIRED_KEYS <= set(r), f"缺欄: {EDGAR_REQUIRED_KEYS - set(r)}"
+
+def test_parse_edgar_fulltext_form_equals_label():
+    """form 欄位必須等於傳入的 form_label。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    for r in rows:
+        assert r["form"] == "13G"
+
+    rows2 = S.parse_edgar_fulltext(data, "13D")
+    for r in rows2:
+        assert r["form"] == "13D"
+
+def test_parse_edgar_fulltext_url_prefix():
+    """url 必須以 https://www.sec.gov/ 開頭。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    for r in rows:
+        assert r["url"].startswith("https://www.sec.gov/"), f"url 前綴錯誤: {r['url']}"
+
+def test_parse_edgar_fulltext_ticker_extracted():
+    """display_names 第一筆含括號 ticker 時，ticker 欄位應正確提取。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    tickers = [r["ticker"] for r in rows]
+    assert "MEG" in tickers
+    assert "OPI" in tickers or "OPINL" in tickers
+    assert "UHG" in tickers
+
+def test_parse_edgar_fulltext_no_ticker_returns_empty_string():
+    """display_names 沒有可辨識 ticker 時，ticker 欄位應為空字串而非 None。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    # fixture 最後一筆 PRIVATE FUND LLC 無 ticker
+    no_ticker = [r for r in rows if r["filer"] and "PRIVATE FUND" in r["filer"] or
+                 (r["ticker"] == "" and "PRIVATE" in r.get("filer", ""))]
+    # 只要確認有空字串的 ticker 出現即可（不強制哪一筆）
+    assert any(r["ticker"] == "" for r in rows), "應有至少一筆 ticker 為空字串"
+    for r in rows:
+        assert r["ticker"] is not None, "ticker 不能是 None"
+
+def test_parse_edgar_fulltext_filer_extracted():
+    """filer 欄位應非空（從 display_names 最後一筆或申報人名稱取得）。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    for r in rows:
+        assert r["filer"], f"filer 不應為空: {r}"
+
+def test_parse_edgar_fulltext_date_extracted():
+    """date 欄位應來自 file_date。"""
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    assert any(r["date"] == "2024-12-17" for r in rows)
+
+def test_parse_edgar_fulltext_empty_hits():
+    """hits.hits 為空時應回傳空 list，不丟例外。"""
+    data = {"hits": {"hits": []}}
+    rows = S.parse_edgar_fulltext(data, "13G")
+    assert rows == []
+
+def test_parse_edgar_fulltext_missing_hits_safe():
+    """缺少 hits 鍵時應回傳空 list，不丟例外。"""
+    assert S.parse_edgar_fulltext({}, "13G") == []
+    assert S.parse_edgar_fulltext({"hits": {}}, "13G") == []

@@ -20,7 +20,7 @@ def test_parse_openinsider_extracts_buy_and_sell():
     assert all(x["value_usd"] >= 0 for x in rows)
 
 
-# ── Task 2: parse_senate_watcher ────────────────────────────────────────────
+# ── Task 2: parse_house_watcher ────────────────────────────────────────────
 
 REQUIRED_KEYS = {"ticker", "member", "party", "trade_type", "date"}
 
@@ -29,91 +29,108 @@ _TODAY = "2026-06-19"
 # 90 天前 = 2026-03-21；再往前算 2 年是 2024-06-19（舊的）
 
 def _sw_make(ticker, senator, type_, date_str):
-    """產生一筆 senate-stock-watcher 格式資料（M/D/YYYY）。"""
+    """產生一筆 house-stock-watcher 格式資料（M/D/YYYY）。"""
     return {"ticker": ticker, "senator": senator, "type": type_,
             "transaction_date": date_str, "owner": "Self", "amount": "$1,001 - $15,000"}
 
 
-def test_parse_senate_watcher_purchase_maps_to_buy():
+def test_parse_house_watcher_purchase_maps_to_buy():
     """Purchase → trade_type:'buy'。"""
     data = [_sw_make("NVDA", "Test Senator", "Purchase", "6/1/2026")]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["trade_type"] == "buy"
     assert rows[0]["ticker"] == "NVDA"
     assert rows[0]["member"] == "Test Senator"
 
 
-def test_parse_senate_watcher_sale_partial_maps_to_sell():
+def test_parse_house_watcher_sale_partial_maps_to_sell():
     """Sale (Partial) → trade_type:'sell'。"""
     data = [_sw_make("AAPL", "Sen Smith", "Sale (Partial)", "5/15/2026")]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["trade_type"] == "sell"
 
 
-def test_parse_senate_watcher_sale_full_maps_to_sell():
+def test_parse_house_watcher_sale_full_maps_to_sell():
     """Sale (Full) → trade_type:'sell'。"""
     data = [_sw_make("MSFT", "Sen Jones", "Sale (Full)", "4/10/2026")]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["trade_type"] == "sell"
 
 
-def test_parse_senate_watcher_exchange_skipped():
+def test_parse_house_watcher_exchange_skipped():
     """Exchange → 跳過，不出現在輸出中。"""
     data = [_sw_make("XYZ", "Sen X", "Exchange", "6/10/2026")]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert rows == []
 
 
-def test_parse_senate_watcher_dash_ticker_skipped():
+def test_parse_house_watcher_dash_ticker_skipped():
     """ticker 為 '--' 應跳過。"""
     data = [_sw_make("--", "Sen Y", "Purchase", "6/5/2026")]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert rows == []
 
 
-def test_parse_senate_watcher_recent_days_filter():
+def test_parse_house_watcher_recent_days_filter():
     """只保留近 90 天記錄：2 年前(2024-06-19)應被過濾，近期(2026-06-01)保留。"""
     old = _sw_make("TSLA", "Old Senator", "Purchase", "6/19/2024")   # 2 年前，應過濾
     new = _sw_make("TSLA", "New Senator", "Purchase", "6/1/2026")    # 近期，應保留
-    rows = S.parse_senate_watcher([old, new], recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher([old, new], recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["date"] == "2026-06-01"
 
 
-def test_parse_senate_watcher_empty_input():
+def test_parse_house_watcher_empty_input():
     """空輸入回 []，不丟例外。"""
-    assert S.parse_senate_watcher([], recent_days=90, today=_TODAY) == []
-    assert S.parse_senate_watcher(None, recent_days=90, today=_TODAY) == []
+    assert S.parse_house_watcher([], recent_days=90, today=_TODAY) == []
+    assert S.parse_house_watcher(None, recent_days=90, today=_TODAY) == []
 
 
-def test_parse_senate_watcher_missing_field_safe():
+def test_parse_house_watcher_missing_field_safe():
     """缺少必要欄位的列安全跳過，不丟例外。"""
     data = [
         {"senator": "No Ticker", "type": "Purchase", "transaction_date": "6/1/2026"},  # 缺 ticker
         {"ticker": "SPY", "type": "Purchase", "transaction_date": "6/1/2026"},         # 缺 senator
         {},  # 完全空
     ]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert rows == []
 
 
-def test_parse_senate_watcher_required_keys():
+def test_parse_house_watcher_required_keys():
     """每筆輸出都含 ticker/member/party/trade_type/date 五個鍵。"""
     data = [_sw_make("AMZN", "Sen Brown", "Purchase", "6/10/2026")]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert REQUIRED_KEYS <= set(rows[0]), f"缺欄: {REQUIRED_KEYS - set(rows[0])}"
 
 
-def test_parse_senate_watcher_date_iso_format():
+def test_parse_house_watcher_date_iso_format():
     """date 欄位應輸出為 ISO 格式 YYYY-MM-DD（M/D/YYYY → YYYY-MM-DD）。"""
     data = [_sw_make("GOOGL", "Sen Lee", "Purchase", "4/5/2026")]
-    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
+    rows = S.parse_house_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["date"] == "2026-04-05"
+
+
+def test_parse_house_watcher_cutoff_boundary_kept():
+    """邊界測試：transaction_date 剛好等於 today - recent_days（cutoff 當天）的記錄應被保留。
+
+    today=2026-06-19, recent_days=90 → cutoff=2026-03-21
+    實作判斷: trade_date < cutoff → 跳過；trade_date >= cutoff → 保留。
+    cutoff 當天（2026-03-21）屬於 >= cutoff，應被保留。
+    """
+    # cutoff = 2026-06-19 - 90d = 2026-03-21
+    cutoff_day = _sw_make("MSFT", "Rep Boundary", "Purchase", "3/21/2026")
+    rows = S.parse_house_watcher([cutoff_day], recent_days=90, today=_TODAY)
+    assert len(rows) == 1, (
+        f"cutoff 當天記錄應被保留（>= cutoff），但實際輸出 {len(rows)} 筆"
+    )
+    assert rows[0]["date"] == "2026-03-21"
+    assert rows[0]["ticker"] == "MSFT"
 
 
 # ── Task 3: parse_edgar_fulltext ────────────────────────────────────────────

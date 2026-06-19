@@ -316,10 +316,10 @@ def build_json(insider, congress, dgfilings, darkpool, updated_iso):
     return {"updated": updated_iso, "stocks": stocks}
 
 
-def parse_senate_watcher(data, recent_days=90, today=None):
-    """house/senate-stock-watcher 聚合 JSON 陣列 → 國會交易列（正規化，與舊 parse_congress 輸出格式相同）。
+def parse_house_watcher(data, recent_days=90, today=None):
+    """house-stock-watcher 聚合 JSON 陣列 → 國會交易列（正規化，與舊 parse_congress 輸出格式相同）。
 
-    輸入: list[dict]，house-stock-watcher（或 senate-stock-watcher）all_transactions.json 原始記錄。
+    輸入: list[dict]，house-stock-watcher all_transactions.json 原始記錄。
     欄位說明：
       senator 或 representative → member（senator 優先，否則取 representative）
       transaction_date (MM/DD/YYYY) → date (YYYY-MM-DD ISO)
@@ -502,7 +502,7 @@ def fetch_congress() -> list | None:
         )
         data = json.loads(raw.decode("utf-8"))
         today_iso = datetime.date.today().isoformat()
-        result = parse_senate_watcher(data, recent_days=90, today=today_iso)
+        result = parse_house_watcher(data, recent_days=90, today=today_iso)
         print(f"[fetch_congress] OK — {len(result)} rows (house-stock-watcher, 近 90 天)")
         return result
     except Exception as e:

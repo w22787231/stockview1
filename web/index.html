@@ -1846,6 +1846,81 @@ function renderReddit(){
   document.querySelectorAll("#content th[data-rk]").forEach(th=>th.onclick=()=>{ const k=th.dataset.rk; if(REDDIT_SORT.k===k) REDDIT_SORT.asc=!REDDIT_SORT.asc; else { REDDIT_SORT.k=k; REDDIT_SORT.asc=(k==="rank"); } renderReddit(); });
 }
 
+// ── 聰明錢榜 ─────────────────────────────────────────
+let SMART_DATA=null, SMART_SORT={k:"hits",asc:false}, SMART_Q="", SMART_PAGE=1;
+const SMART_PER=50;
+function _smth(k,lab,left){ return '<th data-sk="'+k+'"'+(left?' style="text-align:left"':'')+'>'+lab+'</th>'; }
+function _smFmt(sig){
+  if(!sig) return {insider:"—",congress:"—",filing:"—",darkpool:"—"};
+  const ins=sig.insider, cng=sig.congress, fl=sig.filing13dg, dp=sig.darkpool;
+  return {
+    insider: ins ? (ins.buys>0?'<span class="pos">買'+ins.buys+'</span>':'')+
+                   (ins.sells>0?(ins.buys>0?' ':'')+'<span class="neg">賣'+ins.sells+'</span>':'') ||
+                   '<span class="dim">—</span>' : '<span class="dim">—</span>',
+    congress: cng ? (cng.buys>0?'<span class="pos">買'+cng.buys+'</span>':'')+
+                    (cng.sells>0?(cng.buys>0?' ':'')+'<span class="neg">賣'+cng.sells+'</span>':'') ||
+                    '<span class="dim">—</span>' : '<span class="dim">—</span>',
+    filing: fl ? '<span>'+esc(fl.type||"13D/G")+' '+esc(fl.count||1)+'</span>' : '<span class="dim">—</span>',
+    darkpool: dp ? '<span class="dim">'+fmtNum(dp.trades)+'筆/'+fmtNum(Math.round((dp.shares||0)/1000))+'K股</span>' : '<span class="dim">—</span>'
+  };
+}
+async function loadSmart(){
+  for(const k in SORT_STATE) delete SORT_STATE[k];
+  $("#meta").innerHTML='<div><b>聰明錢榜</b></div><div>內部人 · 國會 · 13D/G · 暗池</div>';
+  $("#poolNote").innerHTML="";
+  if(SMART_DATA){ renderSmart(); return; }
+  $("#content").innerHTML='<div class="loading-screen">載入聰明錢資料 …</div>';
+  try{
+    const res=await fetch("data/smartmoney.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    SMART_DATA=await res.json();
+    renderSmart();
+  }catch(e){
+    $("#content").innerHTML='<div class="loading-screen">⚠️ 聰明錢資料尚未產生（'+esc(e.message)+'），請待下次更新。</div>';
+  }
+}
+function renderSmart(){
+  const d=(SMART_DATA&&SMART_DATA.stocks)||[], q=SMART_Q.toLowerCase();
+  let rows=q?d.filter(r=>(r.ticker||"").toLowerCase().includes(q)||(r.name||"").toLowerCase().includes(q)):d.slice();
+  const sk=SMART_SORT.k, asc=SMART_SORT.asc;
+  rows.sort((a,b)=>{
+    if(sk==="ticker"||sk==="name"){ return asc?String(a[sk]).localeCompare(b[sk]):String(b[sk]).localeCompare(a[sk]); }
+    const av=Number(a[sk])||0, bv=Number(b[sk])||0;
+    return asc?av-bv:bv-av;
+  });
+  const total=rows.length, pages=Math.max(1,Math.ceil(total/SMART_PER));
+  if(SMART_PAGE>pages) SMART_PAGE=pages;
+  const slice=rows.slice((SMART_PAGE-1)*SMART_PER, SMART_PAGE*SMART_PER);
+  const upd=SMART_DATA&&SMART_DATA.updated?SMART_DATA.updated.replace("T"," ").slice(0,16)+" UTC":"—";
+  const body=slice.map(r=>{
+    const f=_smFmt(r.signals);
+    return '<tr style="cursor:pointer" onclick="typeof renderSmartDetail===\'function\'&&renderSmartDetail(\''+esc(r.ticker)+'\')">'+
+      '<td style="text-align:left;font-weight:700">'+esc(r.ticker)+'</td>'+
+      '<td style="text-align:left" class="dim">'+esc(r.name||"—")+'</td>'+
+      '<td>'+fmtNum(r.hits)+'</td>'+
+      '<td>'+f.insider+'</td>'+
+      '<td>'+f.congress+'</td>'+
+      '<td>'+f.filing+'</td>'+
+      '<td>'+f.darkpool+'</td>'+
+      '</tr>';
+  }).join("");
+  $("#content").innerHTML=
+    '<section><div class="sec-head"><h2>聰明錢榜</h2></div>'+
+    '<div class="legend">聚合內部人買賣、國會交易、13D/G大戶申報、暗池成交，共 '+fmtNum(total)+' 檔。更新：'+esc(upd)+'。點列可查詳情(開發中)。</div>'+
+    '<div style="margin:8px 0"><input id="smartQ" placeholder="搜尋代碼或名稱…" value="'+esc(SMART_Q)+'" style="width:100%;max-width:280px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)"></div>'+
+    '<div class="tbl-wrap"><table><thead><tr>'+
+    _smth("ticker","代碼",1)+_smth("name","名稱",1)+_smth("hits","訊號數")+_smth("insider","內部人")+_smth("congress","國會")+_smth("filing","13D/G")+_smth("darkpool","暗池")+
+    '</tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px">'+
+    '<button class="btn" id="smPrev"'+(SMART_PAGE<=1?" disabled":"")+'>上一頁</button>'+
+    '<span class="dim">第 '+SMART_PAGE+' / '+pages+' 頁</span>'+
+    '<button class="btn" id="smNext"'+(SMART_PAGE>=pages?" disabled":"")+'>下一頁</button></div></section>';
+  const qi=$("#smartQ"); if(qi){ qi.oninput=e=>{ SMART_Q=e.target.value.trim(); SMART_PAGE=1; renderSmart(); const n=$("#smartQ"); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } }; }
+  const pv=$("#smPrev"); if(pv) pv.onclick=()=>{ if(SMART_PAGE>1){ SMART_PAGE--; renderSmart(); } };
+  const nx=$("#smNext"); if(nx) nx.onclick=()=>{ SMART_PAGE++; renderSmart(); };
+  document.querySelectorAll("#content th[data-sk]").forEach(th=>th.onclick=()=>{ const k=th.dataset.sk; if(SMART_SORT.k===k) SMART_SORT.asc=!SMART_SORT.asc; else { SMART_SORT.k=k; SMART_SORT.asc=false; } renderSmart(); });
+}
+
 // ── ETF 持股異動分頁 ───────────────────────────────
 async function loadEtf(){
   for(const k in SORT_STATE) delete SORT_STATE[k];
@@ -2573,6 +2648,7 @@ function switchView(v){
   else if(v==="options") loadOptions();
   else if(v==="capital") loadCapital();
   else if(v==="reddit") loadReddit();
+  else if(v==="smart") loadSmart();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
 }
 // ── 主分頁:動態渲染 + 可拖曳重排(順序存 localStorage navOrder)──
@@ -2590,6 +2666,7 @@ const NAV=[
   {view:"options", label:"選擇權"},
   {view:"news",    label:"新聞"},
   {view:"reddit",  label:"Reddit 熱門"},
+  {view:"smart",   label:"聰明錢"},
 ];
 function navOrder(){
   let saved=[];

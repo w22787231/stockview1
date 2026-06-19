@@ -20,10 +20,19 @@ jobs:
           python-version: "3.11"
       - name: Install deps
         run: python -m pip install --upgrade pip
-      - name: Pull existing live smartmoney data (首次無檔則略過)
-        run: |
-          mkdir -p data
-          curl -fsS "https://stockview1.pages.dev/data/smartmoney.json" -o data/smartmoney.json || echo "smartmoney.json 尚無(首次,略過)"
+      - name: Pull ALL existing live data (保留全站快照)
+        # Cloudflare Pages 部署是「整個目錄快照」,會取代整站。本工作流只產 smartmoney.json,
+        # 若不先把線上整個 data 樹(頂層 JSON + 5 池 + 中文名 + ~1700 檔個股詳情,含 smartmoney 基準)
+        # 抓回來,部署就會把 tw150/sp500/macro/etf/個股 等其他分頁資料全部抹掉(分頁載入 <!DOCTYPE)。
+        # pull_live_data.py 與其他工作流共用的同一保站機制。
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: cd engine && python pull_live_data.py || true
+      - name: Preserve lite pools' per-stock detail from live
+        # lite 池 Buy 股詳情,沿用線上,避免被快照抹掉。
+        working-directory: engine
+        run: python preserve_lite_stock.py || true
       - name: Export smartmoney
         env:
           PYTHONUTF8: "1"

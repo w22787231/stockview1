@@ -1851,7 +1851,7 @@ let SMART_DATA=null, SMART_SORT={k:"hits",asc:false}, SMART_Q="", SMART_PAGE=1;
 const SMART_PER=50;
 function _smth(k,lab,left){ return '<th data-sk="'+k+'"'+(left?' style="text-align:left"':'')+'>'+lab+'</th>'; }
 function _smFmt(sig){
-  if(!sig) return {insider:"—",congress:"—",filing:"—",darkpool:"—"};
+  if(!sig) return {insider:'<span class="dim">—</span>',congress:'<span class="dim">—</span>',filing:'<span class="dim">—</span>',darkpool:'<span class="dim">—</span>'};
   const ins=sig.insider, cng=sig.congress, fl=sig.filing13dg, dp=sig.darkpool;
   return {
     insider: ins ? (ins.buys>0?'<span class="pos">買'+ins.buys+'</span>':'')+
@@ -1918,7 +1918,7 @@ function renderSmart(){
   const qi=$("#smartQ"); if(qi){ qi.oninput=e=>{ SMART_Q=e.target.value.trim(); SMART_PAGE=1; renderSmart(); const n=$("#smartQ"); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } }; }
   const pv=$("#smPrev"); if(pv) pv.onclick=()=>{ if(SMART_PAGE>1){ SMART_PAGE--; renderSmart(); } };
   const nx=$("#smNext"); if(nx) nx.onclick=()=>{ SMART_PAGE++; renderSmart(); };
-  document.querySelectorAll("#content th[data-sk]").forEach(th=>th.onclick=()=>{ const k=th.dataset.sk; if(SMART_SORT.k===k) SMART_SORT.asc=!SMART_SORT.asc; else { SMART_SORT.k=k; SMART_SORT.asc=false; } renderSmart(); });
+  document.querySelectorAll("#content th[data-sk]").forEach(th=>th.onclick=()=>{ const k=th.dataset.sk; if(SMART_SORT.k===k) SMART_SORT.asc=!SMART_SORT.asc; else { SMART_SORT.k=k; SMART_SORT.asc=(k==="ticker"||k==="name"); } renderSmart(); });
 }
 
 // ── ETF 持股異動分頁 ───────────────────────────────

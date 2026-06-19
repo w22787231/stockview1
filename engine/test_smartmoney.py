@@ -229,6 +229,40 @@ def test_parse_edgar_fulltext_url_uses_filer_cik():
         f"URL 不應含被投資公司 CIK 1643615，實際: {meg_row['url']}"
 
 
+# ── _filter_latest_week ──────────────────────────────────────────────────────
+
+def test_filter_latest_week_keeps_only_newest():
+    """含兩個不同 weekStartDate 時，應只保留較新那一週的記錄。"""
+    rows = [
+        {"issueSymbolIdentifier": "AAPL", "weekStartDate": "2026-05-11", "totalWeeklyShareQuantity": 100, "totalWeeklyTradeCount": 5},
+        {"issueSymbolIdentifier": "MSFT", "weekStartDate": "2026-05-11", "totalWeeklyShareQuantity": 200, "totalWeeklyTradeCount": 8},
+        {"issueSymbolIdentifier": "NVDA", "weekStartDate": "2026-05-25", "totalWeeklyShareQuantity": 300, "totalWeeklyTradeCount": 12},
+        {"issueSymbolIdentifier": "TSLA", "weekStartDate": "2026-05-25", "totalWeeklyShareQuantity": 400, "totalWeeklyTradeCount": 15},
+    ]
+    result = S._filter_latest_week(rows)
+    weeks = {r["weekStartDate"] for r in result}
+    assert weeks == {"2026-05-25"}, f"應只含 2026-05-25，實際: {weeks}"
+    assert len(result) == 2
+    tickers = {r["issueSymbolIdentifier"] for r in result}
+    assert tickers == {"NVDA", "TSLA"}
+
+
+def test_filter_latest_week_empty_input():
+    """空陣列應回傳空 list，不丟例外。"""
+    assert S._filter_latest_week([]) == []
+
+
+def test_filter_latest_week_single_week():
+    """只有一個週的資料，全部應被保留。"""
+    rows = [
+        {"issueSymbolIdentifier": "SPY", "weekStartDate": "2026-05-25", "totalWeeklyShareQuantity": 100, "totalWeeklyTradeCount": 10},
+        {"issueSymbolIdentifier": "QQQ", "weekStartDate": "2026-05-25", "totalWeeklyShareQuantity": 200, "totalWeeklyTradeCount": 20},
+    ]
+    result = S._filter_latest_week(rows)
+    assert len(result) == 2
+    assert all(r["weekStartDate"] == "2026-05-25" for r in result)
+
+
 # ── Task 4: parse_finra_ats ─────────────────────────────────────────────────
 
 FINRA_REQUIRED_KEYS = {"shares", "trades", "week"}

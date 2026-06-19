@@ -86,3 +86,63 @@ def parse_openinsider(html):
         )
 
     return rows
+
+
+def parse_congress(data):
+    """Quiver /beta/live/congresstrading JSON 陣列 → 國會交易列。
+
+    輸入: list[dict]，每筆為 Quiver API 原始記錄。
+    輸出: list[dict]，每筆含:
+      ticker     str  — 股票代號(大寫)
+      member     str  — 議員姓名
+      party      str  — 政黨；缺時 fallback 到 House 欄位，再缺則 ""
+      trade_type str  — "buy"(Purchase) / "sell"(Sale / Sale (Partial) …)
+      date       str  — TransactionDate；缺時 fallback 到 ReportDate，再缺則 ""
+
+    安全跳過:
+      - 缺少 Ticker / Representative / Transaction 等必要欄位
+      - Ticker 為空字串
+      - Transaction 不含 "purchase" 或 "sale" 的未知值
+    不連網、不丟例外。
+    """
+    rows = []
+    for item in data:
+        try:
+            # ── 必要欄位 ────────────────────────────────────
+            ticker = (item.get("Ticker") or "").strip().upper()
+            if not ticker:
+                continue
+
+            member = (item.get("Representative") or "").strip()
+            if not member:
+                continue
+
+            transaction = item.get("Transaction")
+            if not transaction:
+                continue
+
+            t_lower = transaction.lower()
+            if "purchase" in t_lower:
+                trade_type = "buy"
+            elif "sale" in t_lower:
+                trade_type = "sell"
+            else:
+                continue  # Exchange / 其他未知值 → 跳過
+
+            # ── 選擇性欄位 ──────────────────────────────────
+            party = (item.get("Party") or item.get("House") or "").strip()
+
+            date = (item.get("TransactionDate") or item.get("ReportDate") or "").strip()
+
+            rows.append({
+                "ticker": ticker,
+                "member": member,
+                "party": party,
+                "trade_type": trade_type,
+                "date": date,
+            })
+        except Exception:
+            # 任何非預期錯誤一律跳過該筆，不讓整批崩潰
+            continue
+
+    return rows

@@ -1920,6 +1920,97 @@ function renderSmart(){
   const nx=$("#smNext"); if(nx) nx.onclick=()=>{ SMART_PAGE++; renderSmart(); };
   document.querySelectorAll("#content th[data-sk]").forEach(th=>th.onclick=()=>{ const k=th.dataset.sk; if(SMART_SORT.k===k) SMART_SORT.asc=!SMART_SORT.asc; else { SMART_SORT.k=k; SMART_SORT.asc=(k==="ticker"||k==="name"); } renderSmart(); });
 }
+function renderSmartDetail(ticker){
+  const stocks=(SMART_DATA&&SMART_DATA.stocks)||[];
+  const rec=stocks.find(r=>r.ticker===ticker);
+  if(!rec){ renderSmart(); return; }
+  const sig=rec.signals||{};
+  const ins=sig.insider, cng=sig.congress, fl=sig.filing13dg, dp=sig.darkpool;
+  let html='<section>';
+  // 返回按鈕 + 標題
+  html+='<div class="sec-head" style="display:flex;align-items:center;gap:12px">'+
+    '<button class="btn" onclick="renderSmart()" style="flex-shrink:0">← 返回榜</button>'+
+    '<h2>聰明錢詳情 — '+esc(ticker)+(rec.name?'　<span class="dim" style="font-weight:400;font-size:.9em">'+esc(rec.name)+'</span>':'')+'</h2>'+
+    '</div>';
+  // 內部人 Form 4
+  html+='<div class="sec-head"><h3>內部人交易（Form 4）</h3></div>';
+  if(ins&&ins.items&&ins.items.length){
+    html+='<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">日期</th><th style="text-align:left">姓名</th><th style="text-align:left">職位</th><th>買賣</th><th>金額（USD）</th></tr></thead><tbody>';
+    ins.items.forEach(item=>{
+      const isBuy=item.trade_type==="buy";
+      const cls=isBuy?"pos":"neg";
+      const label=isBuy?"買":"賣";
+      const dateStr=item.date?(item.date+"").slice(0,10):"—";
+      html+='<tr>'+
+        '<td class="dim">'+esc(dateStr)+'</td>'+
+        '<td>'+esc(item.insider||"—")+'</td>'+
+        '<td class="dim">'+esc(item.title||"—")+'</td>'+
+        '<td style="text-align:center"><span class="'+cls+'">'+label+'</span></td>'+
+        '<td style="text-align:right">'+(item.value_usd!=null?'$'+fmtNum(item.value_usd):'<span class="dim">—</span>')+'</td>'+
+        '</tr>';
+    });
+    html+='</tbody></table></div>';
+  } else {
+    html+='<div class="legend dim">暫無內部人交易記錄。</div>';
+  }
+  // 國會交易
+  html+='<div class="sec-head" style="margin-top:16px"><h3>國會議員交易</h3></div>';
+  if(cng&&cng.items&&cng.items.length){
+    html+='<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">申報日</th><th style="text-align:left">議員</th><th style="text-align:left">黨/院</th><th>買賣</th></tr></thead><tbody>';
+    cng.items.forEach(item=>{
+      const isBuy=item.trade_type==="buy"||(item.transaction||"").toLowerCase()==="purchase";
+      const cls=isBuy?"pos":"neg";
+      const label=isBuy?"買":"賣";
+      const dateStr=item.date?(item.date+"").slice(0,10):esc(item.filed||"—");
+      html+='<tr>'+
+        '<td class="dim">'+esc(dateStr)+'</td>'+
+        '<td>'+esc(item.representative||item.senator||item.name||"—")+'</td>'+
+        '<td class="dim">'+esc(item.party||item.chamber||"—")+'</td>'+
+        '<td style="text-align:center"><span class="'+cls+'">'+label+'</span></td>'+
+        '</tr>';
+    });
+    html+='</tbody></table></div>';
+  } else {
+    html+='<div class="legend dim">暫無國會議員交易記錄。</div>';
+  }
+  // 13D/13G 申報
+  html+='<div class="sec-head" style="margin-top:16px"><h3>13D/13G 大戶申報</h3></div>';
+  if(fl&&fl.items&&fl.items.length){
+    html+='<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">日期</th><th style="text-align:left">表格</th><th style="text-align:left">申報人</th><th>SEC 連結</th></tr></thead><tbody>';
+    fl.items.forEach(item=>{
+      const dateStr=item.date?(item.date+"").slice(0,10):"—";
+      html+='<tr>'+
+        '<td class="dim">'+esc(dateStr)+'</td>'+
+        '<td>'+esc(item.form||"13D/G")+'</td>'+
+        '<td>'+esc(item.filer||"—")+'</td>'+
+        '<td style="text-align:center">'+(item.url?'<a href="'+esc(item.url)+'" target="_blank" rel="noopener">SEC</a>':'<span class="dim">—</span>')+'</td>'+
+        '</tr>';
+    });
+    html+='</tbody></table></div>';
+  } else {
+    html+='<div class="legend dim">暫無 13D/13G 申報記錄。</div>';
+  }
+  // 暗池彙總
+  html+='<div class="sec-head" style="margin-top:16px"><h3>暗池成交彙總</h3></div>';
+  if(dp){
+    html+='<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">週別</th><th>成交股數（K）</th><th>成交筆數</th></tr></thead><tbody>'+
+      '<tr>'+
+      '<td class="dim">'+esc(dp.week||"—")+'</td>'+
+      '<td style="text-align:right">'+fmtNum(Math.round((dp.shares||0)/1000))+'K</td>'+
+      '<td style="text-align:right">'+fmtNum(dp.trades)+'</td>'+
+      '</tr>'+
+      '</tbody></table></div>';
+  } else {
+    html+='<div class="legend dim">暫無暗池成交資料。</div>';
+  }
+  // 底部導覽連結
+  html+='<div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap">'+
+    '<button class="btn" onclick="switchView(\'etf\')">ETF 資金流</button>'+
+    '<button class="btn" onclick="switchView(\'macro\')">COT 期貨持倉</button>'+
+    '</div>';
+  html+='</section>';
+  $("#content").innerHTML=html;
+}
 
 // ── ETF 持股異動分頁 ───────────────────────────────
 async function loadEtf(){

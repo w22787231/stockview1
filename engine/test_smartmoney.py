@@ -227,3 +227,60 @@ def test_parse_edgar_fulltext_url_uses_filer_cik():
         f"URL 應含申報人 CIK 1273087，實際: {meg_row['url']}"
     assert "/edgar/data/1643615/" not in meg_row["url"], \
         f"URL 不應含被投資公司 CIK 1643615，實際: {meg_row['url']}"
+
+
+# ── Task 4: parse_finra_ats ─────────────────────────────────────────────────
+
+FINRA_REQUIRED_KEYS = {"shares", "trades", "week"}
+
+def test_parse_finra_ats_empty_input():
+    """空陣列輸入應回傳空 dict，不丟例外。"""
+    assert S.parse_finra_ats([]) == {}
+
+def test_parse_finra_ats_multi_mpid_aggregation():
+    """同一 ticker 跨 2 個不同 MPID/ATS 的列，shares 與 trades 應正確加總。
+    PHX: CODA(shares=332, trades=4) + EBXL(shares=2581, trades=21) → 2913 / 25
+    """
+    rows = _fx_json("finra_ats_sample.json")
+    result = S.parse_finra_ats(rows)
+    assert "PHX" in result
+    assert result["PHX"]["shares"] == 332 + 2581   # 2913
+    assert result["PHX"]["trades"] == 4 + 21        # 25
+
+def test_parse_finra_ats_required_keys():
+    """每個 ticker 的值都必須含 shares/trades/week 三個鍵。"""
+    rows = _fx_json("finra_ats_sample.json")
+    result = S.parse_finra_ats(rows)
+    for ticker, val in result.items():
+        assert FINRA_REQUIRED_KEYS <= set(val), f"{ticker} 缺欄: {FINRA_REQUIRED_KEYS - set(val)}"
+
+def test_parse_finra_ats_shares_trades_are_int():
+    """shares 與 trades 必須是 int，不能是 float 或 str。"""
+    rows = _fx_json("finra_ats_sample.json")
+    result = S.parse_finra_ats(rows)
+    for ticker, val in result.items():
+        assert isinstance(val["shares"], int), f"{ticker}.shares 不是 int"
+        assert isinstance(val["trades"], int), f"{ticker}.trades 不是 int"
+
+def test_parse_finra_ats_null_symbol_skipped():
+    """issueSymbolIdentifier 為 null/空的列應被跳過，不出現在結果 dict 中。"""
+    rows = _fx_json("finra_ats_sample.json")
+    result = S.parse_finra_ats(rows)
+    assert None not in result
+    assert "" not in result
+
+def test_parse_finra_ats_single_ticker():
+    """單一列 ticker(BRKR)應正確出現，shares/trades 就是原值。"""
+    rows = _fx_json("finra_ats_sample.json")
+    result = S.parse_finra_ats(rows)
+    assert "BRKR" in result
+    assert result["BRKR"]["shares"] == 21779
+    assert result["BRKR"]["trades"] == 241
+
+def test_parse_finra_ats_week_field():
+    """week 欄位應來自 weekStartDate(或 summaryStartDate)，格式為 YYYY-MM-DD 字串。"""
+    rows = _fx_json("finra_ats_sample.json")
+    result = S.parse_finra_ats(rows)
+    for ticker, val in result.items():
+        assert isinstance(val["week"], str), f"{ticker}.week 不是 str"
+        assert len(val["week"]) == 10, f"{ticker}.week 格式不對: {val['week']}"

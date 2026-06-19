@@ -193,6 +193,38 @@ def parse_edgar_fulltext(data, form_label):
     return rows
 
 
+def parse_finra_ats(rows):
+    """FINRA ATS 週報 JSON 陣列 → 暗池交易彙整 dict。
+
+    輸入: list[dict]，FINRA weeklySummary API 原始記錄（每筆代表一個 ATS/MPID 對同一 ticker 的週成交）。
+    輸出: dict，格式 {ticker: {"shares": int, "trades": int, "week": str}}
+      - 同一 ticker 跨多個 MPID 的列，shares/trades 全部加總。
+      - issueSymbolIdentifier 為 null/空的列跳過。
+      - shares/trades 強制轉為 int。
+      - week 欄位優先取 weekStartDate，缺則取 summaryStartDate，格式 YYYY-MM-DD。
+    純函式、不連網；缺 symbol 的列跳過；空輸入回空 dict；不丟例外。
+    """
+    result = {}
+    for row in rows:
+        try:
+            ticker = (row.get("issueSymbolIdentifier") or "").strip()
+            if not ticker:
+                continue
+
+            shares = int(row.get("totalWeeklyShareQuantity") or 0)
+            trades = int(row.get("totalWeeklyTradeCount") or 0)
+            week = (row.get("weekStartDate") or row.get("summaryStartDate") or "").strip()
+
+            if ticker in result:
+                result[ticker]["shares"] += shares
+                result[ticker]["trades"] += trades
+            else:
+                result[ticker] = {"shares": shares, "trades": trades, "week": week}
+        except Exception:
+            continue
+    return result
+
+
 def parse_congress(data):
     """Quiver /beta/live/congresstrading JSON 陣列 → 國會交易列。
 

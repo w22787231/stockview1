@@ -1,0 +1,44 @@
+name: export-smartmoney
+# 聰明錢(機構持倉/SEC 13F)每日匯出。美股收盤後一次,解耦部署。
+on:
+  schedule:
+    - cron: "0 22 * * 1-5"    # UTC 22:00 週一到週五(美東收盤後)
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: smartmoney-deploy
+  cancel-in-progress: false
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: python -m pip install --upgrade pip
+      - name: Pull existing live smartmoney data (首次無檔則略過)
+        run: curl -fsS "https://stockview1.pages.dev/data/smartmoney.json" -o data/smartmoney.json || echo "smartmoney.json 尚無(首次,略過)"
+      - name: Export smartmoney
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"
+          QUIVER_API_KEY: ${{ secrets.QUIVER_API_KEY }}
+          SEC_UA: ${{ secrets.SEC_UA }}
+        run: cd engine && python export_smartmoney.py
+      - name: Stage web output
+        run: |
+          mkdir -p public && cp -r web/* public/
+          mkdir -p public/data && cp data/*.json public/data/
+          cp engine/universe/tw_names.json public/data/tw_names.json || true
+          if [ -d data/stock ]; then mkdir -p public/data/stock && cp data/stock/*.json public/data/stock/ || true; fi
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main

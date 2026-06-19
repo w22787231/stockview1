@@ -439,13 +439,6 @@ def fetch_edgar() -> list | None:
         "User-Agent": sec_ua,
         "Accept": "application/json",
     }
-    base = (
-        "https://efts.sec.gov/LATEST/search-index?q=%221%22"
-        "&dateRange=custom&startdt={start}&enddt={end}"
-        "&forms={form}&hits.hits.total.value=true&hits.hits._source.period_of_report=true"
-        "&hits.hits._source.file_date=true&hits.hits._source.display_names=true"
-        "&hits.hits._source.ciks=true&hits.hits._id=true&_source=true&from=0&size=40"
-    )
     # 用更簡潔的 EDGAR EFTS endpoint
     urls = {
         "13G": (

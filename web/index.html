@@ -2727,7 +2727,7 @@ function switchView(v){
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   const isPoolView = (v==="trend"||v==="cross");  // 交叉分頁與趨勢共用池分頁列
   $(".toolbar").style.display = isPoolView ? "flex" : "none";
-  document.querySelector(".search").style.display = (v==="news"||v==="reddit") ? "none" : "flex";
+  document.querySelector(".search").style.display = (v==="news"||v==="reddit"||v==="smart") ? "none" : "flex";
   if(v==="macro") loadMacro();
   else if(v==="news") loadNewsFeed();
   else if(v==="chain") loadChain();

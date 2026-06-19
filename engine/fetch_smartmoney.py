@@ -80,7 +80,7 @@ def parse_openinsider(html):
                 "insider": cells[5],
                 "title": cells[6],
                 "trade_type": trade,
-                "value_usd": _num(cells[12]),
+                "value_usd": abs(_num(cells[12])),
                 "date": cells[1],
             }
         )

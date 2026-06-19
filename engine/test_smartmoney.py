@@ -14,3 +14,4 @@ def test_parse_openinsider_extracts_buy_and_sell():
     assert r["trade_type"] in ("buy", "sell")
     assert any(x["trade_type"] == "buy" for x in rows)
     assert isinstance(r["value_usd"], (int, float))
+    assert all(x["value_usd"] >= 0 for x in rows)

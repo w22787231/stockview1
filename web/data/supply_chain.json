@@ -1130,78 +1130,197 @@
     {
       "key": "hvdc",
       "name": "800VDC 電力架構",
-      "bottleneck": "瓶頸=AI 機櫃功耗破 MW,傳統 54V/415VAC 配電不敷,NVIDIA 推 800VDC 架構(2027 Rubin Ultra/Kyber);需固態變壓器、SiC 電源模組、母線與保護。",
-      "note": "選股邏輯:電源系統龍頭(台達電/光寶/旭隼)、整流/UPS(群電/康舒);美股看電力管理+電源 IC(Eaton/Vertiv/MPWR),其他=歐系電力(Schneider)+日系功率電源(Fuji Electric)。",
+      "bottleneck": "瓶頸=AI 機櫃功耗破 MW(GB300 125-140kW→Rubin/Kyber MW 級),NVIDIA 推 800VDC 取代 54V/415VAC;真瓶頸不在整櫃電源,而在『800V 高壓轉換』的 650V+ GaN 與 1200V SiC 元件、其磊晶/代工與 MOCVD 設備;台廠功率分立元件(富鼎/大中/強茂)多在 POL/散熱的次階受惠,非核心卡位。",
+      "note": "依 NVIDIA 800VDC 生態名單(2025/10 擴至 29 家)分四段選股:①整櫃 PSU/配電——台達電/光寶/貿聯-KY(皆入列)+Eaton/Vertiv/Schneider;②高壓轉換瓶頸(GaN/SiC 晶片)——Navitas/Power Integrations/Infineon/onsemi/TI/Innoscience,台廠卡磊晶代工(漢磊/嘉晶/環球晶);③POL 低壓/散熱(吃 AI 總量、非 800V 核心)——富鼎/大中/強茂/MPWR;④設備鏟子——Aixtron(GaN MOCVD 近壟斷)。★=輝達名單或核心卡位;富鼎/大中/強茂屬漲價+AI 浮力,須設停利。",
       "stocks": [
         {
           "code": "2308",
           "market": "tw",
           "name": "台達電",
-          "role": "電源/固態變壓器/800V 架構",
-          "tag": "電源龍頭"
+          "role": "整櫃 HVDC/固態變壓器·800V 架構核心·輝達名單",
+          "tag": "①整櫃龍頭★"
         },
         {
           "code": "2301",
           "market": "tw",
           "name": "光寶科",
-          "role": "伺服器電源/電力轉換",
-          "tag": "電源"
+          "role": "伺服器電源/HVDC 電力轉換·輝達名單",
+          "tag": "①整櫃★"
+        },
+        {
+          "code": "3665",
+          "market": "tw",
+          "name": "貿聯-KY",
+          "role": "高壓連接器/線束(Power System Components)·輝達名單",
+          "tag": "①高壓連接★"
         },
         {
           "code": "6409",
           "market": "tw",
           "name": "旭隼",
           "role": "UPS/工業電源",
-          "tag": "UPS"
+          "tag": "①UPS"
         },
         {
           "code": "6412",
           "market": "tw",
           "name": "群電",
           "role": "伺服器/工業電源供應",
-          "tag": "電源"
+          "tag": "①電源"
         },
         {
           "code": "6282",
           "market": "tw",
           "name": "康舒",
           "role": "電源供應/電力轉換",
-          "tag": "電源"
+          "tag": "①電源"
         },
         {
           "code": "ETN",
           "market": "us",
           "name": "Eaton",
-          "role": "電力管理/資料中心配電",
-          "tag": "電力管理"
+          "role": "資料中心配電/SSCB·800V 全棧·輝達名單",
+          "tag": "①電力系統★"
         },
         {
           "code": "VRT",
           "market": "us",
           "name": "Vertiv",
-          "role": "電力+散熱整合系統",
-          "tag": "系統"
-        },
-        {
-          "code": "MPWR",
-          "market": "us",
-          "name": "Monolithic Power",
-          "role": "高效電源管理 IC",
-          "tag": "電源IC"
+          "role": "電力+散熱整合系統·輝達名單",
+          "tag": "①系統★"
         },
         {
           "code": "SU.PA",
           "market": "other",
           "name": "Schneider Electric(歐)",
-          "role": "資料中心電力基建",
-          "tag": "電力基建"
+          "role": "資料中心電力基建·輝達名單",
+          "tag": "①電力基建"
+        },
+        {
+          "code": "NVTS",
+          "market": "us",
+          "name": "Navitas",
+          "role": "800V→6V GaN PDB·輝達 MGX 合作·最純 GaN(仍虧損)",
+          "tag": "②GaN純正★"
+        },
+        {
+          "code": "POWI",
+          "market": "us",
+          "name": "Power Integrations",
+          "role": "高壓 GaN·獲利穩健·輝達名單",
+          "tag": "②GaN獲利★"
+        },
+        {
+          "code": "ON",
+          "market": "us",
+          "name": "onsemi",
+          "role": "SiC MOSFET(EliteSiC)·輝達名單",
+          "tag": "②SiC"
+        },
+        {
+          "code": "TXN",
+          "market": "us",
+          "name": "Texas Instruments",
+          "role": "800V GaN DC-DC(97.6% 效率)·輝達名單",
+          "tag": "②GaN/類比"
+        },
+        {
+          "code": "WOLF",
+          "market": "us",
+          "name": "Wolfspeed",
+          "role": "SiC 基板/磊晶龍頭(重整中·財務風險)",
+          "tag": "②SiC基板"
+        },
+        {
+          "code": "IFX.DE",
+          "market": "other",
+          "name": "Infineon(歐)",
+          "role": "功率/SiC/CoolGaN 全球龍頭·輝達名單",
+          "tag": "②功率龍頭★"
+        },
+        {
+          "code": "2577.HK",
+          "market": "other",
+          "name": "英諾賽科 Innoscience(港)",
+          "role": "中國 GaN 產能·輝達名單(受惠者亦是 GaN 過剩風險源)",
+          "tag": "②GaN中國"
+        },
+        {
+          "code": "6963.T",
+          "market": "other",
+          "name": "Rohm(日)",
+          "role": "SiC MOSFET/功率元件·輝達名單",
+          "tag": "②SiC"
+        },
+        {
+          "code": "STMPA.PA",
+          "market": "other",
+          "name": "STMicro(歐)",
+          "role": "800V SiC/GaN 電源方案(12V/6V 架構)·輝達名單",
+          "tag": "②SiC/GaN"
         },
         {
           "code": "6504.T",
           "market": "other",
           "name": "富士電機 Fuji Electric(日)",
           "role": "功率半導體/電源系統",
-          "tag": "功率電源"
+          "tag": "②功率電源"
+        },
+        {
+          "code": "3707",
+          "market": "tw",
+          "name": "漢磊",
+          "role": "GaN/SiC 晶圓代工·台廠高壓元件製造卡位",
+          "tag": "②GaN/SiC代工"
+        },
+        {
+          "code": "3016",
+          "market": "tw",
+          "name": "嘉晶",
+          "role": "SiC/GaN 磊晶片",
+          "tag": "②磊晶"
+        },
+        {
+          "code": "6488",
+          "market": "tw",
+          "name": "環球晶",
+          "role": "SiC 基板/矽晶圓",
+          "tag": "②SiC基板"
+        },
+        {
+          "code": "8261",
+          "market": "tw",
+          "name": "富鼎",
+          "role": "中高壓 MOSFET+DC FAN(36%)·最往伺服器電源走",
+          "tag": "③POL/中壓"
+        },
+        {
+          "code": "6435",
+          "market": "tw",
+          "name": "大中",
+          "role": "Dr.MOS+伺服器散熱風扇(36%)·POL/散熱",
+          "tag": "③POL/散熱"
+        },
+        {
+          "code": "2481",
+          "market": "tw",
+          "name": "強茂",
+          "role": "低壓 MOSFET+SiC discrete·切 CSP 電源(AI 占比~7%)",
+          "tag": "③POL沾邊"
+        },
+        {
+          "code": "MPWR",
+          "market": "us",
+          "name": "Monolithic Power",
+          "role": "高效電源管理 IC/POL 垂直供電",
+          "tag": "③電源IC"
+        },
+        {
+          "code": "AIXA.DE",
+          "market": "other",
+          "name": "Aixtron(歐)",
+          "role": "GaN MOCVD 磊晶設備近壟斷·GaN 擴產繞不過",
+          "tag": "④設備鏟子★"
         }
       ],
       "map": "/maps/800vdc.html",

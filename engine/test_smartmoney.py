@@ -344,3 +344,25 @@ def test_build_json_net_usd_all_sells():
     j = S.build_json(insider, [], [], {}, "2026-06-19T00:00:00Z")
     by = {s["ticker"]: s for s in j["stocks"]}
     assert by["MSFT"]["signals"]["insider"]["net_usd"] == -3000.0
+
+
+def test_agg_dg_picks_latest_date_not_last_element():
+    """_agg_dg 回歸：輸入陣列故意讓 date 較新的排在前面(index 0)，
+    應取 date 最大那筆的 form/filer，而非 rows[-1]。"""
+    rows = [
+        {"ticker": "NVDA", "filer": "NewFund",  "form": "13G", "date": "2026-06-18", "url": "https://www.sec.gov/a"},
+        {"ticker": "NVDA", "filer": "OldFund",  "form": "13D", "date": "2026-01-01", "url": "https://www.sec.gov/b"},
+    ]
+    # rows[-1] 是 OldFund/13D (date=2026-01-01)，正確答案是 NewFund/13G (date=2026-06-18)
+    result = S._agg_dg(rows)
+    assert result["type"]  == "13G",       f"expected 13G, got {result['type']}"
+    assert result["filer"] == "NewFund",   f"expected NewFund, got {result['filer']}"
+    assert result["last"]  == "2026-06-18", f"expected 2026-06-18, got {result['last']}"
+    assert result["count"] == 2
+
+
+def test_build_json_darkpool_empty_key_filtered():
+    """build_json 回歸：darkpool 含空字串 key 時，stocks 不應出現 ticker='' 的項。"""
+    darkpool = {"": {"shares": 1, "trades": 1, "week": "2026-06-13"}}
+    j = S.build_json([], [], [], darkpool, "2026-06-19T00:00:00Z")
+    assert j["stocks"] == [], f"預期 stocks=[], 實際: {j['stocks']}"

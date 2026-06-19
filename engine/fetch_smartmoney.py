@@ -246,11 +246,12 @@ def _agg_congress(rows):
 
 def _agg_dg(rows):
     """彙整單一 ticker 的 13D/13G 申報列表。"""
-    last = max((r["date"] for r in rows), default="")
+    last_row = max(rows, key=lambda r: r["date"]) if rows else None
+    last = last_row["date"] if last_row else ""
     return {
         "count": len(rows),
-        "type": rows[-1]["form"] if rows else "",
-        "filer": rows[-1]["filer"] if rows else "",
+        "type": last_row["form"] if last_row else "",
+        "filer": last_row["filer"] if last_row else "",
         "last": last,
         "items": rows[:50],
     }
@@ -288,6 +289,8 @@ def build_json(insider, congress, dgfilings, darkpool, updated_iso):
         if r.get("ticker"):
             slot(r["ticker"])["dg"].append(r)
     for t in (darkpool or {}):
+        if not t:
+            continue
         slot(t)
 
     stocks = []

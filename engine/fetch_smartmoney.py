@@ -225,6 +225,90 @@ def parse_finra_ats(rows):
     return result
 
 
+def _agg_insider(rows):
+    """彙整單一 ticker 的內部人交易列表。"""
+    buys = sum(1 for r in rows if r["trade_type"] == "buy")
+    sells = sum(1 for r in rows if r["trade_type"] == "sell")
+    net = (sum(r["value_usd"] for r in rows if r["trade_type"] == "buy") -
+           sum(r["value_usd"] for r in rows if r["trade_type"] == "sell"))
+    last = max((r["date"] for r in rows), default="")
+    return {"buys": buys, "sells": sells, "net_usd": net, "last": last, "items": rows[:50]}
+
+
+def _agg_congress(rows):
+    """彙整單一 ticker 的國會交易列表。"""
+    buys = sum(1 for r in rows if r["trade_type"] == "buy")
+    sells = sum(1 for r in rows if r["trade_type"] == "sell")
+    last = max((r["date"] for r in rows), default="")
+    members = sorted({r["member"] for r in rows})
+    return {"buys": buys, "sells": sells, "members": members, "last": last, "items": rows[:50]}
+
+
+def _agg_dg(rows):
+    """彙整單一 ticker 的 13D/13G 申報列表。"""
+    last = max((r["date"] for r in rows), default="")
+    return {
+        "count": len(rows),
+        "type": rows[-1]["form"] if rows else "",
+        "filer": rows[-1]["filer"] if rows else "",
+        "last": last,
+        "items": rows[:50],
+    }
+
+
+def build_json(insider, congress, dgfilings, darkpool, updated_iso):
+    """把四個 parser 的輸出彙整為最終 JSON 結構。
+
+    參數:
+      insider     list — parse_openinsider 輸出
+      congress    list — parse_congress 輸出
+      dgfilings   list — parse_edgar_fulltext 輸出
+      darkpool    dict — parse_finra_ats 輸出 {ticker: {shares,trades,week}}
+      updated_iso str  — ISO 8601 更新時間戳記
+
+    回傳:
+      {"updated": updated_iso, "stocks": [...]}
+      每檔: {ticker, name, hits, signals:{insider, congress, filing13dg, darkpool}}
+      - 缺的訊號鍵為 None
+      - hits = 非 None 訊號數
+      - 排序: hits 由大到小，同 hits 再依 insider.net_usd 由大到小
+    """
+    by = {}
+
+    def slot(t):
+        return by.setdefault(t, {"insider": [], "congress": [], "dg": []})
+
+    for r in (insider or []):
+        if r.get("ticker"):
+            slot(r["ticker"])["insider"].append(r)
+    for r in (congress or []):
+        if r.get("ticker"):
+            slot(r["ticker"])["congress"].append(r)
+    for r in (dgfilings or []):
+        if r.get("ticker"):
+            slot(r["ticker"])["dg"].append(r)
+    for t in (darkpool or {}):
+        slot(t)
+
+    stocks = []
+    dp = darkpool or {}
+    for t, g in by.items():
+        sig = {
+            "insider": _agg_insider(g["insider"]) if g["insider"] else None,
+            "congress": _agg_congress(g["congress"]) if g["congress"] else None,
+            "filing13dg": _agg_dg(g["dg"]) if g["dg"] else None,
+            "darkpool": dp.get(t),
+        }
+        hits = sum(1 for v in sig.values() if v is not None)
+        stocks.append({"ticker": t, "name": "", "hits": hits, "signals": sig})
+
+    stocks.sort(
+        key=lambda s: (s["hits"], (s["signals"]["insider"] or {}).get("net_usd", 0)),
+        reverse=True,
+    )
+    return {"updated": updated_iso, "stocks": stocks}
+
+
 def parse_congress(data):
     """Quiver /beta/live/congresstrading JSON 陣列 → 國會交易列。
 

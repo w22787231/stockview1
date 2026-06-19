@@ -284,3 +284,63 @@ def test_parse_finra_ats_week_field():
     for ticker, val in result.items():
         assert isinstance(val["week"], str), f"{ticker}.week 不是 str"
         assert len(val["week"]) == 10, f"{ticker}.week 格式不對: {val['week']}"
+
+
+# ── Task 5: build_json ──────────────────────────────────────────────────────
+
+def test_build_json_counts_hits_and_shapes():
+    insider = [{"ticker":"NVDA","insider":"A","title":"CEO","trade_type":"buy","value_usd":1000.0,"date":"2026-06-18"},
+               {"ticker":"NVDA","insider":"B","title":"CFO","trade_type":"sell","value_usd":400.0,"date":"2026-06-17"}]
+    congress = [{"ticker":"NVDA","member":"X","party":"D","trade_type":"buy","date":"2026-06-10"}]
+    dgfilings = [{"ticker":"AAPL","filer":"BigFund","form":"13G","date":"2026-06-15","url":"https://www.sec.gov/x"}]
+    darkpool = {"NVDA":{"shares":1000000,"trades":500,"week":"2026-06-13"}}
+    j = S.build_json(insider, congress, dgfilings, darkpool, "2026-06-19T00:00:00Z")
+    by = {s["ticker"]: s for s in j["stocks"]}
+    assert by["NVDA"]["hits"] == 3                      # insider+congress+darkpool
+    assert by["NVDA"]["signals"]["insider"]["net_usd"] == 600.0   # 1000 buy - 400 sell
+    assert by["NVDA"]["signals"]["filing13dg"] is None
+    assert by["AAPL"]["hits"] == 1
+    assert j["stocks"][0]["ticker"] == "NVDA"           # hits 高者在前
+    assert j["updated"] == "2026-06-19T00:00:00Z"
+
+
+def test_build_json_empty_inputs_returns_empty_stocks():
+    """全空輸入應安全回傳 stocks=[]，不丟例外。"""
+    j = S.build_json([], [], [], {}, "2026-06-19T00:00:00Z")
+    assert j["stocks"] == []
+    assert j["updated"] == "2026-06-19T00:00:00Z"
+
+
+def test_build_json_none_inputs_safe():
+    """全 None 輸入應安全回傳 stocks=[]，不丟例外。"""
+    j = S.build_json(None, None, None, None, "2026-06-19T00:00:00Z")
+    assert j["stocks"] == []
+
+
+def test_build_json_only_darkpool_hits_one():
+    """只有 darkpool 資料的 ticker，hits 應為 1，其他 signals 均為 None。"""
+    darkpool = {"XYZ": {"shares": 5000, "trades": 10, "week": "2026-06-13"}}
+    j = S.build_json([], [], [], darkpool, "2026-06-19T00:00:00Z")
+    by = {s["ticker"]: s for s in j["stocks"]}
+    assert by["XYZ"]["hits"] == 1
+    assert by["XYZ"]["signals"]["insider"] is None
+    assert by["XYZ"]["signals"]["congress"] is None
+    assert by["XYZ"]["signals"]["filing13dg"] is None
+    assert by["XYZ"]["signals"]["darkpool"]["shares"] == 5000
+
+
+def test_build_json_net_usd_all_buys():
+    """全買入時 net_usd 應為正值(= Σ value_usd)。"""
+    insider = [{"ticker":"TSLA","insider":"C","title":"CTO","trade_type":"buy","value_usd":2000.0,"date":"2026-06-18"},
+               {"ticker":"TSLA","insider":"D","title":"COO","trade_type":"buy","value_usd":500.0,"date":"2026-06-17"}]
+    j = S.build_json(insider, [], [], {}, "2026-06-19T00:00:00Z")
+    by = {s["ticker"]: s for s in j["stocks"]}
+    assert by["TSLA"]["signals"]["insider"]["net_usd"] == 2500.0
+
+
+def test_build_json_net_usd_all_sells():
+    """全賣出時 net_usd 應為負值(= -Σ value_usd)。"""
+    insider = [{"ticker":"MSFT","insider":"E","title":"CEO","trade_type":"sell","value_usd":3000.0,"date":"2026-06-18"}]
+    j = S.build_json(insider, [], [], {}, "2026-06-19T00:00:00Z")
+    by = {s["ticker"]: s for s in j["stocks"]}
+    assert by["MSFT"]["signals"]["insider"]["net_usd"] == -3000.0

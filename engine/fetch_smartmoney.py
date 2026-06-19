@@ -556,6 +556,8 @@ def fetch_finra() -> dict | None:
         # ── Step 2: 分頁抓完整的最新週資料 ─────────────────────────────────
         all_rows: list = []
         offset = 0
+        max_pages = 50
+        page_count = 0
         while True:
             page = _http_post_json(FINRA_API, {
                 "limit": PAGE,
@@ -570,7 +572,11 @@ def fetch_finra() -> dict | None:
             if not page:
                 break
             all_rows.extend(page)
+            page_count += 1
             if len(page) < PAGE:
+                break
+            if page_count >= max_pages:
+                print(f"[fetch_finra] 已達分頁上限 {max_pages} 頁，停止繼續抓取")
                 break
             offset += PAGE
 

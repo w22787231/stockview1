@@ -1885,7 +1885,12 @@ function renderSmart(){
   const sk=SMART_SORT.k, asc=SMART_SORT.asc;
   rows.sort((a,b)=>{
     if(sk==="ticker"||sk==="name"){ return asc?String(a[sk]).localeCompare(b[sk]):String(b[sk]).localeCompare(a[sk]); }
-    const av=Number(a[sk])||0, bv=Number(b[sk])||0;
+    let av=0, bv=0;
+    if(sk==="hits"){ av=Number(a.hits)||0; bv=Number(b.hits)||0; }
+    else if(sk==="insider"){ av=(a.signals&&a.signals.insider)?a.signals.insider.net_usd||0:0; bv=(b.signals&&b.signals.insider)?b.signals.insider.net_usd||0:0; }
+    else if(sk==="congress"){ av=(a.signals&&a.signals.congress)?((a.signals.congress.buys||0)-(a.signals.congress.sells||0)):0; bv=(b.signals&&b.signals.congress)?((b.signals.congress.buys||0)-(b.signals.congress.sells||0)):0; }
+    else if(sk==="filing"){ av=(a.signals&&a.signals.filing13dg)?a.signals.filing13dg.count||0:0; bv=(b.signals&&b.signals.filing13dg)?b.signals.filing13dg.count||0:0; }
+    else if(sk==="darkpool"){ av=(a.signals&&a.signals.darkpool)?a.signals.darkpool.shares||0:0; bv=(b.signals&&b.signals.darkpool)?b.signals.darkpool.shares||0:0; }
     return asc?av-bv:bv-av;
   });
   const total=rows.length, pages=Math.max(1,Math.ceil(total/SMART_PER));
@@ -1894,7 +1899,7 @@ function renderSmart(){
   const upd=SMART_DATA&&SMART_DATA.updated?SMART_DATA.updated.replace("T"," ").slice(0,16)+" UTC":"—";
   const body=slice.map(r=>{
     const f=_smFmt(r.signals);
-    return '<tr style="cursor:pointer" onclick="typeof renderSmartDetail===\'function\'&&renderSmartDetail(\''+esc(r.ticker)+'\')">'+
+    return '<tr class="smart-row" style="cursor:pointer" data-t="'+esc(r.ticker)+'">'+
       '<td style="text-align:left;font-weight:700">'+esc(r.ticker)+'</td>'+
       '<td style="text-align:left" class="dim">'+esc(r.name||"—")+'</td>'+
       '<td>'+fmtNum(r.hits)+'</td>'+
@@ -1919,6 +1924,7 @@ function renderSmart(){
   const pv=$("#smPrev"); if(pv) pv.onclick=()=>{ if(SMART_PAGE>1){ SMART_PAGE--; renderSmart(); } };
   const nx=$("#smNext"); if(nx) nx.onclick=()=>{ SMART_PAGE++; renderSmart(); };
   document.querySelectorAll("#content th[data-sk]").forEach(th=>th.onclick=()=>{ const k=th.dataset.sk; if(SMART_SORT.k===k) SMART_SORT.asc=!SMART_SORT.asc; else { SMART_SORT.k=k; SMART_SORT.asc=(k==="ticker"||k==="name"); } renderSmart(); });
+  document.querySelectorAll("#content tr.smart-row").forEach(tr=>tr.onclick=()=>renderSmartDetail(tr.dataset.t));
 }
 function renderSmartDetail(ticker){
   const stocks=(SMART_DATA&&SMART_DATA.stocks)||[];

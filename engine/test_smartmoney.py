@@ -182,10 +182,7 @@ def test_parse_edgar_fulltext_no_ticker_returns_empty_string():
     """display_names 沒有可辨識 ticker 時，ticker 欄位應為空字串而非 None。"""
     data = _fx_json("edgar_13dg_sample.json")
     rows = S.parse_edgar_fulltext(data, "13G")
-    # fixture 最後一筆 PRIVATE FUND LLC 無 ticker
-    no_ticker = [r for r in rows if r["filer"] and "PRIVATE FUND" in r["filer"] or
-                 (r["ticker"] == "" and "PRIVATE" in r.get("filer", ""))]
-    # 只要確認有空字串的 ticker 出現即可（不強制哪一筆）
+    # fixture 最後一筆 PRIVATE FUND LLC 無 ticker，確認至少有一筆 ticker 為空字串
     assert any(r["ticker"] == "" for r in rows), "應有至少一筆 ticker 為空字串"
     for r in rows:
         assert r["ticker"] is not None, "ticker 不能是 None"
@@ -213,3 +210,20 @@ def test_parse_edgar_fulltext_missing_hits_safe():
     """缺少 hits 鍵時應回傳空 list，不丟例外。"""
     assert S.parse_edgar_fulltext({}, "13G") == []
     assert S.parse_edgar_fulltext({"hits": {}}, "13G") == []
+
+def test_parse_edgar_fulltext_url_uses_filer_cik():
+    """URL 應使用申報人 CIK（accession 前段），而非被投資公司 CIK，以避免 404。
+    MEG 第一筆: _id='0001273087-24-000119:MEG_SC13G.htm'
+      申報人 CIK = 1273087（MILLENNIUM MANAGEMENT LLC）
+      被投資公司 CIK = 1643615（Montrose Environmental Group）
+    URL 應含 /edgar/data/1273087/，不能含 /edgar/data/1643615/。
+    """
+    data = _fx_json("edgar_13dg_sample.json")
+    rows = S.parse_edgar_fulltext(data, "13G")
+    meg_row = next(r for r in rows if r["ticker"] == "MEG")
+    assert meg_row["url"].startswith("https://www.sec.gov/Archives/"), \
+        f"URL 前綴應為 Archives: {meg_row['url']}"
+    assert "/edgar/data/1273087/" in meg_row["url"], \
+        f"URL 應含申報人 CIK 1273087，實際: {meg_row['url']}"
+    assert "/edgar/data/1643615/" not in meg_row["url"], \
+        f"URL 不應含被投資公司 CIK 1643615，實際: {meg_row['url']}"

@@ -121,16 +121,26 @@ def _edgar_extract_filer(display_names):
 def _edgar_build_url(hit_id, ciks):
     """組出 EDGAR Archives 完整文件 URL。
     hit_id 格式: 'ADSH:filename.ext'，例: '0001273087-24-000119:MEG_SC13G.htm'
-    URL 格式: https://www.sec.gov/Archives/edgar/data/{CIK}/{adsh_nodash}/{filename}
+    URL 格式: https://www.sec.gov/Archives/edgar/data/{filer_cik}/{adsh_nodash}/{filename}
+
+    申報人 CIK（filer_cik）從 accession number 前段取得：
+      acc_no = hit_id.split(":")[0]  → '0001273087-24-000119'
+      filer_cik = str(int(acc_no.split("-")[0]))  → '1273087'
+    這樣才能正確對應 EDGAR Archives 路徑，避免用被投資公司 CIK 導致 404。
     若組不出來則退回 https://www.sec.gov/
     """
     try:
-        adsh, filename = hit_id.split(":", 1)
-        adsh_nodash = adsh.replace("-", "")
-        # 取第一個 CIK（被投資公司），去掉前導零
-        cik = str(int(ciks[0])) if ciks else None
-        if cik and adsh_nodash and filename:
-            return f"https://www.sec.gov/Archives/edgar/data/{cik}/{adsh_nodash}/{filename}"
+        parts = hit_id.split(":", 1)
+        acc_no = parts[0]  # e.g. '0001273087-24-000119'
+        filename = parts[1] if len(parts) > 1 else ""
+        adsh_nodash = acc_no.replace("-", "")
+        # 申報人 CIK 取 accession number 前段（去前導零）
+        filer_cik = str(int(acc_no.split("-")[0]))
+        if filer_cik and adsh_nodash:
+            if filename:
+                return f"https://www.sec.gov/Archives/edgar/data/{filer_cik}/{adsh_nodash}/{filename}"
+            else:
+                return f"https://www.sec.gov/Archives/edgar/data/{filer_cik}/{adsh_nodash}/"
     except Exception:
         pass
     return "https://www.sec.gov/"

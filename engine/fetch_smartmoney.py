@@ -316,61 +316,99 @@ def build_json(insider, congress, dgfilings, darkpool, updated_iso):
     return {"updated": updated_iso, "stocks": stocks}
 
 
-def parse_congress(data):
-    """Quiver /beta/live/congresstrading JSON 陣列 → 國會交易列。
+def parse_senate_watcher(data, recent_days=90, today=None):
+    """house/senate-stock-watcher 聚合 JSON 陣列 → 國會交易列（正規化，與舊 parse_congress 輸出格式相同）。
 
-    輸入: list[dict]，每筆為 Quiver API 原始記錄。
+    輸入: list[dict]，house-stock-watcher（或 senate-stock-watcher）all_transactions.json 原始記錄。
+    欄位說明：
+      senator 或 representative → member（senator 優先，否則取 representative）
+      transaction_date (MM/DD/YYYY) → date (YYYY-MM-DD ISO)
+      type (Purchase/Sale/Sale (Full)/Sale (Partial)/Exchange) → trade_type
+      party（若存在）→ party；否則 ""
     輸出: list[dict]，每筆含:
-      ticker     str  — 股票代號(大寫)
+      ticker     str  — 股票代號(大寫，去空白)
       member     str  — 議員姓名
-      party      str  — 政黨；缺時 fallback 到 House 欄位，再缺則 ""
-      trade_type str  — "buy"(Purchase) / "sell"(Sale / Sale (Partial) …)
-      date       str  — TransactionDate；缺時 fallback 到 ReportDate，再缺則 ""
+      party      str  — 政黨；來源無此欄時為 ""
+      trade_type str  — "buy"(type 含 "purchase") / "sell"(type 含 "sale")
+      date       str  — 交易日期 ISO 格式 YYYY-MM-DD
 
     安全跳過:
-      - 缺少 Ticker / Representative / Transaction 等必要欄位
-      - Ticker 為空字串
-      - Transaction 不含 "purchase" 或 "sale" 的未知值
-    不連網、不丟例外。
+      - ticker 為空、"--"、"N/A"（對非個股交易常填 "--"）
+      - type 不含 "purchase" 或 "sale" 的值（如 Exchange）
+      - 缺少 senator/representative 或 transaction_date 等必要欄位
+      - transaction_date 解析失敗
+      - 早於 recent_days 天的舊記錄
+
+    純函式、不連網；畸形/缺欄列安全跳過；空輸入回 []；不丟例外。
     """
+    if not data:
+        return []
+
     rows = []
-    for item in data:
+    try:
+        if today is None:
+            today_date = datetime.date.today()
+        else:
+            today_date = datetime.date.fromisoformat(today)
+        cutoff = today_date - datetime.timedelta(days=recent_days)
+    except Exception:
+        return []
+
+    _SKIP_TICKERS = {"", "--", "N/A", "N/a"}
+
+    for item in (data or []):
         try:
-            # ── 必要欄位 ────────────────────────────────────
-            ticker = (item.get("Ticker") or "").strip().upper()
-            if not ticker:
+            # ── ticker ──────────────────────────────────────────────────────
+            ticker = (item.get("ticker") or "").strip().upper()
+            if ticker in _SKIP_TICKERS:
                 continue
 
-            member = (item.get("Representative") or "").strip()
+            # ── member：senator 優先，否則取 representative ──────────────────
+            member = (item.get("senator") or item.get("representative") or "").strip()
             if not member:
                 continue
 
-            transaction = item.get("Transaction")
-            if not transaction:
-                continue
-
-            t_lower = transaction.lower()
-            if "purchase" in t_lower:
+            # ── trade_type ─────────────────────────────────────────────────
+            type_raw = (item.get("type") or "").strip().lower()
+            if "purchase" in type_raw:
                 trade_type = "buy"
-            elif "sale" in t_lower:
+            elif "sale" in type_raw:
                 trade_type = "sell"
             else:
                 continue  # Exchange / 其他未知值 → 跳過
 
-            # ── 選擇性欄位 ──────────────────────────────────
-            party = (item.get("Party") or item.get("House") or "").strip()
+            # ── date：原格式 MM/DD/YYYY 或 M/D/YYYY，轉為 YYYY-MM-DD ────────
+            raw_date = (item.get("transaction_date") or "").strip()
+            if not raw_date:
+                continue
+            try:
+                # 嘗試 M/D/YYYY 格式
+                parts = raw_date.split("/")
+                if len(parts) == 3:
+                    trade_date = datetime.date(int(parts[2]), int(parts[0]), int(parts[1]))
+                else:
+                    # fallback：嘗試 ISO 格式
+                    trade_date = datetime.date.fromisoformat(raw_date)
+            except Exception:
+                continue
 
-            date = (item.get("TransactionDate") or item.get("ReportDate") or "").strip()
+            # ── recent_days 過濾 ────────────────────────────────────────────
+            if trade_date < cutoff:
+                continue
+
+            date_iso = trade_date.isoformat()
+
+            # ── party（來源無此欄，填空字串）─────────────────────────────────
+            party = (item.get("party") or "").strip()
 
             rows.append({
                 "ticker": ticker,
                 "member": member,
                 "party": party,
                 "trade_type": trade_type,
-                "date": date,
+                "date": date_iso,
             })
         except Exception:
-            # 任何非預期錯誤一律跳過該筆，不讓整批崩潰
             continue
 
     return rows
@@ -442,26 +480,30 @@ def fetch_openinsider() -> list | None:
 
 
 def fetch_congress() -> list | None:
-    """抓取 Quiver Quant 國會交易 API，回傳 parse_congress 結果。
-    需要環境變數 QUIVER_API_KEY；無 key 時 print 提示並回 None。
-    失敗時 print 錯誤並回 None。
+    """抓取 house-stock-watcher 聚合交易 JSON，回傳 parse_senate_watcher 結果（近 90 天）。
+
+    資料源：TattooedHead/house-stock-watcher-data（GitHub raw），免費、免 key、持續更新。
+    覆蓋範圍：美國眾議院（House of Representatives）STOCK Act PTR 申報。
+    失敗時 print 錯誤並回 None，不拋例外。
     """
-    api_key = os.environ.get("QUIVER_API_KEY", "").strip()
-    if not api_key:
-        print("[fetch_congress] SKIPPED: QUIVER_API_KEY 未設定，跳過國會交易資料")
-        return None
-    url = "https://api.quiverquant.com/beta/live/congresstrading"
+    url = (
+        "https://raw.githubusercontent.com/TattooedHead/"
+        "house-stock-watcher-data/main/data/all_transactions.json"
+    )
+    sec_ua = os.environ.get("SEC_UA", "stockview research admin@example.com").strip()
     try:
         raw = _http_get(
             url,
             headers={
                 "Accept": "application/json",
-                "Authorization": f"Token {api_key}",
+                "User-Agent": sec_ua,
             },
+            timeout=60,
         )
         data = json.loads(raw.decode("utf-8"))
-        result = parse_congress(data)
-        print(f"[fetch_congress] OK — {len(result)} rows")
+        today_iso = datetime.date.today().isoformat()
+        result = parse_senate_watcher(data, recent_days=90, today=today_iso)
+        print(f"[fetch_congress] OK — {len(result)} rows (house-stock-watcher, 近 90 天)")
         return result
     except Exception as e:
         print(f"[fetch_congress] FAILED: {e}")

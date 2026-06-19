@@ -20,117 +20,100 @@ def test_parse_openinsider_extracts_buy_and_sell():
     assert all(x["value_usd"] >= 0 for x in rows)
 
 
-# ── Task 2: parse_congress ──────────────────────────────────────────────────
+# ── Task 2: parse_senate_watcher ────────────────────────────────────────────
 
 REQUIRED_KEYS = {"ticker", "member", "party", "trade_type", "date"}
 
-def test_parse_congress_returns_list():
-    """parse_congress 對合法 JSON 陣列應回傳 list。"""
-    data = _fx_json("quiver_congress_sample.json")
-    rows = S.parse_congress(data)
-    assert isinstance(rows, list)
+# 固定 today 讓測試可重現（2026-06-19）
+_TODAY = "2026-06-19"
+# 90 天前 = 2026-03-21；再往前算 2 年是 2024-06-19（舊的）
 
-def test_parse_congress_required_keys():
-    """每筆輸出都必須含 ticker/member/party/trade_type/date 五個鍵。"""
-    data = _fx_json("quiver_congress_sample.json")
-    rows = S.parse_congress(data)
-    assert len(rows) >= 2
-    for r in rows:
-        assert REQUIRED_KEYS <= set(r), f"缺欄: {REQUIRED_KEYS - set(r)}"
+def _sw_make(ticker, senator, type_, date_str):
+    """產生一筆 senate-stock-watcher 格式資料（M/D/YYYY）。"""
+    return {"ticker": ticker, "senator": senator, "type": type_,
+            "transaction_date": date_str, "owner": "Self", "amount": "$1,001 - $15,000"}
 
-def test_parse_congress_trade_type_values():
-    """trade_type 只能是 'buy' 或 'sell'，不能有其他值。"""
-    data = _fx_json("quiver_congress_sample.json")
-    rows = S.parse_congress(data)
-    for r in rows:
-        assert r["trade_type"] in ("buy", "sell"), f"非法 trade_type: {r['trade_type']}"
 
-def test_parse_congress_has_buy_and_sell():
-    """fixture 含 Purchase 和 Sale，解析後兩種 trade_type 都要出現。"""
-    data = _fx_json("quiver_congress_sample.json")
-    rows = S.parse_congress(data)
-    types = {r["trade_type"] for r in rows}
-    assert "buy" in types
-    assert "sell" in types
-
-def test_parse_congress_purchase_maps_to_buy():
-    """Transaction:'Purchase' → trade_type:'buy'。"""
-    data = [{"Ticker": "NVDA", "Representative": "Test Rep", "Party": "Democrat",
-              "Transaction": "Purchase", "TransactionDate": "2024-01-15"}]
-    rows = S.parse_congress(data)
+def test_parse_senate_watcher_purchase_maps_to_buy():
+    """Purchase → trade_type:'buy'。"""
+    data = [_sw_make("NVDA", "Test Senator", "Purchase", "6/1/2026")]
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["trade_type"] == "buy"
+    assert rows[0]["ticker"] == "NVDA"
+    assert rows[0]["member"] == "Test Senator"
 
-def test_parse_congress_sale_maps_to_sell():
-    """Transaction:'Sale' → trade_type:'sell'。"""
-    data = [{"Ticker": "AAPL", "Representative": "Test Sen", "Party": "Republican",
-              "Transaction": "Sale", "TransactionDate": "2024-02-10"}]
-    rows = S.parse_congress(data)
+
+def test_parse_senate_watcher_sale_partial_maps_to_sell():
+    """Sale (Partial) → trade_type:'sell'。"""
+    data = [_sw_make("AAPL", "Sen Smith", "Sale (Partial)", "5/15/2026")]
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["trade_type"] == "sell"
 
-def test_parse_congress_sale_partial_maps_to_sell():
-    """Transaction:'Sale (Partial)' 也應 → trade_type:'sell'。"""
-    data = [{"Ticker": "AMZN", "Representative": "Ro Khanna", "Party": "Democrat",
-              "Transaction": "Sale (Partial)", "TransactionDate": "2024-03-20"}]
-    rows = S.parse_congress(data)
+
+def test_parse_senate_watcher_sale_full_maps_to_sell():
+    """Sale (Full) → trade_type:'sell'。"""
+    data = [_sw_make("MSFT", "Sen Jones", "Sale (Full)", "4/10/2026")]
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
     assert rows[0]["trade_type"] == "sell"
 
-def test_parse_congress_unknown_transaction_skipped():
-    """未知 Transaction 值(如 'Exchange')應被安全跳過，不丟例外。"""
-    data = [{"Ticker": "XYZ", "Representative": "Bad Rep", "Party": "Unknown",
-              "Transaction": "Exchange", "TransactionDate": "2024-04-01"}]
-    rows = S.parse_congress(data)
+
+def test_parse_senate_watcher_exchange_skipped():
+    """Exchange → 跳過，不出現在輸出中。"""
+    data = [_sw_make("XYZ", "Sen X", "Exchange", "6/10/2026")]
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert rows == []
 
-def test_parse_congress_missing_ticker_skipped():
-    """Ticker 為空字串應被跳過。"""
-    data = [{"Ticker": "", "Representative": "No Ticker", "Party": "Democrat",
-              "Transaction": "Purchase", "TransactionDate": "2024-01-01"}]
-    rows = S.parse_congress(data)
+
+def test_parse_senate_watcher_dash_ticker_skipped():
+    """ticker 為 '--' 應跳過。"""
+    data = [_sw_make("--", "Sen Y", "Purchase", "6/5/2026")]
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert rows == []
 
-def test_parse_congress_missing_field_skipped():
-    """缺少 Ticker/Representative/Transaction 等必要欄位時應跳過，不丟例外。"""
+
+def test_parse_senate_watcher_recent_days_filter():
+    """只保留近 90 天記錄：2 年前(2024-06-19)應被過濾，近期(2026-06-01)保留。"""
+    old = _sw_make("TSLA", "Old Senator", "Purchase", "6/19/2024")   # 2 年前，應過濾
+    new = _sw_make("TSLA", "New Senator", "Purchase", "6/1/2026")    # 近期，應保留
+    rows = S.parse_senate_watcher([old, new], recent_days=90, today=_TODAY)
+    assert len(rows) == 1
+    assert rows[0]["date"] == "2026-06-01"
+
+
+def test_parse_senate_watcher_empty_input():
+    """空輸入回 []，不丟例外。"""
+    assert S.parse_senate_watcher([], recent_days=90, today=_TODAY) == []
+    assert S.parse_senate_watcher(None, recent_days=90, today=_TODAY) == []
+
+
+def test_parse_senate_watcher_missing_field_safe():
+    """缺少必要欄位的列安全跳過，不丟例外。"""
     data = [
-        {"Representative": "No Ticker Field", "Transaction": "Purchase"},  # 缺 Ticker
-        {"Ticker": "TSLA"},  # 缺 Transaction
+        {"senator": "No Ticker", "type": "Purchase", "transaction_date": "6/1/2026"},  # 缺 ticker
+        {"ticker": "SPY", "type": "Purchase", "transaction_date": "6/1/2026"},         # 缺 senator
         {},  # 完全空
     ]
-    rows = S.parse_congress(data)
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert rows == []
 
-def test_parse_congress_date_fallback():
-    """TransactionDate 缺失時，應 fallback 到 ReportDate。"""
-    data = [{"Ticker": "GOOG", "Representative": "Someone", "Party": "Democrat",
-              "Transaction": "Purchase", "ReportDate": "2024-05-01"}]
-    rows = S.parse_congress(data)
+
+def test_parse_senate_watcher_required_keys():
+    """每筆輸出都含 ticker/member/party/trade_type/date 五個鍵。"""
+    data = [_sw_make("AMZN", "Sen Brown", "Purchase", "6/10/2026")]
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
-    assert rows[0]["date"] == "2024-05-01"
+    assert REQUIRED_KEYS <= set(rows[0]), f"缺欄: {REQUIRED_KEYS - set(rows[0])}"
 
-def test_parse_congress_empty_input():
-    """空陣列輸入應回傳空 list，不丟例外。"""
-    assert S.parse_congress([]) == []
 
-def test_parse_congress_party_from_house_fallback():
-    """Party 缺失時，應 fallback 到 House 欄位值；若兩者皆缺，用空字串。"""
-    data = [{"Ticker": "SPY", "Representative": "Rep X",
-              "Transaction": "Purchase", "TransactionDate": "2024-06-01",
-              "House": "Senate"}]
-    rows = S.parse_congress(data)
+def test_parse_senate_watcher_date_iso_format():
+    """date 欄位應輸出為 ISO 格式 YYYY-MM-DD（M/D/YYYY → YYYY-MM-DD）。"""
+    data = [_sw_make("GOOGL", "Sen Lee", "Purchase", "4/5/2026")]
+    rows = S.parse_senate_watcher(data, recent_days=90, today=_TODAY)
     assert len(rows) == 1
-    assert rows[0]["party"] == "Senate"
-
-def test_parse_congress_fixture_skips_bad_entries():
-    """fixture 中 Exchange 和空 Ticker 應被跳過，有效記錄 >= 3。"""
-    data = _fx_json("quiver_congress_sample.json")
-    rows = S.parse_congress(data)
-    tickers = [r["ticker"] for r in rows]
-    assert "NVDA" in tickers
-    assert "AAPL" in tickers
-    # Exchange 那筆不應出現
-    assert all(r["trade_type"] in ("buy", "sell") for r in rows)
+    assert rows[0]["date"] == "2026-04-05"
 
 
 # ── Task 3: parse_edgar_fulltext ────────────────────────────────────────────

@@ -1958,14 +1958,14 @@ function renderSmartDetail(ticker){
   if(cng&&cng.items&&cng.items.length){
     html+='<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">申報日</th><th style="text-align:left">議員</th><th style="text-align:left">黨/院</th><th>買賣</th></tr></thead><tbody>';
     cng.items.forEach(item=>{
-      const isBuy=item.trade_type==="buy"||(item.transaction||"").toLowerCase()==="purchase";
+      const isBuy=item.trade_type==="buy";
       const cls=isBuy?"pos":"neg";
       const label=isBuy?"買":"賣";
-      const dateStr=item.date?(item.date+"").slice(0,10):esc(item.filed||"—");
+      const dateStr=item.date?(item.date+"").slice(0,10):"—";
       html+='<tr>'+
         '<td class="dim">'+esc(dateStr)+'</td>'+
-        '<td>'+esc(item.representative||item.senator||item.name||"—")+'</td>'+
-        '<td class="dim">'+esc(item.party||item.chamber||"—")+'</td>'+
+        '<td>'+esc(item.member||"—")+'</td>'+
+        '<td class="dim">'+esc(item.party||"—")+'</td>'+
         '<td style="text-align:center"><span class="'+cls+'">'+label+'</span></td>'+
         '</tr>';
     });
@@ -1983,7 +1983,7 @@ function renderSmartDetail(ticker){
         '<td class="dim">'+esc(dateStr)+'</td>'+
         '<td>'+esc(item.form||"13D/G")+'</td>'+
         '<td>'+esc(item.filer||"—")+'</td>'+
-        '<td style="text-align:center">'+(item.url?'<a href="'+esc(item.url)+'" target="_blank" rel="noopener">SEC</a>':'<span class="dim">—</span>')+'</td>'+
+        '<td style="text-align:center">'+((()=>{const safeUrl=(item.url||"").indexOf("https://")===0?item.url:"";return safeUrl?'<a href="'+esc(safeUrl)+'" target="_blank" rel="noopener">SEC</a>':'<span class="dim">—</span>';})())+'</td>'+
         '</tr>';
     });
     html+='</tbody></table></div>';

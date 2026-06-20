@@ -4135,6 +4135,7 @@ function renderSpec(){
     '<section style="margin-top:18px"><div class="sec-head"><h2>投機交易</h2></div>'+
     '<div class="legend">多源投機訊號(ARKK/SPY、高beta/低波、槓桿ETF量、BTC、COT槓桿基金、融資/GDP)標準化合成,'+
     '<b>投機溫度</b>=近5年百分位,越高越過熱。z 橫條:紅=偏投機、綠=偏冷。Reddit 為當下旁註(不進分數)。</div>'+
+    '<div class="legend"><span class="dim"><b>投機溫度（0–100）</b>＝投機強度在<b>近 5 年</b>分布的百分位（越高＝相對近 5 年越過熱）。<b>投機強度（z）</b>＝六源標準化後等權平均的原始分數（σ；0＝近 5 年常態、正＝偏投機）。兩者現已統一用 <b>5 年</b> 基準。<br>等權為透明起點；因風險偏好類來源較多，解讀偏重風險偏好面。</span></div>'+
     '<div style="display:flex;align-items:center;gap:10px;margin:8px 0"><span style="font-size:22px;font-weight:800;color:'+col+'">'+(t==null?"—":t)+'</span>'+
     '<span class="dim" style="font-size:12px">/100 投機溫度</span>'+bar+'</div>'+
     '<div id="specChart" style="width:100%;height:220px"></div>'+

@@ -127,7 +127,7 @@ def assemble_spec_raw(start):
         context["margin_gdp_pct"] = L.get("ratio_pct")
     sp500 = yfc["SPY"] if "SPY" in yfc.columns else None
     return sources, cards, context, sp500
-Z_WIN = 756          # 3 年
+Z_WIN = 1260         # 5 年
 PCT_LOOKBACK = 1260  # 5 年
 
 def build_spec_json(sources, cards, context, weights, today_iso, sp500=None):

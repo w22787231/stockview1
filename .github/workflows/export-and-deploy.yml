@@ -133,6 +133,16 @@ jobs:
           python -m pip install pypdf -q || true   # FactSet PDF 解析(forward EPS)
           python export_sentiment.py || true
 
+      - name: Export speculation temperature (投機溫度)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          pip install yfinance pandas numpy -q || true
+          cd engine
+          python export_spec.py || echo "[spec] 失敗,沿用線上"
+
       - name: Export calendar (econ data + earnings, Taipei time)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

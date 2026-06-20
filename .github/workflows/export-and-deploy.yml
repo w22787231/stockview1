@@ -79,6 +79,17 @@ jobs:
           cd engine
           python export_macro.py
 
+      - name: Export liquidity pressure index (PI)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          pip install yfinance pandas numpy -q || true
+          cd engine
+          python export_pi.py || echo "[pi] 失敗,沿用線上"
+
       - name: Export Taiwan themes (sector/theme baskets)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

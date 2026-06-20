@@ -3916,7 +3916,9 @@ const PI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年
 function drawPiChart(id, dates, piArr, sp500Arr){
   const el = $("#"+id);
   if(!el || !window.echarts) return;
-  const ch = echarts.getInstanceByDom(el) || echarts.init(el, null, {renderer:"canvas"});
+  // dispose 舊實例後重建，避免 innerHTML 重建後 stale 重用
+  const _old = echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch = echarts.init(el, null, {renderer:"canvas"});
   const toMs = s => new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
   ch.setOption({
     grid:{left:56, right:56, top:32, bottom:30},
@@ -4007,11 +4009,16 @@ function renderPI(d){
       '<div class="legend" style="margin-top:10px">資料來源:FRED + Yahoo Finance。PI 為六因子加權 z 分數合成，視窗 '+esc(PI_WIN_LABEL[win]||win)+'。</div>'+
     '</section>';
 
-  // 繪圖
+  // 繪圖：依窗口截取最近 N 筆，讓 x 軸範圍隨窗口縮放
   const ser = d.series || {};
-  const dates   = ser.dates   || [];
-  const sp500   = ser.sp500   || [];
-  const piSer   = (ser.pi_by_window||{})[win] || [];
+  const allDates = ser.dates   || [];
+  const allSp500 = ser.sp500   || [];
+  const allPiSer = (ser.pi_by_window||{})[win] || [];
+  const WIN_N = {"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
+  const n = Math.min(WIN_N[win] || allDates.length, allDates.length);
+  const dates  = allDates.slice(-n);
+  const sp500  = allSp500.slice(-n);
+  const piSer  = allPiSer.slice(-n);
   if(dates.length>=2 && piSer.length>=2){
     drawPiChart("piChart", dates, piSer, sp500);
   } else {
@@ -4060,7 +4067,9 @@ async function loadSpec(){
 }
 function drawSpecChart(id,dates,z){
   const el=document.getElementById(id); if(!el||!window.echarts) return;
-  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  // dispose 舊實例後重建，避免 innerHTML 重建後 stale 重用
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
   const toMs=s=>new Date(s+"T00:00:00").getTime();
   ch.setOption({grid:{left:48,right:16,top:24,bottom:28},tooltip:{trigger:"axis"},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,

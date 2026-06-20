@@ -32,9 +32,9 @@ def main():
         print("[spec] assemble 例外:", e); res = None
     if res is None:
         print("[!] 投機資料不足 → 不覆寫"); _preserve(); return
-    sources, cards, context = res
+    sources, cards, context, sp500 = res
     try:
-        j = S.build_spec_json(sources, cards, context, WEIGHTS, today)
+        j = S.build_spec_json(sources, cards, context, WEIGHTS, today, sp500=sp500)
     except Exception as e:
         print("[!] 計算失敗:", e); _preserve(); return
     if not j["temperature"]["series"]["dates"]:

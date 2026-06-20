@@ -3916,7 +3916,9 @@ const PI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年
 function drawPiChart(id, dates, piArr, sp500Arr){
   const el = $("#"+id);
   if(!el || !window.echarts) return;
-  const ch = echarts.getInstanceByDom(el) || echarts.init(el, null, {renderer:"canvas"});
+  // dispose 舊實例後重建，避免 innerHTML 重建後 stale 重用
+  const _old = echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch = echarts.init(el, null, {renderer:"canvas"});
   const toMs = s => new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
   ch.setOption({
     grid:{left:56, right:56, top:32, bottom:30},
@@ -3941,7 +3943,9 @@ function drawPiChart(id, dates, piArr, sp500Arr){
        lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}}
     ]
   }, true);
-  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro = ()=>ch.resize();
+  window.addEventListener("resize", el._ro);
 }
 
 function renderPI(d){
@@ -4007,11 +4011,16 @@ function renderPI(d){
       '<div class="legend" style="margin-top:10px">資料來源:FRED + Yahoo Finance。PI 為六因子加權 z 分數合成，視窗 '+esc(PI_WIN_LABEL[win]||win)+'。</div>'+
     '</section>';
 
-  // 繪圖
+  // 繪圖：依窗口截取最近 N 筆，讓 x 軸範圍隨窗口縮放
   const ser = d.series || {};
-  const dates   = ser.dates   || [];
-  const sp500   = ser.sp500   || [];
-  const piSer   = (ser.pi_by_window||{})[win] || [];
+  const allDates = ser.dates   || [];
+  const allSp500 = ser.sp500   || [];
+  const allPiSer = (ser.pi_by_window||{})[win] || [];
+  const WIN_N = {"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
+  const n = Math.min(WIN_N[win] || allDates.length, allDates.length, allSp500.length, allPiSer.length);
+  const dates  = allDates.slice(-n);
+  const sp500  = allSp500.slice(-n);
+  const piSer  = allPiSer.slice(-n);
   if(dates.length>=2 && piSer.length>=2){
     drawPiChart("piChart", dates, piSer, sp500);
   } else {
@@ -4058,19 +4067,39 @@ async function loadSpec(){
     host.innerHTML='<div class="dim" style="padding:8px">投機交易指標尚未產生（'+esc(e.message)+'）。</div>';
   }
 }
-function drawSpecChart(id,dates,z){
+function drawSpecChart(id,dates,z,sp500){
   const el=document.getElementById(id); if(!el||!window.echarts) return;
-  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
   const toMs=s=>new Date(s+"T00:00:00").getTime();
-  ch.setOption({grid:{left:48,right:16,top:24,bottom:28},tooltip:{trigger:"axis"},
+  const hasSp500=sp500&&sp500.length>0;
+  const yAxes=hasSp500?[
+    {type:"value",name:"投機 z",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+    {type:"value",name:"S&P500",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{show:false},position:"right"}
+  ]:{type:"value",name:"投機 z",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}};
+  const seriesList=[
+    {name:"投機強度",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,
+     data:dates.map((d,i)=>[toMs(d),z[i]]),lineStyle:{color:"#c026d3",width:2},itemStyle:{color:"#c026d3"},
+     areaStyle:{color:"#c026d3",opacity:.07},
+     markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}}
+  ];
+  if(hasSp500) seriesList.push(
+    {name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,
+     data:dates.map((d,i)=>[toMs(d),sp500[i]]),
+     lineStyle:{color:"#2563eb",width:1.5,type:"dashed"},itemStyle:{color:"#2563eb"}}
+  );
+  ch.setOption({
+    grid:{left:hasSp500?56:48,right:hasSp500?56:16,top:32,bottom:28},
+    legend:{top:0,textStyle:{fontSize:11}},
+    tooltip:{trigger:"axis"},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:(v)=>{const dt=new Date(v);return dt.getMonth()===0?dt.getFullYear()+"年":(dt.getMonth()+1)+"月";}}},
-    yAxis:{type:"value",name:"投機 z",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
-    series:[{name:"投機強度",type:"line",smooth:true,showSymbol:false,
-      data:dates.map((d,i)=>[toMs(d),z[i]]),lineStyle:{color:"#c026d3",width:2},itemStyle:{color:"#c026d3"},
-      areaStyle:{color:"#c026d3",opacity:.07},
-      markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}}]},true);
-  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+    yAxis:yAxes,
+    series:seriesList
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize",el._ro);
 }
 function _tempColor(t){ return t==null?"#8b949e":(t>=70?"#e11d48":(t>=40?"#c98a00":"#16a34a")); }
 function renderSpec(){
@@ -4106,13 +4135,15 @@ function renderSpec(){
     '<section style="margin-top:18px"><div class="sec-head"><h2>投機交易</h2></div>'+
     '<div class="legend">多源投機訊號(ARKK/SPY、高beta/低波、槓桿ETF量、BTC、COT槓桿基金、融資/GDP)標準化合成,'+
     '<b>投機溫度</b>=近5年百分位,越高越過熱。z 橫條:紅=偏投機、綠=偏冷。Reddit 為當下旁註(不進分數)。</div>'+
+    '<div class="legend"><span class="dim"><b>投機溫度（0–100）</b>＝投機強度在<b>近 5 年</b>分布的百分位（越高＝相對近 5 年越過熱）。<b>投機強度（z）</b>＝六源標準化後等權平均的原始分數（σ；0＝近 5 年常態、正＝偏投機）。兩者現已統一用 <b>5 年</b> 基準。<br>等權為透明起點；因風險偏好類來源較多，解讀偏重風險偏好面。</span></div>'+
     '<div style="display:flex;align-items:center;gap:10px;margin:8px 0"><span style="font-size:22px;font-weight:800;color:'+col+'">'+(t==null?"—":t)+'</span>'+
     '<span class="dim" style="font-size:12px">/100 投機溫度</span>'+bar+'</div>'+
     '<div id="specChart" style="width:100%;height:220px"></div>'+
     '<div style="margin-top:8px">'+comps+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'+cards+'</div>'+
     (ctxLine?'<div class="legend" style="margin-top:8px">'+ctxLine+'</div>':'')+'</section>';
-  drawSpecChart("specChart", s.dates||[], s.z||[]);
+  const sp500Ser = s.sp500 || [];
+  drawSpecChart("specChart", s.dates||[], s.z||[], sp500Ser);
 }
 // ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
 

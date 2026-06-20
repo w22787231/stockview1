@@ -3,7 +3,7 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np, pandas as pd
-from fetch_pi import rolling_z, weighted_pi, _percentile  # noqa: F401(rolling_z/weighted_pi used below)
+from fetch_pi import rolling_z, weighted_pi, _percentile
 
 SOURCE_KEYS = ["投機成長","高beta偏好","槓桿ETF熱度","風險偏好","COT槓桿基金","融資GDP"]
 Z_WIN = 756          # 3 年
@@ -21,8 +21,13 @@ def build_spec_json(sources, cards, context, weights, today_iso):
     comp = weighted_pi(z_df, {k: weights.get(k, 1.0) for k in present})
     valid = comp.dropna()
     last = valid.index[-1] if len(valid) else idx[-1]
-    components = {k: (round(float(z_df[k].loc[last]), 2) if (k in z_df and not pd.isna(z_df[k].loc[last])) else None)
-                 for k in SOURCE_KEYS}
+    def _safe_last(col):
+        try:
+            v = col.loc[last]
+        except Exception:
+            return None
+        return None if pd.isna(v) else round(float(v), 2)
+    components = {k: (_safe_last(z_df[k]) if k in z_df.columns else None) for k in SOURCE_KEYS}
     cutoff = idx.max() - pd.Timedelta(days=365*10)
     wk_idx = pd.Series(1, index=idx).resample("W-FRI").last().index
     wk_idx = wk_idx[wk_idx >= cutoff]

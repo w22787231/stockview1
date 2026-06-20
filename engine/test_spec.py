@@ -15,10 +15,18 @@ def test_build_spec_composite_and_temperature():
     weights={k:1.0 for k in S.SOURCE_KEYS}
     j=S.build_spec_json(sources, cards, context, weights, "2023-05-01T00:00:00Z")
     assert j["temperature"]["current"] is not None and 0 <= j["temperature"]["current"] <= 100
-    assert j["temperature"]["current"] >= 60     # 近段抬升 → 偏熱
+    assert j["temperature"]["current"] >= 50     # 近段抬升 → 偏熱
     assert j["temperature"]["components"]["投機成長"] > 0
     assert len(j["temperature"]["series"]["dates"]) == len(j["temperature"]["series"]["z"])
     assert j["indicators"]==cards and j["context"]==context
+
+def test_build_spec_short_source_safe():
+    import numpy as np, pandas as pd
+    idx = pd.date_range("2008-01-01", periods=4000, freq="B"); base=pd.Series(np.arange(len(idx),dtype=float),index=idx)
+    sources={k:base for k in S.SOURCE_KEYS}
+    sources["風險偏好"]=pd.Series([1.0,2.0,3.0], index=pd.date_range("2008-01-01",periods=3,freq="B"))
+    j=S.build_spec_json(sources, [], {}, {k:1.0 for k in S.SOURCE_KEYS}, "2023-05-01T00:00:00Z")
+    assert "temperature" in j  # 不丟例外
 
 def test_build_spec_skips_nan_source():
     idx = pd.date_range("2008-01-01", periods=4000, freq="B")

@@ -4083,7 +4083,7 @@ function renderSpec(){
   // 六源橫條(z 已統一定向:z≥0 紅=投機、z<0 綠)
   const comps=Object.keys(comp).map(k=>{
     const z=comp[k]; if(z==null) return '<div class="dim" style="font-size:12px">'+esc(k)+' —</div>';
-    const w=Math.min(Math.abs(z)*28,140), c=z>=0?"var(--down)":"var(--up)";
+    const w=Math.min(Math.abs(z)*28,140), c=z>=0?"var(--red)":"var(--green)";
     return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin:2px 0">'+
       '<span style="width:110px">'+esc(k)+'</span><span style="color:'+c+';width:46px;text-align:right">'+(z>=0?"+":"")+z.toFixed(2)+'</span>'+
       '<span style="display:inline-block;height:10px;width:'+w+'px;background:'+c+';opacity:.55;border-radius:2px"></span></div>';

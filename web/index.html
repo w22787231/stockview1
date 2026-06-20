@@ -1210,6 +1210,7 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="piBlock"></div>'+
     '<section>'+
       '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
         '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
@@ -1220,8 +1221,7 @@ function renderMacro(d){
       '<div class="sec-head"><h2>台股主題 / 類股</h2><span class="tag">成分股平均 1/5/20 日漲跌</span>'+
         '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
-    '</section>'+
-    '<div id="piBlock"></div>';
+    '</section>';
   if(d.m1b_m2) drawM1M2(d.m1b_m2);
   loadSentiment();
   loadThemes();

@@ -95,3 +95,15 @@ def test_parse_fred_observations_handles_missing():
     # 其他兩筆為 float
     assert abs(s.iloc[0] - 4.43) < 1e-9
     assert abs(s.iloc[2] - 4.41) < 1e-9
+
+def test_parse_fred_observations_skips_missing_date():
+    """缺 date 鍵的 observation 應被跳過,不丟 KeyError,其餘正常解析。"""
+    obj = {"observations": [
+        {"value": "4.3"},                             # 缺 date → 跳過
+        {"date": "2024-01-04", "value": "4.30"},      # 合法
+    ]}
+    s = P.parse_fred_observations(obj)
+    # 僅剩 1 筆(缺 date 那筆被跳過)
+    assert len(s) == 1
+    assert abs(s.iloc[0] - 4.30) < 1e-9
+    assert str(s.index[0].date()) == "2024-01-04"

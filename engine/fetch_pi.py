@@ -15,11 +15,15 @@ def parse_fred_observations(obj):
     """解析 FRED JSON 回應(dict)為 pandas.Series。
     - date 為 DatetimeIndex,遞增排序
     - value "." → NaN;其餘轉 float
+    - 缺 date 鍵的 observation 直接跳過
     """
     obs = obj.get("observations", [])
     dates, values = [], []
     for o in obs:
-        dates.append(pd.Timestamp(o["date"]))
+        d = o.get("date")
+        if not d:
+            continue
+        dates.append(pd.Timestamp(d))
         v = o.get("value", ".")
         values.append(float("nan") if v == "." else float(v))
     s = pd.Series(values, index=pd.DatetimeIndex(dates), dtype=float)
@@ -47,23 +51,16 @@ def fetch_fred(series_id, start="2000-01-01"):
         print(f"[fetch_pi] fetch_fred({series_id}) 失敗: {e}")
         return None
 
-def fetch_yf_close(ticker, start="2000-01-01"):
-    """用 yfinance 抓收盤價 Series;失敗 print 後回 None。"""
+def fetch_yf_close(symbols, start="2000-01-01"):
+    """用 yfinance 批次抓收盤價 DataFrame(欄=ticker);失敗 print 後回 None。"""
     try:
         import yfinance as yf
-        df = yf.download(ticker, start=start, auto_adjust=True, progress=False)
-        if df is None or df.empty:
-            print(f"[fetch_pi] fetch_yf_close({ticker}) 回傳空資料")
-            return None
-        col = "Close"
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        s = df[col].dropna()
-        s.index = pd.DatetimeIndex(s.index).tz_localize(None)
-        return s.sort_index()
+        df = yf.download(symbols, start=start, progress=False)["Close"]
+        if isinstance(df, pd.Series):
+            df = df.to_frame(symbols[0])
+        return df
     except Exception as e:
-        print(f"[fetch_pi] fetch_yf_close({ticker}) 失敗: {e}")
-        return None
+        print("[pi] yfinance 失敗: %s" % e); return None
 
 # ── 組裝原始因子 ──────────────────────────────────────────────────────────────
 
@@ -81,45 +78,36 @@ def assemble_raw(start="2000-01-01"):
     signs: 定向符號(正=壓力升);sp500: ^GSPC 指數
     """
     # --- FRED 系列 ---
-    dgs2      = fetch_fred("DGS2",          start)
-    dgs10     = fetch_fred("DGS10",         start)
-    walcl     = fetch_fred("WALCL",         start)
-    wtregen   = fetch_fred("WTREGEN",       start)
-    rrp       = fetch_fred("RRPONTSYD",     start)
-    hy_spread = fetch_fred("BAMLH0A0HYM2",  start)
+    dgs2   = fetch_fred("DGS2",         start)
+    dgs10  = fetch_fred("DGS10",        start)
+    walcl  = fetch_fred("WALCL",        start)
+    tga    = fetch_fred("WTREGEN",      start)
+    rrp    = fetch_fred("RRPONTSYD",    start)
+    hy     = fetch_fred("BAMLH0A0HYM2", start)
 
-    # --- yfinance ---
-    vix  = fetch_yf_close("^VIX",  start)
-    move = fetch_yf_close("^MOVE", start)
-    oil  = fetch_yf_close("CL=F",  start)
-    sp   = fetch_yf_close("^GSPC", start)
+    # --- yfinance 一次批次抓 ---
+    yfc = fetch_yf_close(["^VIX", "^MOVE", "CL=F", "^GSPC"], start)
+    if yfc is None or any(x is None for x in [dgs2, dgs10, walcl, tga, rrp, hy]):
+        print("[pi] 關鍵來源缺失,放棄本次"); return None
 
-    # 任一關鍵源為 None → 整體回 None
-    required = [dgs2, dgs10, walcl, wtregen, rrp, hy_spread, vix, move, oil, sp]
-    if any(x is None for x in required):
-        print("[fetch_pi] assemble_raw: 部分資料來源缺失,回 None")
-        return None
-
-    # ③官方流動性 = WALCL/1000 − WTREGEN − RRPONTSYD(單位統一為十億美元)
-    net_liq = walcl / 1000.0 - wtregen - rrp
-
+    netliq = walcl / 1000.0 - tga - rrp
     factors_raw = {
         "①短端利率":   dgs2,
         "②久期供給":   dgs10,
-        "③官方流動性": net_liq,
-        "④一級擁擠":   hy_spread,
-        "⑤波動率":     (vix, move),   # tuple → build_pi_json 支援 blend
-        "⑥油價":       oil,
+        "③官方流動性": netliq,
+        "④一級擁擠":   hy,
+        "⑤波動率":     (yfc["^VIX"], yfc["^MOVE"]),
+        "⑥油價":       yfc["CL=F"],
     }
     signs = {
-        "①短端利率":   +1,   # 利率高 = 收緊 = 壓力
-        "②久期供給":   +1,   # 長端高 = 發債抽水 = 壓力
-        "③官方流動性": -1,   # 淨流動性高 = 壓力低
-        "④一級擁擠":   +1,   # HY 利差走闊 = 壓力
-        "⑤波動率":     +1,   # 波動放大 = 壓力
-        "⑥油價":       +1,   # 油價高 = 通脹 = 壓力
+        "①短端利率":   +1,
+        "②久期供給":   +1,
+        "③官方流動性": -1,
+        "④一級擁擠":   +1,
+        "⑤波動率":     +1,
+        "⑥油價":       +1,
     }
-    return factors_raw, signs, sp
+    return factors_raw, signs, yfc["^GSPC"]
 
 def rolling_z(s, window, min_periods):
     m = s.rolling(window, min_periods=min_periods).mean()

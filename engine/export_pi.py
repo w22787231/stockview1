@@ -9,7 +9,7 @@ import urllib.request, urllib.error
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from fetch_pi import assemble_raw, build_pi_json, FACTOR_KEYS
+from fetch_pi import assemble_raw, build_pi_json
 
 WEIGHTS = {
     "①短端利率":  1.0,

@@ -107,3 +107,26 @@ def test_parse_fred_observations_skips_missing_date():
     assert len(s) == 1
     assert abs(s.iloc[0] - 4.30) < 1e-9
     assert str(s.index[0].date()) == "2024-01-04"
+
+def test_build_pi_factor5_single_series_ok():
+    """⑤波動率為單一 Series(非 tuple)時,build_pi_json 仍正常產出 components["⑤波動率"] 非 None。"""
+    import numpy as np, pandas as pd
+    idx = pd.date_range("2008-01-01", periods=4000, freq="B")
+    rng = np.arange(len(idx), dtype=float)
+    base = pd.Series(rng, index=idx)
+    fr = {
+        "①短端利率":   base,
+        "②久期供給":   base,
+        "③官方流動性": base,
+        "④一級擁擠":   base,
+        "⑤波動率":     base,   # 單一 Series,非 tuple
+        "⑥油價":       base,
+    }
+    sg = {"①短端利率":1,"②久期供給":1,"③官方流動性":-1,"④一級擁擠":1,"⑤波動率":1,"⑥油價":1}
+    j = P.build_pi_json(
+        fr, sg,
+        pd.Series(1000+rng, index=idx),
+        {k:(1.5 if k=="③官方流動性" else 1) for k in P.FACTOR_KEYS},
+        "2023-05-01T00:00:00Z"
+    )
+    assert j["current_by_window"]["5y"]["components"]["⑤波動率"] is not None

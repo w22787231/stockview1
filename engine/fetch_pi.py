@@ -64,6 +64,11 @@ def fetch_yf_close(symbols, start="2000-01-01"):
 
 # ── 組裝原始因子 ──────────────────────────────────────────────────────────────
 
+def _col(df, name):
+    """從 DataFrame 安全取欄;df 為 None 或欄不存在 → 回 None。"""
+    return df[name] if (df is not None and name in df.columns) else None
+
+
 def assemble_raw(start="2000-01-01"):
     """抓取所有原始因子,組裝成 (factors_raw, signs, sp500)。
     任一關鍵源 None → 整體回 None。
@@ -73,7 +78,7 @@ def assemble_raw(start="2000-01-01"):
       ②久期供給  : DGS10
       ③官方流動性: WALCL/1000 - WTREGEN - RRPONTSYD(十億美元)
       ④一級擁擠  : BAMLH0A0HYM2
-      ⑤波動率    : tuple(^VIX, ^MOVE)
+      ⑤波動率    : tuple(^VIX, ^MOVE);若僅一者存在則用單一 Series
       ⑥油價      : CL=F(WTI 原油期貨)
     signs: 定向符號(正=壓力升);sp500: ^GSPC 指數
     """
@@ -85,9 +90,26 @@ def assemble_raw(start="2000-01-01"):
     rrp    = fetch_fred("RRPONTSYD",    start)
     hy     = fetch_fred("BAMLH0A0HYM2", start)
 
-    # --- yfinance 一次批次抓 ---
+    # --- yfinance 一次批次抓(防禦式取欄) ---
     yfc = fetch_yf_close(["^VIX", "^MOVE", "CL=F", "^GSPC"], start)
-    if yfc is None or any(x is None for x in [dgs2, dgs10, walcl, tga, rrp, hy]):
+    vix  = _col(yfc, "^VIX")
+    move = _col(yfc, "^MOVE")
+    oil  = _col(yfc, "CL=F")
+    spx  = _col(yfc, "^GSPC")
+
+    # ⑤波動率降級:兩者都在 → tuple;只有一個在 → 單一 Series
+    if vix is not None and move is not None:
+        vol5 = (vix, move)
+    elif vix is not None:
+        vol5 = vix
+    elif move is not None:
+        vol5 = move
+    else:
+        vol5 = None  # 兩者都缺 → 關鍵缺失
+
+    # 關鍵源判斷:FRED 六者任一 None、spx/oil/⑤ 任一 None → 放棄
+    fred_ok = all(x is not None for x in [dgs2, dgs10, walcl, tga, rrp, hy])
+    if not fred_ok or spx is None or oil is None or vol5 is None:
         print("[pi] 關鍵來源缺失,放棄本次"); return None
 
     netliq = walcl / 1000.0 - tga - rrp
@@ -96,8 +118,8 @@ def assemble_raw(start="2000-01-01"):
         "②久期供給":   dgs10,
         "③官方流動性": netliq,
         "④一級擁擠":   hy,
-        "⑤波動率":     (yfc["^VIX"], yfc["^MOVE"]),
-        "⑥油價":       yfc["CL=F"],
+        "⑤波動率":     vol5,
+        "⑥油價":       oil,
     }
     signs = {
         "①短端利率":   +1,
@@ -107,7 +129,7 @@ def assemble_raw(start="2000-01-01"):
         "⑤波動率":     +1,
         "⑥油價":       +1,
     }
-    return factors_raw, signs, yfc["^GSPC"]
+    return factors_raw, signs, spx
 
 def rolling_z(s, window, min_periods):
     m = s.rolling(window, min_periods=min_periods).mean()

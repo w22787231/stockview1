@@ -37,3 +37,22 @@ def test_build_spec_skips_nan_source():
     j = S.build_spec_json(sources, [], {}, {k:1.0 for k in S.SOURCE_KEYS}, "2023-05-01T00:00:00Z")
     assert j["temperature"]["components"]["融資GDP"] is None        # 缺源 → None
     assert j["temperature"]["current"] is not None                  # 其餘 5 源仍算出溫度
+
+# ── Task 2: 純函式 sentiment 解析 ────────────────────────────────────────────
+
+def test_cot_series_from_sentiment():
+    sent = {"cot_spx": {"dates": ["2022-02-08","2022-02-15","2022-02-22"], "lev_net": [58542, 30528, 73418]}}
+    s = S.cot_series_from_sentiment(sent)
+    assert isinstance(s, pd.Series) and len(s) == 3
+    assert s.index.is_monotonic_increasing
+    assert float(s.iloc[0]) == 58542
+
+def test_margin_series_from_sentiment():
+    sent = {"leverage": {"months": ["Jun-25","Jul-25","Aug-25"], "ratio_series": [3.17, 3.22, 3.33]}}
+    s = S.margin_series_from_sentiment(sent)
+    assert isinstance(s, pd.Series) and len(s) == 3
+    assert abs(float(s.iloc[-1]) - 3.33) < 1e-9
+
+def test_cot_margin_missing_safe():
+    assert S.cot_series_from_sentiment({}) is None
+    assert S.margin_series_from_sentiment({"leverage": {}}) is None

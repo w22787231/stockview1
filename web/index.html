@@ -1211,6 +1211,7 @@ function renderMacro(d){
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
     '<div id="piBlock"></div>'+
+    '<div id="specBlock"></div>'+
     '<section>'+
       '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
         '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
@@ -1226,6 +1227,7 @@ function renderMacro(d){
   loadSentiment();
   loadThemes();
   loadPI();
+  loadSpec();
 }
 // 台灣 M1B/M2 年增率 + M1B−M2 差(資金黃金/死亡交叉)線圖。
 function drawM1M2(m){
@@ -4040,6 +4042,80 @@ async function loadPI(){
       '<div class="legend">⚠️ pi.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_pi。</div></section>';
   }
 }
+
+// ── 投機交易:溫度 + 六源橫條 + 歷史線 + 4 卡 + Reddit/融資旁註 ──────────────────────────
+let SPEC_DATA=null;
+async function loadSpec(){
+  const host=document.getElementById("specBlock"); if(!host) return;
+  if(SPEC_DATA){ renderSpec(); return; }
+  host.innerHTML='<div class="dim" style="padding:8px">載入投機交易指標 …</div>';
+  try{
+    const res=await fetch("data/spec.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    SPEC_DATA=await res.json();
+    renderSpec();
+  }catch(e){
+    host.innerHTML='<div class="dim" style="padding:8px">投機交易指標尚未產生（'+esc(e.message)+'）。</div>';
+  }
+}
+function drawSpecChart(id,dates,z){
+  const el=document.getElementById(id); if(!el||!window.echarts) return;
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  const toMs=s=>new Date(s+"T00:00:00").getTime();
+  ch.setOption({grid:{left:48,right:16,top:24,bottom:28},tooltip:{trigger:"axis"},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:(v)=>{const dt=new Date(v);return dt.getMonth()===0?dt.getFullYear()+"年":(dt.getMonth()+1)+"月";}}},
+    yAxis:{type:"value",name:"投機 z",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+    series:[{name:"投機強度",type:"line",smooth:true,showSymbol:false,
+      data:dates.map((d,i)=>[toMs(d),z[i]]),lineStyle:{color:"#c026d3",width:2},itemStyle:{color:"#c026d3"},
+      areaStyle:{color:"#c026d3",opacity:.07},
+      markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}}]},true);
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+function _tempColor(t){ return t==null?"#8b949e":(t>=70?"#e11d48":(t>=40?"#c98a00":"#16a34a")); }
+function renderSpec(){
+  const host=document.getElementById("specBlock"); if(!host||!SPEC_DATA) return;
+  const d=SPEC_DATA, T=d.temperature||{}, t=T.current, comp=T.components||{}, s=T.series||{};
+  const col=_tempColor(t), pct=(t==null?0:t);
+  // 溫度條
+  const bar='<div style="background:var(--line);border-radius:8px;height:14px;overflow:hidden;max-width:420px">'+
+    '<div style="height:100%;width:'+pct+'%;background:'+col+'"></div></div>';
+  // 六源橫條(z 已統一定向:z≥0 紅=投機、z<0 綠)
+  const comps=Object.keys(comp).map(k=>{
+    const z=comp[k]; if(z==null) return '<div class="dim" style="font-size:12px">'+esc(k)+' —</div>';
+    const w=Math.min(Math.abs(z)*28,140), c=z>=0?"var(--down)":"var(--up)";
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin:2px 0">'+
+      '<span style="width:110px">'+esc(k)+'</span><span style="color:'+c+';width:46px;text-align:right">'+(z>=0?"+":"")+z.toFixed(2)+'</span>'+
+      '<span style="display:inline-block;height:10px;width:'+w+'px;background:'+c+';opacity:.55;border-radius:2px"></span></div>';
+  }).join("");
+  // 4 卡
+  const cards=(d.indicators||[]).map(c=>{
+    const chg=c.chg_pct||0, cc=chg>=0?"#16a34a":"#e11d48";
+    const spk=(c.spark&&c.spark.length>1)?sparkline(c.spark, chg>=0?"#16a34a":"#e11d48"):"";
+    return '<div style="border:1px solid var(--line);border-radius:8px;padding:8px;min-width:150px">'+
+      '<div style="font-weight:700;font-size:13px">'+esc(c.key)+' <span class="dim" style="font-weight:400">'+esc(c.sub)+'</span></div>'+
+      '<div style="font-size:15px">'+esc(String(c.value))+' <span style="color:'+cc+';font-size:12px">'+(chg>=0?"+":"")+chg+'%</span></div>'+
+      spk+'<div class="dim" style="font-size:11px;margin-top:2px">'+esc(c.note||"")+'</div></div>';
+  }).join("");
+  const ctx=d.context||{};
+  const ctxLine=[
+    (ctx.reddit_mentions!=null?'Reddit 當前提及 '+fmtNum(ctx.reddit_mentions)+(ctx.reddit_top&&ctx.reddit_top.length?'(熱門 '+ctx.reddit_top.map(esc).join("、")+')':''):''),
+    (ctx.margin_gdp_pct!=null?'融資/GDP '+ctx.margin_gdp_pct+'%':'')
+  ].filter(Boolean).join(" · ");
+  host.innerHTML=
+    '<section style="margin-top:18px"><div class="sec-head"><h2>投機交易</h2></div>'+
+    '<div class="legend">多源投機訊號(ARKK/SPY、高beta/低波、槓桿ETF量、BTC、COT槓桿基金、融資/GDP)標準化合成,'+
+    '<b>投機溫度</b>=近5年百分位,越高越過熱。z 橫條:紅=偏投機、綠=偏冷。Reddit 為當下旁註(不進分數)。</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin:8px 0"><span style="font-size:22px;font-weight:800;color:'+col+'">'+(t==null?"—":t)+'</span>'+
+    '<span class="dim" style="font-size:12px">/100 投機溫度</span>'+bar+'</div>'+
+    '<div id="specChart" style="width:100%;height:220px"></div>'+
+    '<div style="margin-top:8px">'+comps+'</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'+cards+'</div>'+
+    (ctxLine?'<div class="legend" style="margin-top:8px">'+ctxLine+'</div>':'')+'</section>';
+  drawSpecChart("specChart", s.dates||[], s.z||[]);
+}
+// ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
+
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──
 let OPT_SYM="SPY", OPT_EXP=null;
 function loadOptions(){

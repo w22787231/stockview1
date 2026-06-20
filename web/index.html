@@ -4067,23 +4067,39 @@ async function loadSpec(){
     host.innerHTML='<div class="dim" style="padding:8px">投機交易指標尚未產生（'+esc(e.message)+'）。</div>';
   }
 }
-function drawSpecChart(id,dates,z){
+function drawSpecChart(id,dates,z,sp500){
   const el=document.getElementById(id); if(!el||!window.echarts) return;
-  // dispose 舊實例後重建，避免 innerHTML 重建後 stale 重用
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   const toMs=s=>new Date(s+"T00:00:00").getTime();
-  ch.setOption({grid:{left:48,right:16,top:24,bottom:28},tooltip:{trigger:"axis"},
+  const hasSp500=sp500&&sp500.length>0;
+  const yAxes=hasSp500?[
+    {type:"value",name:"投機 z",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+    {type:"value",name:"S&P500",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{show:false},position:"right"}
+  ]:{type:"value",name:"投機 z",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}};
+  const seriesList=[
+    {name:"投機強度",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,
+     data:dates.map((d,i)=>[toMs(d),z[i]]),lineStyle:{color:"#c026d3",width:2},itemStyle:{color:"#c026d3"},
+     areaStyle:{color:"#c026d3",opacity:.07},
+     markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}}
+  ];
+  if(hasSp500) seriesList.push(
+    {name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,
+     data:dates.map((d,i)=>[toMs(d),sp500[i]]),
+     lineStyle:{color:"#2563eb",width:1.5,type:"dashed"},itemStyle:{color:"#2563eb"}}
+  );
+  ch.setOption({
+    grid:{left:hasSp500?56:48,right:hasSp500?56:16,top:32,bottom:28},
+    legend:{top:0,textStyle:{fontSize:11}},
+    tooltip:{trigger:"axis"},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:(v)=>{const dt=new Date(v);return dt.getMonth()===0?dt.getFullYear()+"年":(dt.getMonth()+1)+"月";}}},
-    yAxis:{type:"value",name:"投機 z",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
-    series:[{name:"投機強度",type:"line",smooth:true,showSymbol:false,
-      data:dates.map((d,i)=>[toMs(d),z[i]]),lineStyle:{color:"#c026d3",width:2},itemStyle:{color:"#c026d3"},
-      areaStyle:{color:"#c026d3",opacity:.07},
-      markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}}]},true);
-  if(el._ro) window.removeEventListener("resize", el._ro);
-  el._ro = ()=>ch.resize();
-  window.addEventListener("resize", el._ro);
+    yAxis:yAxes,
+    series:seriesList
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize",el._ro);
 }
 function _tempColor(t){ return t==null?"#8b949e":(t>=70?"#e11d48":(t>=40?"#c98a00":"#16a34a")); }
 function renderSpec(){
@@ -4125,7 +4141,8 @@ function renderSpec(){
     '<div style="margin-top:8px">'+comps+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'+cards+'</div>'+
     (ctxLine?'<div class="legend" style="margin-top:8px">'+ctxLine+'</div>':'')+'</section>';
-  drawSpecChart("specChart", s.dates||[], s.z||[]);
+  const sp500Ser = s.sp500 || [];
+  drawSpecChart("specChart", s.dates||[], s.z||[], sp500Ser);
 }
 // ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
 

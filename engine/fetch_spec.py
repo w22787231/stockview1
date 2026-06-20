@@ -9,18 +9,6 @@ SOURCE_KEYS = ["投機成長","高beta偏好","槓桿ETF熱度","風險偏好","
 Z_WIN = 756          # 3 年
 PCT_LOOKBACK = 1260  # 5 年
 
-def _spec_percentile(series, lookback):
-    """與 fetch_pi._percentile 邏輯相同,但用 weak rank(含等於)避免全等值時回 0。
-    0-100 整數或 None(樣本不足 30)。
-    """
-    s = series.dropna()
-    if len(s) < 30:
-        return None
-    tail = s.tail(lookback)
-    cur = tail.iloc[-1]
-    # weak: count(x <= cur) / len → 0~1,再映射到 0-100
-    return round(float((tail <= cur).sum()) / max(len(tail), 1) * 100, 0)
-
 def build_spec_json(sources, cards, context, weights, today_iso):
     present = [k for k in SOURCE_KEYS if k in sources and sources[k] is not None and sources[k].notna().any()]
     if not present:
@@ -40,7 +28,7 @@ def build_spec_json(sources, cards, context, weights, today_iso):
     wk_idx = wk_idx[wk_idx >= cutoff]
     z_series = [None if pd.isna(v) else round(float(v), 4)
                 for v in comp.reindex(idx).ffill().reindex(wk_idx, method="ffill").values]
-    temp = _spec_percentile(comp, PCT_LOOKBACK)  # 0-100 或 None
+    temp = _percentile(comp, PCT_LOOKBACK)  # 0-100 或 None
     return {
         "generated_at": today_iso, "weights": weights,
         "indicators": cards or [],

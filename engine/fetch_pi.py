@@ -1,9 +1,125 @@
 # -*- coding: utf-8 -*-
 """流動性壓力指數 PI:抓取(fetch_*)+ 純計算(rolling_z/weighted_pi/build_pi_json)。"""
+import os
+import urllib.request
+import urllib.error
+import json as _json
 import numpy as np, pandas as pd
 
 FACTOR_KEYS = ["①短端利率","②久期供給","③官方流動性","④一級擁擠","⑤波動率","⑥油價"]
 WINDOWS = {"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260}
+
+# ── FRED 解析 ────────────────────────────────────────────────────────────────
+
+def parse_fred_observations(obj):
+    """解析 FRED JSON 回應(dict)為 pandas.Series。
+    - date 為 DatetimeIndex,遞增排序
+    - value "." → NaN;其餘轉 float
+    """
+    obs = obj.get("observations", [])
+    dates, values = [], []
+    for o in obs:
+        dates.append(pd.Timestamp(o["date"]))
+        v = o.get("value", ".")
+        values.append(float("nan") if v == "." else float(v))
+    s = pd.Series(values, index=pd.DatetimeIndex(dates), dtype=float)
+    return s.sort_index()
+
+# ── 網路 fetch ────────────────────────────────────────────────────────────────
+
+_FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+
+def fetch_fred(series_id, start="2000-01-01"):
+    """抓取 FRED 時間序列。
+    需要環境變數 FRED_API_KEY;無金鑰 print 後回 None,不拋例外。
+    """
+    key = os.environ.get("FRED_API_KEY")
+    if not key:
+        print(f"[fetch_pi] FRED_API_KEY 未設定,跳過 {series_id}")
+        return None
+    url = (f"{_FRED_BASE}?series_id={series_id}&api_key={key}"
+           f"&file_type=json&observation_start={start}")
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            obj = _json.loads(r.read().decode("utf-8"))
+        return parse_fred_observations(obj)
+    except Exception as e:
+        print(f"[fetch_pi] fetch_fred({series_id}) 失敗: {e}")
+        return None
+
+def fetch_yf_close(ticker, start="2000-01-01"):
+    """用 yfinance 抓收盤價 Series;失敗 print 後回 None。"""
+    try:
+        import yfinance as yf
+        df = yf.download(ticker, start=start, auto_adjust=True, progress=False)
+        if df is None or df.empty:
+            print(f"[fetch_pi] fetch_yf_close({ticker}) 回傳空資料")
+            return None
+        col = "Close"
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        s = df[col].dropna()
+        s.index = pd.DatetimeIndex(s.index).tz_localize(None)
+        return s.sort_index()
+    except Exception as e:
+        print(f"[fetch_pi] fetch_yf_close({ticker}) 失敗: {e}")
+        return None
+
+# ── 組裝原始因子 ──────────────────────────────────────────────────────────────
+
+def assemble_raw(start="2000-01-01"):
+    """抓取所有原始因子,組裝成 (factors_raw, signs, sp500)。
+    任一關鍵源 None → 整體回 None。
+
+    factors_raw dict 鍵對齊 FACTOR_KEYS:
+      ①短端利率  : DGS2
+      ②久期供給  : DGS10
+      ③官方流動性: WALCL/1000 - WTREGEN - RRPONTSYD(十億美元)
+      ④一級擁擠  : BAMLH0A0HYM2
+      ⑤波動率    : tuple(^VIX, ^MOVE)
+      ⑥油價      : CL=F(WTI 原油期貨)
+    signs: 定向符號(正=壓力升);sp500: ^GSPC 指數
+    """
+    # --- FRED 系列 ---
+    dgs2      = fetch_fred("DGS2",          start)
+    dgs10     = fetch_fred("DGS10",         start)
+    walcl     = fetch_fred("WALCL",         start)
+    wtregen   = fetch_fred("WTREGEN",       start)
+    rrp       = fetch_fred("RRPONTSYD",     start)
+    hy_spread = fetch_fred("BAMLH0A0HYM2",  start)
+
+    # --- yfinance ---
+    vix  = fetch_yf_close("^VIX",  start)
+    move = fetch_yf_close("^MOVE", start)
+    oil  = fetch_yf_close("CL=F",  start)
+    sp   = fetch_yf_close("^GSPC", start)
+
+    # 任一關鍵源為 None → 整體回 None
+    required = [dgs2, dgs10, walcl, wtregen, rrp, hy_spread, vix, move, oil, sp]
+    if any(x is None for x in required):
+        print("[fetch_pi] assemble_raw: 部分資料來源缺失,回 None")
+        return None
+
+    # ③官方流動性 = WALCL/1000 − WTREGEN − RRPONTSYD(單位統一為十億美元)
+    net_liq = walcl / 1000.0 - wtregen - rrp
+
+    factors_raw = {
+        "①短端利率":   dgs2,
+        "②久期供給":   dgs10,
+        "③官方流動性": net_liq,
+        "④一級擁擠":   hy_spread,
+        "⑤波動率":     (vix, move),   # tuple → build_pi_json 支援 blend
+        "⑥油價":       oil,
+    }
+    signs = {
+        "①短端利率":   +1,   # 利率高 = 收緊 = 壓力
+        "②久期供給":   +1,   # 長端高 = 發債抽水 = 壓力
+        "③官方流動性": -1,   # 淨流動性高 = 壓力低
+        "④一級擁擠":   +1,   # HY 利差走闊 = 壓力
+        "⑤波動率":     +1,   # 波動放大 = 壓力
+        "⑥油價":       +1,   # 油價高 = 通脹 = 壓力
+    }
+    return factors_raw, signs, sp
 
 def rolling_z(s, window, min_periods):
     m = s.rolling(window, min_periods=min_periods).mean()

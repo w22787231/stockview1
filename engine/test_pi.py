@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 # engine/test_pi.py
+import io, json, os
 import numpy as np, pandas as pd
 import fetch_pi as P
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+def _fx(name):
+    with io.open(os.path.join(HERE, "fixtures", name), encoding="utf-8") as f:
+        return json.load(f)
 
 def test_rolling_z_known_values():
     s = pd.Series([1,2,3,4,5], dtype=float)
@@ -70,3 +76,22 @@ def test_weighted_pi_distinct_values_exact():
     # (2*1 + 0*1 + -1*1.5 + 1*1 + 0.5*1 + -0.5*1) / (1+1+1.5+1+1+1)
     num = 2 + 0 - 1.5 + 1 + 0.5 - 0.5
     assert abs(pi.iloc[0] - num/6.5) < 1e-9
+
+# ── Task 2: parse_fred_observations ──────────────────────────────────────────
+
+def test_parse_fred_observations_handles_missing():
+    """'.' 值應轉為 NaN;合法 float 正常;date 為索引且遞增排序。"""
+    obj = _fx("fred_dgs2_sample.json")
+    s = P.parse_fred_observations(obj)
+    # 型別檢查
+    assert isinstance(s, pd.Series)
+    # 長度應等於 observations 筆數
+    assert len(s) == 3
+    # 索引為 DatetimeIndex 且遞增
+    assert isinstance(s.index, pd.DatetimeIndex)
+    assert s.index.is_monotonic_increasing
+    # 第 2 筆 value="." → NaN
+    assert pd.isna(s.iloc[1])
+    # 其他兩筆為 float
+    assert abs(s.iloc[0] - 4.43) < 1e-9
+    assert abs(s.iloc[2] - 4.41) < 1e-9

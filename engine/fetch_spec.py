@@ -125,15 +125,16 @@ def assemble_spec_raw(start):
     L = (sent or {}).get("leverage") or {}
     if L.get("ratio_pct") is not None:
         context["margin_gdp_pct"] = L.get("ratio_pct")
-    return sources, cards, context
+    sp500 = yfc["SPY"] if "SPY" in yfc.columns else None
+    return sources, cards, context, sp500
 Z_WIN = 756          # 3 年
 PCT_LOOKBACK = 1260  # 5 年
 
-def build_spec_json(sources, cards, context, weights, today_iso):
+def build_spec_json(sources, cards, context, weights, today_iso, sp500=None):
     present = [k for k in SOURCE_KEYS if k in sources and sources[k] is not None and sources[k].notna().any()]
     if not present:
         return {"generated_at": today_iso, "weights": weights, "indicators": cards or [],
-                "temperature": {"current": None, "series": {"dates": [], "z": []},
+                "temperature": {"current": None, "series": {"dates": [], "z": [], "sp500": []},
                                 "components": {k: None for k in SOURCE_KEYS}}, "context": context or {}}
     idx = pd.bdate_range(min(sources[k].index.min() for k in present),
                          max(sources[k].index.max() for k in present))
@@ -153,13 +154,19 @@ def build_spec_json(sources, cards, context, weights, today_iso):
     wk_idx = wk_idx[wk_idx >= cutoff]
     z_series = [None if pd.isna(v) else round(float(v), 4)
                 for v in comp.reindex(idx).ffill().reindex(wk_idx, method="ffill").values]
+    if sp500 is not None:
+        sp500_aligned = sp500.reindex(idx).ffill().reindex(wk_idx, method="ffill")
+        sp500_series = [None if pd.isna(v) else round(float(v), 2) for v in sp500_aligned.values]
+    else:
+        sp500_series = []
     temp = _percentile(comp, PCT_LOOKBACK)  # 0-100 或 None
     return {
         "generated_at": today_iso, "weights": weights,
         "indicators": cards or [],
         "temperature": {
             "current": (None if temp is None else int(temp)),
-            "series": {"dates": [d.strftime("%Y-%m-%d") for d in wk_idx], "z": z_series},
+            "series": {"dates": [d.strftime("%Y-%m-%d") for d in wk_idx], "z": z_series,
+                       "sp500": sp500_series},
             "components": components,
         },
         "context": context or {},

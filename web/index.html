@@ -3931,11 +3931,12 @@ function drawPiChart(id, dates, piArr, sp500Arr){
     series:[
       {name:"流動性壓力 PI", type:"line", smooth:true, showSymbol:false, yAxisIndex:0,
        data:dates.map((d,i)=>[toMs(d), piArr[i]]),
-       lineStyle:{color:"#e11d48", width:2}, itemStyle:{color:"#e11d48"},
-       areaStyle:{color:"#e11d48", opacity:.07}},
+       lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
+       areaStyle:{color:"#e8923a", opacity:.07},
+       markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}},
       {name:"S&P 500", type:"line", smooth:true, showSymbol:false, yAxisIndex:1,
        data:dates.map((d,i)=>[toMs(d), sp500Arr[i]]),
-       lineStyle:{color:"#1f6feb", width:1.5, type:"dashed"}, itemStyle:{color:"#1f6feb"}}
+       lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}}
     ]
   }, true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
@@ -3966,7 +3967,7 @@ function renderPI(d){
     const pct_bar = Math.min(Math.abs(z)/3*100, 100).toFixed(1);
     const isNeg = z < 0;
     // dir:"hi"=高z偏壓力(紅), dir:"lo"=低z偏壓力(紅)
-    const stressed = (f.dir==="hi" && z>0) || (f.dir==="lo" && z<0);
+    const stressed = z >= 0;   // z≥0=壓力(紅/.neg), z<0=寬鬆(綠/.pos); z已統一定向不再看dir
     const cls = stressed ? "neg" : "pos";
     return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0">'+
       '<div style="width:120px;font-size:12px;color:var(--ink2);text-align:right;flex-shrink:0">'+esc(f.key)+'</div>'+
@@ -4025,6 +4026,8 @@ function renderPI(d){
 async function loadPI(){
   const box = $("#piBlock");
   if(!box) return;
+  if(PI_DATA){ renderPI(PI_DATA); return; }   // 快取守衛：同 session 不重複 fetch
+  box.innerHTML='<div class="dim" style="padding:8px">載入流動性壓力指數 …</div>';
   try{
     const res = await fetch("data/pi.json?t="+Date.now(), {cache:"no-store"});
     if(!res.ok) throw new Error(res.status);

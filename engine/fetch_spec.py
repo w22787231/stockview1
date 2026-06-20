@@ -69,7 +69,7 @@ def _spark(s, n=26):
     return [round(float(v), 4) for v in w.values]
 
 def assemble_spec_raw(start):
-    """組裝 (sources, cards, context)；yfinance 整批失敗回 None；任何 fetch 例外安全處理。"""
+    """組裝 (sources, cards, context, sp500)；yfinance 整批失敗回 None；任何 fetch 例外安全處理。"""
     yfc = fetch_yf_close(["ARKK", "SPY", "SPHB", "SPLV", "TQQQ", "SOXL", "BTC-USD"], start)
     if yfc is None:
         print("[spec] yfinance 全失敗")

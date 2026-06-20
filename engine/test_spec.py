@@ -56,3 +56,29 @@ def test_margin_series_from_sentiment():
 def test_cot_margin_missing_safe():
     assert S.cot_series_from_sentiment({}) is None
     assert S.margin_series_from_sentiment({"leverage": {}}) is None
+
+# ── Task 3: sp500 series 測試 ─────────────────────────────────────────────────
+
+def test_build_spec_sp500_length_matches_dates():
+    """傳入 sp500 Series 時，series.sp500 長度 == series.dates 長度，且均為數值。"""
+    import numpy as np, pandas as pd
+    idx = pd.date_range("2008-01-01", periods=4000, freq="B")
+    vals = np.linspace(100, 500, len(idx))
+    base = pd.Series(vals, index=idx)
+    sources = {k: base for k in S.SOURCE_KEYS}
+    sp500 = pd.Series(np.linspace(1000, 5000, len(idx)), index=idx)
+    weights = {k: 1.0 for k in S.SOURCE_KEYS}
+    j = S.build_spec_json(sources, [], {}, weights, "2023-05-01T00:00:00Z", sp500=sp500)
+    ser = j["temperature"]["series"]
+    assert len(ser["sp500"]) == len(ser["dates"]), "sp500 長度需與 dates 一致"
+    assert all(v is None or isinstance(v, float) for v in ser["sp500"]), "sp500 元素應為 float 或 None"
+
+def test_build_spec_sp500_none_gives_empty():
+    """sp500=None 時 series.sp500 == []。"""
+    import numpy as np, pandas as pd
+    idx = pd.date_range("2008-01-01", periods=4000, freq="B")
+    base = pd.Series(np.linspace(0, 1, len(idx)), index=idx)
+    sources = {k: base for k in S.SOURCE_KEYS}
+    weights = {k: 1.0 for k in S.SOURCE_KEYS}
+    j = S.build_spec_json(sources, [], {}, weights, "2023-05-01T00:00:00Z", sp500=None)
+    assert j["temperature"]["series"].get("sp500") == [], "sp500=None 應輸出 []"

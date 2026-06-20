@@ -1220,10 +1220,12 @@ function renderMacro(d){
       '<div class="sec-head"><h2>台股主題 / 類股</h2><span class="tag">成分股平均 1/5/20 日漲跌</span>'+
         '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
-    '</section>';
+    '</section>'+
+    '<div id="piBlock"></div>';
   if(d.m1b_m2) drawM1M2(d.m1b_m2);
   loadSentiment();
   loadThemes();
+  loadPI();
 }
 // 台灣 M1B/M2 年增率 + M1B−M2 差(資金黃金/死亡交叉)線圖。
 function drawM1M2(m){
@@ -3903,6 +3905,137 @@ function drawCapLines(id,dates,series,unit){
       data:dates.map((d,i)=>[toMs(d),s[1][i]]),lineStyle:{color:s[2],width:2},itemStyle:{color:s[2]},
       areaStyle:single?{color:s[2],opacity:.08}:undefined}))},true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+// ── 流動性壓力指數(PI) ── 雙軸折線圖 + 窗切換 + 六因子橫條 ──
+let PI_DATA = null;
+let PI_WIN  = "5y";
+const PI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
+
+function drawPiChart(id, dates, piArr, sp500Arr){
+  const el = $("#"+id);
+  if(!el || !window.echarts) return;
+  const ch = echarts.getInstanceByDom(el) || echarts.init(el, null, {renderer:"canvas"});
+  const toMs = s => new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  ch.setOption({
+    grid:{left:56, right:56, top:32, bottom:30},
+    legend:{top:0, textStyle:{fontSize:11}},
+    tooltip:{trigger:"axis"},
+    xAxis:{type:"time", axisLabel:{fontSize:9, hideOverlap:true,
+      formatter:(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:[
+      {type:"value", name:"PI", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value", name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"}
+    ],
+    series:[
+      {name:"流動性壓力 PI", type:"line", smooth:true, showSymbol:false, yAxisIndex:0,
+       data:dates.map((d,i)=>[toMs(d), piArr[i]]),
+       lineStyle:{color:"#e11d48", width:2}, itemStyle:{color:"#e11d48"},
+       areaStyle:{color:"#e11d48", opacity:.07}},
+      {name:"S&P 500", type:"line", smooth:true, showSymbol:false, yAxisIndex:1,
+       data:dates.map((d,i)=>[toMs(d), sp500Arr[i]]),
+       lineStyle:{color:"#1f6feb", width:1.5, type:"dashed"}, itemStyle:{color:"#1f6feb"}}
+    ]
+  }, true);
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+
+function renderPI(d){
+  const box = $("#piBlock");
+  if(!box) return;
+  const win = PI_WIN;
+  const cur = (d.current_by_window||{})[win] || {};
+  const pi  = cur.pi   != null ? cur.pi.toFixed(2)   : "—";
+  const pct = cur.pctile != null ? cur.pctile.toFixed(1) : "—";
+  const comps = cur.components || {};
+  const meta  = d.factors_meta || [];
+
+  // 窗切換按鈕
+  const wins = d.windows || ["1m","3m","6m","1y","3y","5y"];
+  const btns = wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-piw="'+w+'">'+
+      (PI_WIN_LABEL[w]||w)+'</button>'
+  ).join("");
+
+  // 六因子橫條
+  const barWidth = 200; // px base for 100% z=3
+  const factorBars = meta.map(f=>{
+    const z = comps[f.key];
+    if(z == null) return "";
+    const pct_bar = Math.min(Math.abs(z)/3*100, 100).toFixed(1);
+    const isNeg = z < 0;
+    // dir:"hi"=高z偏壓力(紅), dir:"lo"=低z偏壓力(紅)
+    const stressed = (f.dir==="hi" && z>0) || (f.dir==="lo" && z<0);
+    const cls = stressed ? "neg" : "pos";
+    return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0">'+
+      '<div style="width:120px;font-size:12px;color:var(--ink2);text-align:right;flex-shrink:0">'+esc(f.key)+'</div>'+
+      '<div style="flex:1;background:var(--line);border-radius:4px;height:10px;position:relative;min-width:80px">'+
+        '<div style="position:absolute;'+(isNeg?"right:50%":"left:50%")+';width:'+pct_bar/2+'%;height:100%;background:'+(stressed?"#e11d48":"#16a34a")+';border-radius:4px"></div>'+
+        '<div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:var(--ink3)"></div>'+
+      '</div>'+
+      '<div style="width:44px;font-size:12px;text-align:right;flex-shrink:0" class="'+cls+'">'+(z>0?"+":"")+z.toFixed(2)+'z</div>'+
+    '</div>';
+  }).join("");
+
+  // PI 當前讀數卡
+  const piColor = Number(pi)>0 ? "#e11d48" : "#16a34a";
+  const piCardStyle = 'border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:130px;margin-right:12px';
+
+  box.innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>流動性壓力指數(PI)</h2>'+
+        '<span class="tag">六因子 z 加權合成</span>'+
+        '<span class="hint">PI>0 流動性偏緊、PI<0 流動性寬鬆；歷史分位愈高風險愈大</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+piCardStyle+'">'+
+          '<div class="cap-lab">PI 當前值</div>'+
+          '<div class="cap-big" style="color:'+piColor+'">'+esc(pi)+'</div>'+
+        '</div>'+
+        '<div style="'+piCardStyle+'">'+
+          '<div class="cap-lab">歷史分位('+esc(PI_WIN_LABEL[win]||win)+')</div>'+
+          '<div class="cap-big">'+esc(pct)+'%</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px">'+btns+'</div>'+
+      '<div id="piChart" class="cap-chart" style="height:260px"></div>'+
+      '<div class="cap-sub2" style="margin-top:14px">六因子分解(z 偏差;紅=對應方向加壓)</div>'+
+      '<div style="max-width:520px;margin-top:6px">'+factorBars+'</div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED + Yahoo Finance。PI 為六因子加權 z 分數合成，視窗 '+esc(PI_WIN_LABEL[win]||win)+'。</div>'+
+    '</section>';
+
+  // 繪圖
+  const ser = d.series || {};
+  const dates   = ser.dates   || [];
+  const sp500   = ser.sp500   || [];
+  const piSer   = (ser.pi_by_window||{})[win] || [];
+  if(dates.length>=2 && piSer.length>=2){
+    drawPiChart("piChart", dates, piSer, sp500);
+  } else {
+    const c=$("#piChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  // 窗按鈕事件
+  box.querySelectorAll("[data-piw]").forEach(b=>b.onclick=()=>{
+    PI_WIN = b.dataset.piw;
+    renderPI(PI_DATA);
+  });
+}
+
+async function loadPI(){
+  const box = $("#piBlock");
+  if(!box) return;
+  try{
+    const res = await fetch("data/pi.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    PI_DATA = await res.json();
+    if(PI_DATA.default_window) PI_WIN = PI_DATA.default_window;
+    renderPI(PI_DATA);
+  }catch(e){
+    if(box) box.innerHTML =
+      '<section><div class="sec-head"><h2>流動性壓力指數(PI)</h2></div>'+
+      '<div class="legend">⚠️ pi.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_pi。</div></section>';
+  }
 }
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──
 let OPT_SYM="SPY", OPT_EXP=null;

@@ -127,8 +127,9 @@ def assemble_spec_raw(start):
         context["margin_gdp_pct"] = L.get("ratio_pct")
     sp500 = yfc["SPY"] if "SPY" in yfc.columns else None
     return sources, cards, context, sp500
-Z_WIN = 1260         # 5 年
-PCT_LOOKBACK = 1260  # 5 年
+Z_WIN = 1260         # 5 年(滾動 z 窗)
+PCT_LOOKBACK = 1260  # 5 年(溫度=composite z 的近 5 年百分位)
+MIN_PERIODS = 252    # z 最低資料門檻 = 1 年:讓歷史較短的源(如融資GDP ~2-3 年)也能算出 z 進合成;窗仍為 5 年
 
 def build_spec_json(sources, cards, context, weights, today_iso, sp500=None):
     present = [k for k in SOURCE_KEYS if k in sources and sources[k] is not None and sources[k].notna().any()]
@@ -138,7 +139,7 @@ def build_spec_json(sources, cards, context, weights, today_iso, sp500=None):
                                 "components": {k: None for k in SOURCE_KEYS}}, "context": context or {}}
     idx = pd.bdate_range(min(sources[k].index.min() for k in present),
                          max(sources[k].index.max() for k in present))
-    z_df = pd.DataFrame({k: rolling_z(sources[k].reindex(idx).ffill(), Z_WIN, Z_WIN//2) for k in present})
+    z_df = pd.DataFrame({k: rolling_z(sources[k].reindex(idx).ffill(), Z_WIN, MIN_PERIODS) for k in present})
     comp = weighted_pi(z_df, {k: weights.get(k, 1.0) for k in present})
     valid = comp.dropna()
     last = valid.index[-1] if len(valid) else idx[-1]

@@ -233,7 +233,7 @@ def fetch_leverage():
         pairs = re.findall(r"([A-Z][a-z]{2}-\d{2})[\s\S]{0,400}?([1-9],\d{3},\d{3})", html)
         if not pairs:
             return None
-        pairs = pairs[:12][::-1]   # 最新在前→取近12月→反轉成時間序(舊→新)
+        pairs = pairs[:60][::-1]   # 最新在前→取 FINRA 內嵌全部月份(上限60月,通常2-3年)→反轉成時間序(舊→新);供投機溫度的融資GDP源做z
         gdp_t, gdp_label = _fetch_gdp_trillions()
         if not gdp_t:
             return None

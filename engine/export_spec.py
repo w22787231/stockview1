@@ -42,8 +42,13 @@ def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with io.open(OUT, "w", encoding="utf-8") as f:
         json.dump(j, f, ensure_ascii=False, separators=(",", ":"))
-    print("✓ spec.json:溫度=%s,%d 週點,%d 卡" % (
-        j["temperature"]["current"], len(j["temperature"]["series"]["dates"]), len(j["indicators"])))
+    byw = j["temperature"].get("by_window", {})
+    dfw = j["temperature"].get("default_window", "5y")
+    cur = (byw.get(dfw) or {}).get("current")
+    zbw = j["temperature"]["series"].get("z_by_window", {})
+    win_lens = {w: len(v) for w, v in zbw.items()}
+    print("✓ spec.json:溫度(%s)=%s,%d 週點,%d 卡,各窗長度=%s" % (
+        dfw, cur, len(j["temperature"]["series"]["dates"]), len(j["indicators"]), win_lens))
 
 if __name__ == "__main__":
     main()

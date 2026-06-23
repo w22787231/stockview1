@@ -14,10 +14,10 @@ def test_build_spec_composite_and_temperature():
     context={"reddit_mentions":100,"reddit_top":["NVDA"],"margin_gdp_pct":4.4}
     weights={k:1.0 for k in S.SOURCE_KEYS}
     j=S.build_spec_json(sources, cards, context, weights, "2023-05-01T00:00:00Z")
-    assert j["temperature"]["current"] is not None and 0 <= j["temperature"]["current"] <= 100
-    assert j["temperature"]["current"] >= 50     # 近段抬升 → 偏熱
-    assert j["temperature"]["components"]["投機成長"] > 0
-    assert len(j["temperature"]["series"]["dates"]) == len(j["temperature"]["series"]["z"])
+    assert j["temperature"]["by_window"]["5y"]["current"] is not None and 0 <= j["temperature"]["by_window"]["5y"]["current"] <= 100
+    assert j["temperature"]["by_window"]["5y"]["current"] >= 50     # 近段抬升 → 偏熱
+    assert j["temperature"]["by_window"]["5y"]["components"]["投機成長"] > 0
+    assert len(j["temperature"]["series"]["dates"]) == len(j["temperature"]["series"]["z_by_window"]["5y"])
     assert j["indicators"]==cards and j["context"]==context
 
 def test_build_spec_short_source_safe():
@@ -35,8 +35,8 @@ def test_build_spec_skips_nan_source():
     sources = {k: up for k in S.SOURCE_KEYS}
     sources["融資GDP"] = pd.Series([np.nan]*len(idx), index=idx)   # 模擬歷史不足
     j = S.build_spec_json(sources, [], {}, {k:1.0 for k in S.SOURCE_KEYS}, "2023-05-01T00:00:00Z")
-    assert j["temperature"]["components"]["融資GDP"] is None        # 缺源 → None
-    assert j["temperature"]["current"] is not None                  # 其餘 5 源仍算出溫度
+    assert j["temperature"]["by_window"]["5y"]["components"]["融資GDP"] is None   # 缺源 → None
+    assert j["temperature"]["by_window"]["5y"]["current"] is not None             # 其餘 5 源仍算出溫度
 
 # ── Task 2: 純函式 sentiment 解析 ────────────────────────────────────────────
 
@@ -82,3 +82,39 @@ def test_build_spec_sp500_none_gives_empty():
     weights = {k: 1.0 for k in S.SOURCE_KEYS}
     j = S.build_spec_json(sources, [], {}, weights, "2023-05-01T00:00:00Z", sp500=None)
     assert j["temperature"]["series"].get("sp500") == [], "sp500=None 應輸出 []"
+
+# ── Task 4: 多窗測試 ──────────────────────────────────────────────────────────
+
+def test_build_spec_windows_present():
+    """temperature.windows 必須是 6 窗、z_by_window 每窗長度等於 dates 長度。"""
+    import numpy as np, pandas as pd
+    idx = pd.date_range("2008-01-01", periods=4000, freq="B")
+    vals = np.linspace(0, 1, len(idx))
+    base = pd.Series(vals, index=idx)
+    sources = {k: base for k in S.SOURCE_KEYS}
+    weights = {k: 1.0 for k in S.SOURCE_KEYS}
+    j = S.build_spec_json(sources, [], {}, weights, "2023-05-01T00:00:00Z")
+    T = j["temperature"]
+    assert T["windows"] == ["1m", "3m", "6m", "1y", "3y", "5y"], f"windows 錯誤: {T['windows']}"
+    dates_len = len(T["series"]["dates"])
+    for w in T["windows"]:
+        zw = T["series"]["z_by_window"][w]
+        assert len(zw) == dates_len, f"窗 {w}: z 長度 {len(zw)} != dates 長度 {dates_len}"
+
+
+def test_build_spec_windows_differ():
+    """不同窗(1y vs 5y)的 z 序列末點應不同(窗長不同→ rolling_z 不同)。"""
+    import numpy as np, pandas as pd
+    idx = pd.date_range("2008-01-01", periods=4000, freq="B")
+    # 近期明顯不同於長期平均 → 不同窗末點必定不同
+    vals = np.concatenate([np.linspace(0, 1, 3000), np.linspace(1, 8, 1000)])
+    base = pd.Series(vals, index=idx)
+    sources = {k: base for k in S.SOURCE_KEYS}
+    weights = {k: 1.0 for k in S.SOURCE_KEYS}
+    j = S.build_spec_json(sources, [], {}, weights, "2023-05-01T00:00:00Z")
+    z1y = j["temperature"]["series"]["z_by_window"]["1y"]
+    z5y = j["temperature"]["series"]["z_by_window"]["5y"]
+    # 末點(最後一個非 None)應不同
+    last1y = next((v for v in reversed(z1y) if v is not None), None)
+    last5y = next((v for v in reversed(z5y) if v is not None), None)
+    assert last1y != last5y, f"1y 末點({last1y}) 與 5y 末點({last5y}) 不應相同"

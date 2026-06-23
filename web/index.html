@@ -4055,6 +4055,8 @@ async function loadPI(){
 
 // ── 投機交易:溫度 + 六源橫條 + 歷史線 + 4 卡 + Reddit/融資旁註 ──────────────────────────
 let SPEC_DATA=null;
+let SPEC_WIN="5y";
+const SPEC_WIN_LABEL={"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
 async function loadSpec(){
   const host=document.getElementById("specBlock"); if(!host) return;
   if(SPEC_DATA){ renderSpec(); return; }
@@ -4063,6 +4065,7 @@ async function loadSpec(){
     const res=await fetch("data/spec.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(res.status);
     SPEC_DATA=await res.json();
+    if(SPEC_DATA.temperature && SPEC_DATA.temperature.default_window) SPEC_WIN=SPEC_DATA.temperature.default_window;
     renderSpec();
   }catch(e){
     host.innerHTML='<div class="dim" style="padding:8px">投機交易指標尚未產生（'+esc(e.message)+'）。</div>';
@@ -4105,18 +4108,27 @@ function drawSpecChart(id,dates,z,sp500){
 function _tempColor(t){ return t==null?"#8b949e":(t>=70?"#e11d48":(t>=40?"#c98a00":"#16a34a")); }
 function renderSpec(){
   const host=document.getElementById("specBlock"); if(!host||!SPEC_DATA) return;
-  const d=SPEC_DATA, T=d.temperature||{}, t=T.current, comp=T.components||{}, s=T.series||{};
+  const d=SPEC_DATA, T=d.temperature||{};
+  const win=SPEC_WIN;
+  const cur=(T.by_window||{})[win]||{};
+  const t=cur.current, comp=cur.components||{};
+  const s=T.series||{};
   const col=_tempColor(t), pct=(t==null?0:t);
   // 溫度條
   const bar='<div style="background:var(--line);border-radius:8px;height:14px;overflow:hidden;max-width:420px">'+
     '<div style="height:100%;width:'+pct+'%;background:'+col+'"></div></div>';
+  // 窗按鈕列
+  const winBtns=(T.windows||["5y"]).map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-spw="'+w+'">'+
+      (SPEC_WIN_LABEL[w]||w)+'</button>'
+  ).join("");
   // 六源橫條(z 已統一定向:z≥0 紅=投機、z<0 綠)
   const comps=Object.keys(comp).map(k=>{
     const z=comp[k]; if(z==null) return '<div class="dim" style="font-size:12px">'+esc(k)+' —</div>';
-    const w=Math.min(Math.abs(z)*28,140), c=z>=0?"var(--red)":"var(--green)";
+    const bw=Math.min(Math.abs(z)*28,140), c=z>=0?"var(--red)":"var(--green)";
     return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin:2px 0">'+
       '<span style="width:110px">'+esc(k)+'</span><span style="color:'+c+';width:46px;text-align:right">'+(z>=0?"+":"")+z.toFixed(2)+'</span>'+
-      '<span style="display:inline-block;height:10px;width:'+w+'px;background:'+c+';opacity:.55;border-radius:2px"></span></div>';
+      '<span style="display:inline-block;height:10px;width:'+bw+'px;background:'+c+';opacity:.55;border-radius:2px"></span></div>';
   }).join("");
   // 4 卡
   const cards=(d.indicators||[]).map(c=>{
@@ -4132,19 +4144,25 @@ function renderSpec(){
     (ctx.reddit_mentions!=null?'Reddit 當前提及 '+fmtNum(ctx.reddit_mentions)+(ctx.reddit_top&&ctx.reddit_top.length?'(熱門 '+ctx.reddit_top.map(esc).join("、")+')':''):''),
     (ctx.margin_gdp_pct!=null?'融資/GDP '+ctx.margin_gdp_pct+'%':'')
   ].filter(Boolean).join(" · ");
+  // 依窗裁切圖表資料
+  const WIN_N={"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
+  const allDates=s.dates||[], allSp=s.sp500||[], allZ=(s.z_by_window||{})[win]||[];
+  const n=Math.min(WIN_N[win]||allDates.length, allDates.length, (allSp.length||allDates.length), allZ.length);
+  const dates=allDates.slice(-n), z=allZ.slice(-n), sp=(allSp.length?allSp.slice(-n):[]);
   host.innerHTML=
     '<section style="margin-top:18px"><div class="sec-head"><h2>投機交易</h2></div>'+
     '<div class="legend">多源投機訊號(ARKK/SPY、高beta/低波、槓桿ETF量、BTC、COT槓桿基金、融資/GDP)標準化合成,'+
     '<b>投機溫度</b>=近5年百分位,越高越過熱。z 橫條:紅=偏投機、綠=偏冷。Reddit 為當下旁註(不進分數)。</div>'+
-    '<div class="legend"><span class="dim"><b>投機溫度（0–100）</b>＝投機強度在<b>近 5 年</b>分布的百分位（越高＝相對近 5 年越過熱）。<b>投機強度（z）</b>＝六源標準化後等權平均的原始分數（σ；0＝近 5 年常態、正＝偏投機）。兩者現已統一用 <b>5 年</b> 基準。<br>等權為透明起點；因風險偏好類來源較多，解讀偏重風險偏好面。</span></div>'+
+    '<div class="legend"><span class="dim"><b>投機溫度（0–100）</b>＝投機強度在<b>近 5 年</b>分布的百分位（越高＝相對近 5 年越過熱）。<b>投機強度（z）</b>＝六源標準化後等權平均的原始分數（σ；0＝近 5 年常態、正＝偏投機）。溫度口徑固定 5 年；視窗（'+esc(SPEC_WIN_LABEL[win]||win)+'）影響 z 圖與橫條。<br>等權為透明起點；因風險偏好類來源較多，解讀偏重風險偏好面。</span></div>'+
+    '<div style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0">'+winBtns+'</div>'+
     '<div style="display:flex;align-items:center;gap:10px;margin:8px 0"><span style="font-size:22px;font-weight:800;color:'+col+'">'+(t==null?"—":t)+'</span>'+
     '<span class="dim" style="font-size:12px">/100 投機溫度</span>'+bar+'</div>'+
     '<div id="specChart" style="width:100%;height:220px"></div>'+
     '<div style="margin-top:8px">'+comps+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'+cards+'</div>'+
     (ctxLine?'<div class="legend" style="margin-top:8px">'+ctxLine+'</div>':'')+'</section>';
-  const sp500Ser = s.sp500 || [];
-  drawSpecChart("specChart", s.dates||[], s.z||[], sp500Ser);
+  drawSpecChart("specChart", dates, z, sp);
+  host.querySelectorAll("[data-spw]").forEach(b=>b.onclick=()=>{ SPEC_WIN=b.dataset.spw; renderSpec(); });
 }
 // ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
 

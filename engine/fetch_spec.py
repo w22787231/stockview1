@@ -3,7 +3,7 @@
 import io, json, os, sys, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np, pandas as pd
-from fetch_pi import rolling_z, weighted_pi, _percentile, fetch_yf_close
+from fetch_pi import rolling_z, weighted_pi, _percentile, fetch_yf_close, WINDOWS
 
 SOURCE_KEYS = ["投機成長","高beta偏好","槓桿ETF熱度","風險偏好","COT槓桿基金","融資GDP"]
 
@@ -127,48 +127,57 @@ def assemble_spec_raw(start):
         context["margin_gdp_pct"] = L.get("ratio_pct")
     sp500 = yfc["SPY"] if "SPY" in yfc.columns else None
     return sources, cards, context, sp500
-Z_WIN = 1260         # 5 年(滾動 z 窗)
 PCT_LOOKBACK = 1260  # 5 年(溫度=composite z 的近 5 年百分位)
-MIN_PERIODS = 252    # z 最低資料門檻 = 1 年:讓歷史較短的源(如融資GDP ~2-3 年)也能算出 z 進合成;窗仍為 5 年
+DEFAULT_WINDOW = "5y"
+
+def _win_min_periods(wlen):
+    # 短窗用半窗(反應快);長窗上限 252(1年),讓歷史較短的源(如融資GDP ~2-3年)也能進合成
+    return max(min(wlen // 2, 252), 10)
+
+def _safe_last(col, last):
+    try:
+        v = col.loc[last]
+    except Exception:
+        return None
+    return None if pd.isna(v) else round(float(v), 2)
 
 def build_spec_json(sources, cards, context, weights, today_iso, sp500=None):
     present = [k for k in SOURCE_KEYS if k in sources and sources[k] is not None and sources[k].notna().any()]
+    win_keys = list(WINDOWS.keys())
     if not present:
         return {"generated_at": today_iso, "weights": weights, "indicators": cards or [],
-                "temperature": {"current": None, "series": {"dates": [], "z": [], "sp500": []},
-                                "components": {k: None for k in SOURCE_KEYS}}, "context": context or {}}
+                "temperature": {"default_window": DEFAULT_WINDOW, "windows": win_keys,
+                                "series": {"dates": [], "sp500": [], "z_by_window": {w: [] for w in win_keys}},
+                                "by_window": {w: {"current": None, "components": {k: None for k in SOURCE_KEYS}} for w in win_keys}},
+                "context": context or {}}
     idx = pd.bdate_range(min(sources[k].index.min() for k in present),
                          max(sources[k].index.max() for k in present))
-    z_df = pd.DataFrame({k: rolling_z(sources[k].reindex(idx).ffill(), Z_WIN, MIN_PERIODS) for k in present})
-    comp = weighted_pi(z_df, {k: weights.get(k, 1.0) for k in present})
-    valid = comp.dropna()
-    last = valid.index[-1] if len(valid) else idx[-1]
-    def _safe_last(col):
-        try:
-            v = col.loc[last]
-        except Exception:
-            return None
-        return None if pd.isna(v) else round(float(v), 2)
-    components = {k: (_safe_last(z_df[k]) if k in z_df.columns else None) for k in SOURCE_KEYS}
+    src_aligned = {k: sources[k].reindex(idx).ffill() for k in present}
     cutoff = idx.max() - pd.Timedelta(days=365*10)
     wk_idx = pd.Series(1, index=idx).resample("W-FRI").last().index
     wk_idx = wk_idx[wk_idx >= cutoff]
-    z_series = [None if pd.isna(v) else round(float(v), 4)
-                for v in comp.reindex(idx).ffill().reindex(wk_idx, method="ffill").values]
+    def _sample(s):
+        return [None if pd.isna(v) else round(float(v), 4)
+                for v in s.reindex(idx).ffill().reindex(wk_idx, method="ffill").values]
+    z_by_window, by_window = {}, {}
+    for w, wlen in WINDOWS.items():
+        mp = _win_min_periods(wlen)
+        z_df = pd.DataFrame({k: rolling_z(src_aligned[k], wlen, mp) for k in present})
+        comp = weighted_pi(z_df, {k: weights.get(k, 1.0) for k in present})
+        z_by_window[w] = _sample(comp)
+        valid = comp.dropna()
+        last = valid.index[-1] if len(valid) else idx[-1]
+        comps = {k: (_safe_last(z_df[k], last) if k in z_df.columns else None) for k in SOURCE_KEYS}
+        temp = _percentile(comp, PCT_LOOKBACK)
+        by_window[w] = {"current": (None if temp is None else int(temp)), "components": comps}
     if sp500 is not None:
-        sp500_aligned = sp500.reindex(idx).ffill().reindex(wk_idx, method="ffill")
-        sp500_series = [None if pd.isna(v) else round(float(v), 2) for v in sp500_aligned.values]
+        sp500_series = [None if pd.isna(v) else round(float(v), 2)
+                        for v in sp500.reindex(idx).ffill().reindex(wk_idx, method="ffill").values]
     else:
         sp500_series = []
-    temp = _percentile(comp, PCT_LOOKBACK)  # 0-100 或 None
-    return {
-        "generated_at": today_iso, "weights": weights,
-        "indicators": cards or [],
-        "temperature": {
-            "current": (None if temp is None else int(temp)),
-            "series": {"dates": [d.strftime("%Y-%m-%d") for d in wk_idx], "z": z_series,
-                       "sp500": sp500_series},
-            "components": components,
-        },
-        "context": context or {},
-    }
+    return {"generated_at": today_iso, "weights": weights, "indicators": cards or [],
+            "temperature": {"default_window": DEFAULT_WINDOW, "windows": win_keys,
+                            "series": {"dates": [d.strftime("%Y-%m-%d") for d in wk_idx],
+                                       "sp500": sp500_series, "z_by_window": z_by_window},
+                            "by_window": by_window},
+            "context": context or {}}

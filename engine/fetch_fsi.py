@@ -8,8 +8,8 @@ OFR FSI 已標準化(0=正常,正=壓力高於常態),不需再算 z。"""
 import urllib.request, io, csv
 
 OFR_URL = "https://www.financialresearch.gov/financial-stress-index/data/fsi.csv"
-KEEP = 1500   # 落盤保留最近 N 交易日(覆蓋 5 年窗 1260 + MA 暖機)
-WINDOWS = ["1m", "3m", "6m", "1y", "3y", "5y"]
+KEEP = 10000  # 落盤保留(OFR 全史 ~6700 點/2000 至今,夠 10年/全部 窗;tail 取最近 N)
+WINDOWS = ["1m", "3m", "6m", "1y", "3y", "5y", "10y", "max"]
 CAT_MAP = [("Credit", "信用"), ("Equity valuation", "股票評價"), ("Safe assets", "安全資產"),
            ("Funding", "資金面"), ("Volatility", "波動")]
 REG_MAP = [("United States", "美國"), ("Other advanced economies", "其他成熟"),
@@ -111,7 +111,7 @@ def build_fsi_json(records, sp_map, today, keep=KEEP):
     fsi = [r["fsi"] for r in records]
     ma20 = moving_avg(fsi, 20)
     ma50 = moving_avg(fsi, 50)
-    ma200 = moving_avg(fsi, 200)
+    ma60 = moving_avg(fsi, 60)
     sp500 = align_sp500(dates, sp_map)
 
     def tail(a):
@@ -128,14 +128,14 @@ def build_fsi_json(records, sp_map, today, keep=KEEP):
         "current": last["fsi"],
         "ma20_last": ma20[-1],
         "ma50_last": ma50[-1],
-        "ma200_last": ma200[-1],
+        "ma60_last": ma60[-1],
         "breakdown": {"categories": cats, "regions": regs},
         "series": {
             "dates": tail(dates),
             "fsi": tail(fsi),
             "ma20": tail(ma20),
             "ma50": tail(ma50),
-            "ma200": tail(ma200),
+            "ma60": tail(ma60),
             "sp500": tail(sp500),
         },
     }

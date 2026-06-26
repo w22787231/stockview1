@@ -3915,44 +3915,48 @@ function drawCapLines(id,dates,series,unit){
 // ── 金融壓力指數(OFR FSI):FSI + 20MA + 50MA + S&P500 四線疊圖 + 窗 + 5類/3地區拆解 ──
 let FSI_DATA = null;
 let FSI_WIN  = "5y";
-const FSI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
+let FSI_INV  = false;   // 反轉視角:顯示 −FSI(與股市同向)
+const FSI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
 
-function drawFsiChart(id, dates, fsi, ma20, ma50, ma200, sp500){
+function drawFsiChart(id, dates, fsi, ma20, ma50, ma60, sp500, inv){
   const el = $("#"+id);
   if(!el || !window.echarts) return;
   const _old = echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch = echarts.init(el, null, {renderer:"canvas"});
+  const sgn = inv ? -1 : 1;
   const toMs = s => new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
-  const L = (name,arr)=>dates.map((d,i)=>[toMs(d), (arr&&arr[i]!=null)?arr[i]:null]);
+  const L  = arr=>dates.map((d,i)=>[toMs(d), (arr&&arr[i]!=null)? sgn*arr[i] : null]);   // FSI 族:反轉時取負
+  const Lsp= arr=>dates.map((d,i)=>[toMs(d), (arr&&arr[i]!=null)? arr[i] : null]);        // S&P500 不變
+  const fsiName = inv ? "風險偏好 −FSI" : "金融壓力 FSI";
   ch.setOption({
     grid:{left:56, right:56, top:30, bottom:30},
     legend:{top:0, textStyle:{fontSize:10}, itemWidth:16, itemHeight:8,
-      data:["金融壓力 FSI","FSI 20MA","FSI 50MA","FSI 200MA","S&P 500"]},
+      data:[fsiName,"FSI 20MA","FSI 50MA","FSI 60MA","S&P 500"]},
     tooltip:{trigger:"axis"},
     xAxis:{type:"time", axisLabel:{fontSize:9, hideOverlap:true,
       formatter:(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:[
-      {type:"value", name:"FSI", nameTextStyle:{fontSize:10}, scale:true,
+      {type:"value", name:(inv?"−FSI":"FSI"), nameTextStyle:{fontSize:10}, scale:true,
        axisLabel:{fontSize:10}, splitLine:{lineStyle:{opacity:.3}}},
       {type:"value", name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
        axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"}
     ],
     series:[
-      {name:"金融壓力 FSI", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("fsi",fsi),
+      {name:fsiName, type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(fsi),
        lineStyle:{color:"#e11d48", width:2.4}, itemStyle:{color:"#e11d48"},
        areaStyle:{color:"#e11d48", opacity:.06},
        markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[
          {yAxis:0},
-         {yAxis:-1, lineStyle:{color:"#e11d48",type:[8,6],width:1.4,opacity:.85},
-          label:{formatter:"−1",position:"insideEndTop",color:"#e11d48",fontSize:10}}
+         {yAxis:sgn*-1, lineStyle:{color:"#e11d48",type:[8,6],width:1.4,opacity:.85},
+          label:{formatter:(inv?"+1":"−1"),position:"insideEndTop",color:"#e11d48",fontSize:10}}
        ]}},
-      {name:"FSI 20MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma20",ma20),
+      {name:"FSI 20MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma20),
        lineStyle:{color:"#f59e0b", width:1.4}, itemStyle:{color:"#f59e0b"}},
-      {name:"FSI 50MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma50",ma50),
+      {name:"FSI 50MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma50),
        lineStyle:{color:"#9333ea", width:1.4}, itemStyle:{color:"#9333ea"}},
-      {name:"FSI 200MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma200",ma200),
+      {name:"FSI 60MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma60),
        lineStyle:{color:"#0d9488", width:1.6}, itemStyle:{color:"#0d9488"}},
-      {name:"S&P 500", type:"line", smooth:true, showSymbol:false, yAxisIndex:1, data:L("sp",sp500),
+      {name:"S&P 500", type:"line", smooth:true, showSymbol:false, yAxisIndex:1, data:Lsp(sp500),
        lineStyle:{color:"#2563eb", width:1.4, type:"dashed"}, itemStyle:{color:"#2563eb"}}
     ]
   }, true);
@@ -3983,12 +3987,13 @@ function fsiBreakdownBars(items, ref){
 function renderFsi(d){
   const box = $("#fsiBlock");
   if(!box) return;
-  const win = FSI_WIN;
+  const win = FSI_WIN, inv = FSI_INV, sgn = inv ? -1 : 1;
   const cur = d.current;
-  const fsiTxt = cur != null ? (cur>0?"+":"")+cur.toFixed(3) : "—";
-  const ma20 = d.ma20_last, ma50 = d.ma50_last, ma200 = d.ma200_last;
+  const ma20 = d.ma20_last, ma50 = d.ma50_last, ma60 = d.ma60_last;
+  // 顯示值:反轉時取負(數值卡與線一致);顏色仍依原始壓力(紅=壓力、綠=平靜)
+  const dv = x => x==null ? "—" : ((sgn*x)>0?"+":"")+(sgn*x).toFixed(3);
   const fsiColor = (cur!=null && cur>0) ? "#e11d48" : "#16a34a";
-  // 趨勢註解:FSI vs 20/50MA
+  // 趨勢註解(依原始 FSI vs 20/50MA,反轉與否都是談壓力)
   let trend = "";
   if(cur!=null && ma20!=null && ma50!=null){
     if(cur>ma20 && ma20>ma50) trend = '<b class="neg">壓力升溫</b>(FSI 上穿均線)';
@@ -4000,6 +4005,7 @@ function renderFsi(d){
   const btns = wins.map(w=>
     '<button class="btn'+(w===win?" active":"")+'" data-fsiw="'+w+'">'+(FSI_WIN_LABEL[w]||w)+'</button>'
   ).join("");
+  const invBtn = '<button class="btn'+(inv?" active":"")+'" id="fsiInvBtn" title="反轉視角:顯示 −FSI,讓壓力線與 S&amp;P500 同向(正相關),較直觀">🔄 反轉視角'+(inv?"(−FSI)":"")+'</button>';
 
   const bd = d.breakdown || {};
   const cats = bd.categories || [], regs = bd.regions || [];
@@ -4007,24 +4013,28 @@ function renderFsi(d){
   let ref = 0.5;
   cats.concat(regs).forEach(x=>{ if(x.val!=null) ref = Math.max(ref, Math.abs(x.val)); });
   const card = 'border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
+  const curLab = inv ? "−FSI 現值" : "FSI 現值";
 
   box.innerHTML =
     '<section>'+
       '<div class="sec-head"><h2>金融壓力指數(OFR FSI)</h2>'+
-        '<span class="tag">美財政部 OFR · 每日</span>'+
-        '<span class="hint">FSI&gt;0 壓力高於常態(紅)、FSI&lt;0 低於常態(綠);上穿 20/50MA＝壓力升溫</span></div>'+
+        '<span class="tag">美財政部 OFR · 每日 · 2000~</span>'+
+        '<span class="hint">'+(inv
+          ? '反轉視角:顯示 <b>−FSI</b>(↑＝風險偏好升、與股市<b class="pos">同向</b>);數值已取負'
+          : 'FSI&gt;0 壓力高於常態(紅)、FSI&lt;0 低於常態(綠);上穿 20/50MA＝壓力升溫')+'</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
-        '<div style="'+card+'"><div class="cap-lab">FSI 現值</div>'+
-          '<div class="cap-big" style="color:'+fsiColor+'">'+esc(fsiTxt)+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">'+curLab+'</div>'+
+          '<div class="cap-big" style="color:'+fsiColor+'">'+esc(dv(cur))+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">20 日均線</div>'+
-          '<div class="cap-big">'+(ma20!=null?(ma20>0?"+":"")+ma20.toFixed(3):"—")+'</div></div>'+
+          '<div class="cap-big">'+dv(ma20)+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">50 日均線</div>'+
-          '<div class="cap-big">'+(ma50!=null?(ma50>0?"+":"")+ma50.toFixed(3):"—")+'</div></div>'+
-        '<div style="'+card+'"><div class="cap-lab">200 日均線</div>'+
-          '<div class="cap-big" style="color:#0d9488">'+(ma200!=null?(ma200>0?"+":"")+ma200.toFixed(3):"—")+'</div></div>'+
+          '<div class="cap-big">'+dv(ma50)+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">60 日均線</div>'+
+          '<div class="cap-big" style="color:#0d9488">'+dv(ma60)+'</div></div>'+
         (trend?'<div class="dim" style="font-size:12px;align-self:center">趨勢:'+trend+'</div>':'')+
       '</div>'+
-      '<div style="margin-bottom:8px">'+btns+'</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+
+        '<span style="width:1px;height:18px;background:var(--line);margin:0 4px"></span>'+invBtn+'</div>'+
       '<div id="fsiChart" class="cap-chart" style="height:270px"></div>'+
       '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:14px">'+
         '<div style="flex:1;min-width:240px">'+
@@ -4034,18 +4044,18 @@ function renderFsi(d){
           '<div class="cap-sub2">壓力來源 · 3 地區(最新)</div>'+
           '<div style="margin-top:6px">'+fsiBreakdownBars(regs, ref)+'</div></div>'+
       '</div>'+
-      '<div class="legend" style="margin-top:10px">資料來源:OFR Financial Stress Index(美國財政部金融研究辦公室)+ Yahoo Finance。OFR FSI 由 33 個市場變數標準化合成,0=正常;5 類/3 地區為加法拆解(加總≈總指數)。視窗 '+esc(FSI_WIN_LABEL[win]||win)+',資料日 '+esc(d.as_of||"")+'。</div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:OFR Financial Stress Index(美國財政部金融研究辦公室)+ Yahoo Finance。OFR FSI 由 33 個市場變數標準化合成,0=正常;5 類/3 地區為加法拆解(加總≈總指數)。視窗 '+esc(FSI_WIN_LABEL[win]||win)+',資料日 '+esc(d.as_of||"")+'。'+(inv?'<b>(反轉視角:線與卡為 −FSI;下方「壓力來源」仍為原始壓力口徑)</b>':'')+'</div>'+
     '</section>';
 
-  // 依窗截取最近 N 筆
+  // 依窗截取最近 N 筆('max' 不在 WIN_N → 退回全長)
   const ser = d.series || {};
   const allDates = ser.dates || [];
-  const WIN_N = {"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
+  const WIN_N = {"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};
   const n = Math.min(WIN_N[win] || allDates.length, allDates.length);
   const sl = a => (a||[]).slice(-n);
   const dates = sl(allDates);
   if(dates.length>=2){
-    drawFsiChart("fsiChart", dates, sl(ser.fsi), sl(ser.ma20), sl(ser.ma50), sl(ser.ma200), sl(ser.sp500));
+    drawFsiChart("fsiChart", dates, sl(ser.fsi), sl(ser.ma20), sl(ser.ma50), sl(ser.ma60), sl(ser.sp500), inv);
   } else {
     const c=$("#fsiChart"); if(c) c.innerHTML='<div class="legend">資料點不足,無法繪圖。</div>';
   }
@@ -4054,6 +4064,8 @@ function renderFsi(d){
     FSI_WIN = b.dataset.fsiw;
     renderFsi(FSI_DATA);
   });
+  const ib = box.querySelector("#fsiInvBtn");
+  if(ib) ib.onclick=()=>{ FSI_INV = !FSI_INV; renderFsi(FSI_DATA); };
 }
 
 async function loadFsi(){

@@ -67,12 +67,13 @@ def test_build_fsi_json_shape():
     sp = {r["date"]: base + i for i, r in enumerate(recs)}
     j = F.build_fsi_json(recs, sp, "2026-05-30", keep=40)
     assert j["default_window"] == "5y"
-    assert j["windows"] == ["1m", "3m", "6m", "1y", "3y", "5y"]
+    assert j["windows"] == ["1m", "3m", "6m", "1y", "3y", "5y", "10y", "max"]
     s = j["series"]
     assert len(s["dates"]) == 40 and len(s["fsi"]) == 40
     assert len(s["ma20"]) == 40 and len(s["ma50"]) == 40 and len(s["sp500"]) == 40
-    assert len(s["ma200"]) == 40            # 200MA 序列存在(此測資<200點→全 None,長度仍對齊)
-    assert s["ma200"][-1] is None
+    assert len(s["ma60"]) == 40             # 60MA 序列存在且長度對齊
+    assert s["ma60"][0] is None             # 視窗開頭(整體第20點)不足 60 → None
+    assert s["ma60"][-1] is not None        # 末點(整體第60點)有值
     assert s["ma20"][-1] is not None   # 末點 MA 有值
     cats = {c["key"]: c["val"] for c in j["breakdown"]["categories"]}
     assert cats["信用"] == -1.0 and "波動" in cats

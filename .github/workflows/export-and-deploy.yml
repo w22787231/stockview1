@@ -90,6 +90,16 @@ jobs:
           cd engine
           python export_pi.py || echo "[pi] 失敗,沿用線上"
 
+      - name: Export financial stress index (OFR FSI)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          pip install yfinance -q || true
+          cd engine
+          python export_fsi.py || echo "[fsi] 失敗,沿用線上"
+
       - name: Export Taiwan themes (sector/theme baskets)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

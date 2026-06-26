@@ -1210,6 +1210,7 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<section>'+
@@ -1226,6 +1227,7 @@ function renderMacro(d){
   if(d.m1b_m2) drawM1M2(d.m1b_m2);
   loadSentiment();
   loadThemes();
+  loadFsi();
   loadPI();
   loadSpec();
 }
@@ -1445,10 +1447,10 @@ function sp500FwdPeBox(v){
       (v.avg5?(' · FactSet 5年均 '+v.avg5+'／10年均 '+v.avg10):'')+
       ((Array.isArray(v.spy)&&v.spy.length)?' · <b style="color:#9333ea">紫線=SPY 收盤(右軸)</b>,對照估值 vs 價格走勢':'')+
       '。forward＝用未來12個月預估EPS,故低於 trailing。</div>'+
-    '<div class="ex" style="margin-top:4px">延伸參考 →'+
-      ' <a href="https://www.macromicro.me/charts/148300/NASDAQ-100-Index-Forward-PE-Ratio" target="_blank" rel="noopener" style="color:var(--acc)">QQQ (NDX100) Forward P/E ↗</a>'+
-      ' · <a href="https://www.macromicro.me/charts/148308/Information-Technology-Sector-Forward-PE-Ratio" target="_blank" rel="noopener" style="color:var(--acc)">科技類股 Forward P/E ↗</a>'+
-      ' <span style="color:var(--dim);font-size:10px">（MacroMicro）</span></div>'+
+    '<div class="ex" style="margin-top:4px;color:var(--red);font-weight:600">延伸參考 →'+
+      ' <a href="https://www.macromicro.me/charts/148300/NASDAQ-100-Index-Forward-PE-Ratio" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline">QQQ (NDX100) Forward P/E ↗</a>'+
+      ' · <a href="https://www.macromicro.me/charts/148308/Information-Technology-Sector-Forward-PE-Ratio" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline">科技類股 Forward P/E ↗</a>'+
+      ' <span style="color:var(--red);font-size:10px">（MacroMicro）</span></div>'+
     '</div>';
 }
 function drawSp500FwdPe(v){
@@ -3910,6 +3912,160 @@ function drawCapLines(id,dates,series,unit){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 // ── 流動性壓力指數(PI) ── 雙軸折線圖 + 窗切換 + 六因子橫條 ──
+// ── 金融壓力指數(OFR FSI):FSI + 20MA + 50MA + S&P500 四線疊圖 + 窗 + 5類/3地區拆解 ──
+let FSI_DATA = null;
+let FSI_WIN  = "5y";
+const FSI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
+
+function drawFsiChart(id, dates, fsi, ma20, ma50, sp500){
+  const el = $("#"+id);
+  if(!el || !window.echarts) return;
+  const _old = echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch = echarts.init(el, null, {renderer:"canvas"});
+  const toMs = s => new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const L = (name,arr)=>dates.map((d,i)=>[toMs(d), (arr&&arr[i]!=null)?arr[i]:null]);
+  ch.setOption({
+    grid:{left:56, right:56, top:30, bottom:30},
+    legend:{top:0, textStyle:{fontSize:10}, itemWidth:16, itemHeight:8,
+      data:["金融壓力 FSI","FSI 20MA","FSI 50MA","S&P 500"]},
+    tooltip:{trigger:"axis"},
+    xAxis:{type:"time", axisLabel:{fontSize:9, hideOverlap:true,
+      formatter:(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:[
+      {type:"value", name:"FSI", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value", name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"}
+    ],
+    series:[
+      {name:"金融壓力 FSI", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("fsi",fsi),
+       lineStyle:{color:"#e11d48", width:2.4}, itemStyle:{color:"#e11d48"},
+       areaStyle:{color:"#e11d48", opacity:.06},
+       markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}},
+      {name:"FSI 20MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma20",ma20),
+       lineStyle:{color:"#f59e0b", width:1.4}, itemStyle:{color:"#f59e0b"}},
+      {name:"FSI 50MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma50",ma50),
+       lineStyle:{color:"#9333ea", width:1.4}, itemStyle:{color:"#9333ea"}},
+      {name:"S&P 500", type:"line", smooth:true, showSymbol:false, yAxisIndex:1, data:L("sp",sp500),
+       lineStyle:{color:"#2563eb", width:1.4, type:"dashed"}, itemStyle:{color:"#2563eb"}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro = ()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+// 拆解橫條(中心 0,正=壓力紅、負=低於常態綠);items=[{key,val}],ref=共用刻度
+function fsiBreakdownBars(items, ref){
+  return items.map(it=>{
+    const v = it.val;
+    if(v == null) return "";
+    const pct_bar = Math.min(Math.abs(v)/ref*100, 100);
+    const isNeg = v < 0;
+    const stressed = v >= 0;
+    return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0">'+
+      '<div style="width:88px;font-size:12px;color:var(--ink2);text-align:right;flex-shrink:0">'+esc(it.key)+'</div>'+
+      '<div style="flex:1;background:var(--line);border-radius:4px;height:10px;position:relative;min-width:80px">'+
+        '<div style="position:absolute;'+(isNeg?"right:50%":"left:50%")+';width:'+pct_bar/2+'%;height:100%;background:'+(stressed?"#e11d48":"#16a34a")+';border-radius:4px"></div>'+
+        '<div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:var(--ink3)"></div>'+
+      '</div>'+
+      '<div style="width:48px;font-size:12px;text-align:right;flex-shrink:0" class="'+(stressed?"neg":"pos")+'">'+(v>0?"+":"")+v.toFixed(3)+'</div>'+
+    '</div>';
+  }).join("");
+}
+
+function renderFsi(d){
+  const box = $("#fsiBlock");
+  if(!box) return;
+  const win = FSI_WIN;
+  const cur = d.current;
+  const fsiTxt = cur != null ? (cur>0?"+":"")+cur.toFixed(3) : "—";
+  const ma20 = d.ma20_last, ma50 = d.ma50_last;
+  const fsiColor = (cur!=null && cur>0) ? "#e11d48" : "#16a34a";
+  // 趨勢註解:FSI vs 20/50MA
+  let trend = "";
+  if(cur!=null && ma20!=null && ma50!=null){
+    if(cur>ma20 && ma20>ma50) trend = '<b class="neg">壓力升溫</b>(FSI 上穿均線)';
+    else if(cur<ma20 && ma20<ma50) trend = '<b class="pos">壓力降溫</b>(FSI 跌破均線)';
+    else trend = "盤整";
+  }
+
+  const wins = d.windows || ["1m","3m","6m","1y","3y","5y"];
+  const btns = wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-fsiw="'+w+'">'+(FSI_WIN_LABEL[w]||w)+'</button>'
+  ).join("");
+
+  const bd = d.breakdown || {};
+  const cats = bd.categories || [], regs = bd.regions || [];
+  // 共用刻度 = 所有分量絕對值最大(至少 0.5,避免小值爆滿)
+  let ref = 0.5;
+  cats.concat(regs).forEach(x=>{ if(x.val!=null) ref = Math.max(ref, Math.abs(x.val)); });
+  const card = 'border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
+
+  box.innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>金融壓力指數(OFR FSI)</h2>'+
+        '<span class="tag">美財政部 OFR · 每日</span>'+
+        '<span class="hint">FSI&gt;0 壓力高於常態(紅)、FSI&lt;0 低於常態(綠);上穿 20/50MA＝壓力升溫</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
+        '<div style="'+card+'"><div class="cap-lab">FSI 現值</div>'+
+          '<div class="cap-big" style="color:'+fsiColor+'">'+esc(fsiTxt)+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">20 日均線</div>'+
+          '<div class="cap-big">'+(ma20!=null?(ma20>0?"+":"")+ma20.toFixed(3):"—")+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">50 日均線</div>'+
+          '<div class="cap-big">'+(ma50!=null?(ma50>0?"+":"")+ma50.toFixed(3):"—")+'</div></div>'+
+        (trend?'<div class="dim" style="font-size:12px;align-self:center">趨勢:'+trend+'</div>':'')+
+      '</div>'+
+      '<div style="margin-bottom:8px">'+btns+'</div>'+
+      '<div id="fsiChart" class="cap-chart" style="height:270px"></div>'+
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:14px">'+
+        '<div style="flex:1;min-width:240px">'+
+          '<div class="cap-sub2">壓力來源 · 5 大類(最新,紅=加壓)</div>'+
+          '<div style="margin-top:6px">'+fsiBreakdownBars(cats, ref)+'</div></div>'+
+        '<div style="flex:1;min-width:240px">'+
+          '<div class="cap-sub2">壓力來源 · 3 地區(最新)</div>'+
+          '<div style="margin-top:6px">'+fsiBreakdownBars(regs, ref)+'</div></div>'+
+      '</div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:OFR Financial Stress Index(美國財政部金融研究辦公室)+ Yahoo Finance。OFR FSI 由 33 個市場變數標準化合成,0=正常;5 類/3 地區為加法拆解(加總≈總指數)。視窗 '+esc(FSI_WIN_LABEL[win]||win)+',資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  // 依窗截取最近 N 筆
+  const ser = d.series || {};
+  const allDates = ser.dates || [];
+  const WIN_N = {"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
+  const n = Math.min(WIN_N[win] || allDates.length, allDates.length);
+  const sl = a => (a||[]).slice(-n);
+  const dates = sl(allDates);
+  if(dates.length>=2){
+    drawFsiChart("fsiChart", dates, sl(ser.fsi), sl(ser.ma20), sl(ser.ma50), sl(ser.sp500));
+  } else {
+    const c=$("#fsiChart"); if(c) c.innerHTML='<div class="legend">資料點不足,無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-fsiw]").forEach(b=>b.onclick=()=>{
+    FSI_WIN = b.dataset.fsiw;
+    renderFsi(FSI_DATA);
+  });
+}
+
+async function loadFsi(){
+  const box = $("#fsiBlock");
+  if(!box) return;
+  if(FSI_DATA){ renderFsi(FSI_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入金融壓力指數 …</div>';
+  try{
+    const res = await fetch("data/fsi.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    FSI_DATA = await res.json();
+    if(FSI_DATA.default_window) FSI_WIN = FSI_DATA.default_window;
+    renderFsi(FSI_DATA);
+  }catch(e){
+    if(box) box.innerHTML =
+      '<section><div class="sec-head"><h2>金融壓力指數(OFR FSI)</h2></div>'+
+      '<div class="legend">⚠️ fsi.json 尚未產生('+esc(e.message)+')。請先在 GitHub Actions 執行 export_fsi。</div></section>';
+  }
+}
+
 let PI_DATA = null;
 let PI_WIN  = "5y";
 const PI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};

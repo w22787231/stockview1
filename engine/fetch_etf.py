@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""抓取 5 檔台股主動式ETF每日持股,輸出統一格式 list[dict]:
+"""抓取 9 檔台股主動式ETF每日持股,輸出統一格式 list[dict]:
    {etf, etf_name, code, name, weight, qty}
-   來源(已驗證 2026-06-04):統一 ezmoney / 群益 capitalfund / 元大 yuantaetfs。野村已取消。"""
-import ssl, gzip, re, json, http.cookiejar
+   來源(已驗證 2026-06-26):統一 ezmoney / 群益 capitalfund / 元大 yuantaetfs /
+   富邦 fsit Assets.aspx / 聯博 webapi /holdings / 凱基 kgifund Detail / 安聯 allianzgi POST。野村已取消。"""
+import ssl, gzip, re, json, http.cookiejar, html
 import urllib.request as U
 
 _CTX = ssl.create_default_context(); _CTX.check_hostname=False; _CTX.verify_mode=ssl.CERT_NONE
@@ -16,6 +17,10 @@ ETFS = {
     "00403A": {"name":"統一台股升級50",    "src":"tongyi", "fundCode":"63YTW"},
     "00982A": {"name":"群益台灣精選強棒",  "src":"capital","path":"399"},
     "00990A": {"name":"元大全球AI新經濟",  "src":"yuanta"},
+    "00405A": {"name":"富邦台灣龍耀",      "src":"fubon"},
+    "00404A": {"name":"聯博動能50",        "src":"ab",     "isin":"TW00000404A5"},
+    "00407A": {"name":"凱基台灣",          "src":"kgi",    "fundID":"J024"},
+    "00402A": {"name":"安聯美國科技領航",  "src":"allianz","fund_no":"E0003"},
 }
 
 def _get(opener, url):
@@ -157,7 +162,100 @@ def fetch_yuanta(etf, info):
         rows.append(_rec(etf,info,code,name,wv,q))
     return rows
 
-_FETCH={"tongyi":fetch_tongyi,"capital":fetch_capital,"yuanta":fetch_yuanta}
+def fetch_fubon(etf, info):
+    """富邦投信 Assets.aspx(純 GET HTML):持股表欄序 代號/名稱/股數/金額/權重%。
+       注意:Pcf.aspx 對主動式 ETF 不揭露個股,要用 Assets.aspx。qty 原始股數→張(//1000)。"""
+    op=U.build_opener(_H()); op.addheaders=_UA
+    t=_get(op, f"https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId={etf}&lan=TW")
+    rows=[]; seen=set()
+    for tab in re.findall(r'<table.*?</table>', t, re.S):
+        if "股票代號" not in tab and "股數" not in tab: continue
+        for tr in re.findall(r'<tr[^>]*>(.*?)</tr>', tab, re.S):
+            cells=re.findall(r'<td[^>]*>(.*?)</td>', tr, re.S)
+            if len(cells)<5: continue
+            vals=[html.unescape(re.sub(r'<[^>]+>',' ',c)).strip() for c in cells]
+            code=vals[0].rstrip("*").strip()
+            if not re.match(r'^[0-9]{4,6}[A-Z]?$', code) or code in seen: continue
+            seen.add(code)
+            qs=vals[2].replace(",","")
+            q=str(int(float(qs))//1000) if re.match(r'^[0-9.]+$', qs) else ""
+            rows.append(_rec(etf,info,code,vals[1].rstrip("*"),vals[4],q))
+    return rows
+
+def fetch_ab(etf, info):
+    """聯博 AB webapi /holdings(純 GET JSON):取 holdingCategory==holdings-section-equity 段。
+       info['isin'] 必填(如 TW00000404A5)。qty 股數→張;weight=holdingPerc(%)。"""
+    op=U.build_opener(_H()); op.addheaders=_UA
+    isin=info.get("isin") or f"TW00000{etf}5"
+    data=json.loads(_get(op, f"https://webapi.alliancebernstein.com/v2/funds/tw/zh-tw/investor/{isin}/holdings"))
+    rows=[]; seen=set()
+    for sec in data.get("domesticHoldings",[]) or []:
+        if sec.get("holdingCategory")!="holdings-section-equity": continue
+        for h in sec.get("holdings",[]) or []:
+            code=(h.get("holdingCode") or "").strip()
+            if not (code and code[:4].isdigit()) or code in seen: continue   # 排現金/選擇權/期貨(無代號)
+            seen.add(code)
+            q=str(int(float(h.get("holdingShares") or 0))//1000)
+            w=h.get("holdingPerc"); w="" if w in (None,"") else str(w)
+            rows.append(_rec(etf,info,code,h.get("holding") or "",w,q))
+    return rows
+
+def fetch_kgi(etf, info):
+    """凱基投信 Fund/Detail?fundID=(純 GET HTML):<tr name=content> 4td 代號/名稱/股數/權重%。
+       踩雷:持股表在頁面出現兩次→用 code 去重;名稱是 HTML entity→unescape。qty 股數→張。"""
+    op=U.build_opener(_H()); op.addheaders=_UA
+    t=_get(op, f"https://www.kgifund.com.tw/Fund/Detail?fundID={info['fundID']}")
+    rows=[]; seen=set()
+    for tr in re.findall(r'<tr name="content"[^>]*>(.*?)</tr>', t, re.S):
+        tds=re.findall(r'<td[^>]*>(.*?)</td>', tr, re.S)
+        if len(tds)<4: continue
+        cells=[html.unescape(re.sub(r'<[^>]+>','',c)).strip() for c in tds]
+        code=cells[0].rstrip("*").strip()
+        if not re.match(r'^[0-9]{4,6}[A-Z]?$', code) or code in seen: continue
+        seen.add(code)
+        qs=cells[2].replace(",","")
+        q=str(int(qs)//1000) if qs.isdigit() else ""
+        rows.append(_rec(etf,info,code,cells[1].rstrip("*"),cells[3],q))
+    return rows
+
+def fetch_allianz(etf, info):
+    """安聯 ETF(美股持股):3 步 cookie(WAF→antiforgery→POST GetFundAssets)。
+       code 為「NVDA US」、name 可能含「.」(Amazon.com Inc)→繞過 _clean_name 直接建 record。
+       qty 原始股數→張(//1000,與統一全球創新海外同口徑)。info['fund_no']=E0003。"""
+    fund_no=info.get("fund_no","E0003")
+    base="https://etf.allianzgi.com.tw"; api=base+"/webapi/api"
+    cj=http.cookiejar.CookieJar()
+    op=U.build_opener(U.HTTPCookieProcessor(cj), _H()); op.addheaders=_UA
+    try: op.open(base+"/", timeout=30).read()
+    except Exception: pass
+    op.open(api+"/AntiForgery/GetAntiForgeryToken", timeout=30).read()
+    xsrf=next((c.value for c in cj if c.name=="X-XSRF-TOKEN"), "")
+    req=U.Request(api+"/Fund/GetFundAssets", data=json.dumps({"FundID":fund_no}).encode(),
+                  headers={"Content-Type":"application/json","x-xsrf-token":xsrf or "",
+                           "Origin":base,"Referer":base+"/etf-info/"+fund_no})
+    d=op.open(req, timeout=40).read()
+    if d[:2]==b'\x1f\x8b': d=gzip.decompress(d)
+    j=json.loads(d.decode("utf-8","replace"))
+    rows=[]; seen=set()
+    for tbl in (j.get("Entries",{}) or {}).get("Data",{}).get("Table",[]) or []:
+        cols=[c.get("Name") for c in tbl.get("Columns",[]) or []]
+        if "股票代號" not in cols: continue
+        ic=cols.index("股票代號"); inm=cols.index("股票名稱")
+        iq=cols.index("股數") if "股數" in cols else None
+        iw=cols.index("權重(%)") if "權重(%)" in cols else None
+        for row in tbl.get("Rows",[]) or []:
+            code=(row[ic] or "").strip(); name=(row[inm] or "").strip()
+            if not code or not name or code in seen: continue
+            if any(k in name for k in ("現金","應收","應付","存款")): continue
+            seen.add(code)
+            qs=(row[iq] or "").replace(",","").strip() if iq is not None else ""
+            q=str(int(float(qs))//1000) if re.match(r'^[0-9.]+$', qs) else ""
+            w=(row[iw] or "").replace("%","").strip() if iw is not None else ""
+            rows.append({"etf":etf,"etf_name":info["name"],"code":code,"name":name,"weight":w,"qty":q})
+    return rows
+
+_FETCH={"tongyi":fetch_tongyi,"capital":fetch_capital,"yuanta":fetch_yuanta,
+        "fubon":fetch_fubon,"ab":fetch_ab,"kgi":fetch_kgi,"allianz":fetch_allianz}
 
 def fetch_all():
     out={}

@@ -2026,7 +2026,7 @@ function renderSmartDetail(ticker){
 // ── ETF 持股異動分頁 ───────────────────────────────
 async function loadEtf(){
   for(const k in SORT_STATE) delete SORT_STATE[k];
-  $("#meta").innerHTML='<div><b>ETF 持股異動</b> 5 檔主動式ETF</div><div>每日追蹤 · 來源各發行商官網</div>';
+  $("#meta").innerHTML='<div><b>ETF 持股異動</b> 9 檔主動式ETF</div><div>每日追蹤 · 來源各發行商官網</div>';
   $("#poolNote").innerHTML="";
   if(ETF_DATA){ renderEtf(); return; }
   $("#content").innerHTML='<div class="loading-screen">載入 ETF 持股異動 …</div>';

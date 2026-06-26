@@ -111,6 +111,7 @@ def build_fsi_json(records, sp_map, today, keep=KEEP):
     fsi = [r["fsi"] for r in records]
     ma20 = moving_avg(fsi, 20)
     ma50 = moving_avg(fsi, 50)
+    ma200 = moving_avg(fsi, 200)
     sp500 = align_sp500(dates, sp_map)
 
     def tail(a):
@@ -127,12 +128,14 @@ def build_fsi_json(records, sp_map, today, keep=KEEP):
         "current": last["fsi"],
         "ma20_last": ma20[-1],
         "ma50_last": ma50[-1],
+        "ma200_last": ma200[-1],
         "breakdown": {"categories": cats, "regions": regs},
         "series": {
             "dates": tail(dates),
             "fsi": tail(fsi),
             "ma20": tail(ma20),
             "ma50": tail(ma50),
+            "ma200": tail(ma200),
             "sp500": tail(sp500),
         },
     }

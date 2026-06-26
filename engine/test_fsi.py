@@ -71,6 +71,8 @@ def test_build_fsi_json_shape():
     s = j["series"]
     assert len(s["dates"]) == 40 and len(s["fsi"]) == 40
     assert len(s["ma20"]) == 40 and len(s["ma50"]) == 40 and len(s["sp500"]) == 40
+    assert len(s["ma200"]) == 40            # 200MA 序列存在(此測資<200點→全 None,長度仍對齊)
+    assert s["ma200"][-1] is None
     assert s["ma20"][-1] is not None   # 末點 MA 有值
     cats = {c["key"]: c["val"] for c in j["breakdown"]["categories"]}
     assert cats["信用"] == -1.0 and "波動" in cats

@@ -3917,7 +3917,7 @@ let FSI_DATA = null;
 let FSI_WIN  = "5y";
 const FSI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
 
-function drawFsiChart(id, dates, fsi, ma20, ma50, sp500){
+function drawFsiChart(id, dates, fsi, ma20, ma50, ma200, sp500){
   const el = $("#"+id);
   if(!el || !window.echarts) return;
   const _old = echarts.getInstanceByDom(el); if(_old) _old.dispose();
@@ -3927,7 +3927,7 @@ function drawFsiChart(id, dates, fsi, ma20, ma50, sp500){
   ch.setOption({
     grid:{left:56, right:56, top:30, bottom:30},
     legend:{top:0, textStyle:{fontSize:10}, itemWidth:16, itemHeight:8,
-      data:["金融壓力 FSI","FSI 20MA","FSI 50MA","S&P 500"]},
+      data:["金融壓力 FSI","FSI 20MA","FSI 50MA","FSI 200MA","S&P 500"]},
     tooltip:{trigger:"axis"},
     xAxis:{type:"time", axisLabel:{fontSize:9, hideOverlap:true,
       formatter:(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
@@ -3950,6 +3950,8 @@ function drawFsiChart(id, dates, fsi, ma20, ma50, sp500){
        lineStyle:{color:"#f59e0b", width:1.4}, itemStyle:{color:"#f59e0b"}},
       {name:"FSI 50MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma50",ma50),
        lineStyle:{color:"#9333ea", width:1.4}, itemStyle:{color:"#9333ea"}},
+      {name:"FSI 200MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma200",ma200),
+       lineStyle:{color:"#0d9488", width:1.6}, itemStyle:{color:"#0d9488"}},
       {name:"S&P 500", type:"line", smooth:true, showSymbol:false, yAxisIndex:1, data:L("sp",sp500),
        lineStyle:{color:"#2563eb", width:1.4, type:"dashed"}, itemStyle:{color:"#2563eb"}}
     ]
@@ -3984,7 +3986,7 @@ function renderFsi(d){
   const win = FSI_WIN;
   const cur = d.current;
   const fsiTxt = cur != null ? (cur>0?"+":"")+cur.toFixed(3) : "—";
-  const ma20 = d.ma20_last, ma50 = d.ma50_last;
+  const ma20 = d.ma20_last, ma50 = d.ma50_last, ma200 = d.ma200_last;
   const fsiColor = (cur!=null && cur>0) ? "#e11d48" : "#16a34a";
   // 趨勢註解:FSI vs 20/50MA
   let trend = "";
@@ -4018,6 +4020,8 @@ function renderFsi(d){
           '<div class="cap-big">'+(ma20!=null?(ma20>0?"+":"")+ma20.toFixed(3):"—")+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">50 日均線</div>'+
           '<div class="cap-big">'+(ma50!=null?(ma50>0?"+":"")+ma50.toFixed(3):"—")+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">200 日均線</div>'+
+          '<div class="cap-big" style="color:#0d9488">'+(ma200!=null?(ma200>0?"+":"")+ma200.toFixed(3):"—")+'</div></div>'+
         (trend?'<div class="dim" style="font-size:12px;align-self:center">趨勢:'+trend+'</div>':'')+
       '</div>'+
       '<div style="margin-bottom:8px">'+btns+'</div>'+
@@ -4041,7 +4045,7 @@ function renderFsi(d){
   const sl = a => (a||[]).slice(-n);
   const dates = sl(allDates);
   if(dates.length>=2){
-    drawFsiChart("fsiChart", dates, sl(ser.fsi), sl(ser.ma20), sl(ser.ma50), sl(ser.sp500));
+    drawFsiChart("fsiChart", dates, sl(ser.fsi), sl(ser.ma20), sl(ser.ma50), sl(ser.ma200), sl(ser.sp500));
   } else {
     const c=$("#fsiChart"); if(c) c.innerHTML='<div class="legend">資料點不足,無法繪圖。</div>';
   }

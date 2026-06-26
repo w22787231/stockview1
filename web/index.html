@@ -3943,8 +3943,8 @@ function drawFsiChart(id, dates, fsi, ma20, ma50, sp500){
        areaStyle:{color:"#e11d48", opacity:.06},
        markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[
          {yAxis:0},
-         {yAxis:-1, lineStyle:{color:"#e11d48",type:"dashed",width:1.4,opacity:.9},
-          label:{formatter:"FSI −1",position:"insideEndTop",color:"#e11d48",fontSize:10}}
+         {yAxis:-1, lineStyle:{color:"#e11d48",type:[8,6],width:1.4,opacity:.85},
+          label:{formatter:"−1",position:"insideEndTop",color:"#e11d48",fontSize:10}}
        ]}},
       {name:"FSI 20MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L("ma20",ma20),
        lineStyle:{color:"#f59e0b", width:1.4}, itemStyle:{color:"#f59e0b"}},

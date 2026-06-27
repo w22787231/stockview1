@@ -437,6 +437,26 @@ def _factset_week(dd, _io):
     return None
 
 
+def _aggregate_semi_fwd_pe(quotes):
+    """SOXX 成分 forward PE 取「中位數」(穩健、免疫離群/髒資料)+ 合理範圍過濾。
+    quotes: list of {epsForward, marketCap, price}。回 (median_fwd_pe, included, total) 或 None。"""
+    import statistics
+    total = len(quotes)
+    pes = []
+    for q in quotes:
+        ef = q.get("epsForward")
+        px = q.get("price")
+        if not ef or not px or ef <= 0 or px <= 0:
+            continue
+        fwd_pe = px / ef
+        if fwd_pe < 3 or fwd_pe > 150:   # 合理範圍:剔除明顯髒資料(epsForward 錯值)
+            continue
+        pes.append(fwd_pe)
+    if not pes:
+        return None
+    return (round(statistics.median(pes), 2), len(pes), total)
+
+
 def fetch_sp500_fwd_pe():
     """S&P500 forward P/E:逐「週」抓 FactSet Earnings Insight 取「當週」forward EPS(反推),
     配 ^GSPC 日收盤 → 每天用「該日所屬週的實際 EPS」算 forward P/E(歷史準確,非用現值近似)。
@@ -543,6 +563,130 @@ def fetch_sp500_fwd_pe():
             "report_date": sorted_eps[-1][0], "avg5": a5, "avg10": a10,
             "eps_hist": eps_hist, "dates": dates, "pe": pe, "spy": spy,
             "thr": {"high": 21.5, "low": 20, "oversold": 16}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC + SPY 價"}
+
+
+# SOXX(iShares 半導體 ETF)成分,~30 檔;變動少,實作時可對照 iShares 最新成分微調
+_SEMI_TICKERS = ["NVDA","AVGO","AMD","TXN","QCOM","MU","ADI","LRCX","KLAC","AMAT",
+                 "NXPI","MCHP","MPWR","ON","MRVL","TER","SWKS","QRVO","ENTG","COHR",
+                 "GFS","WOLF","LSCC","AMKR","RMBS","SLAB","MKSI","TSM","ASML","INTC"]
+
+
+def _yahoo_quote_fields(symbols):
+    """Yahoo v7 quote(需 crumb):一次撈多檔的 epsForward / marketCap / price。
+    回 [{symbol, epsForward, marketCap, price}, ...](拿不到的檔略過)。"""
+    import http.cookiejar, urllib.parse
+    H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    cj = http.cookiejar.CookieJar()
+    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+    try:
+        op.open(urllib.request.Request("https://fc.yahoo.com", headers=H), timeout=20).read(10)
+    except Exception:
+        pass
+    try:
+        crumb = op.open(urllib.request.Request(
+            "https://query2.finance.yahoo.com/v1/test/getcrumb", headers=H),
+            timeout=20).read().decode("utf-8", "ignore").strip()
+    except Exception:
+        return []
+    if not crumb:
+        return []
+    out = []
+    url = ("https://query1.finance.yahoo.com/v7/finance/quote?symbols="
+           + ",".join(symbols) + "&crumb=" + urllib.parse.quote(crumb))
+    try:
+        d = json.loads(op.open(urllib.request.Request(url, headers=H), timeout=25)
+                       .read().decode("utf-8", "ignore"))
+        for r in d.get("quoteResponse", {}).get("result", []):
+            out.append({"symbol": r.get("symbol"),
+                        "epsForward": r.get("epsForward"),
+                        "marketCap": r.get("marketCap"),
+                        "price": r.get("regularMarketPrice")})
+    except Exception:
+        return []
+    return out
+
+
+def fetch_semi_fwd_pe():
+    """半導體 Forward P/E:SOXX 成分股 forward PE 取中位數 → 指數 fwdPE(穩健免疫離群);
+    H1 累積(讀回已發布 json),配 SOXX 日線逐日算 PE。門檻 30/20/15,無 avg5/avg10。"""
+    # 1) 讀回已發布 json 以累積 eps_hist
+    prev = {}
+    try:
+        pj = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://stockview1.pages.dev/data/sentiment.json",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=10).read().decode("utf-8", "ignore"))
+        prev = pj.get("semi_fwd_pe") or {}
+    except Exception:
+        pass
+    eps_hist = dict(prev.get("eps_hist") or {})
+
+    # 2) 今日成分加權 fwdPE
+    quotes = _yahoo_quote_fields(_SEMI_TICKERS)
+    agg = _aggregate_semi_fwd_pe(quotes) if quotes else None
+
+    # 3) 取 SOXX 即時 + 日線
+    soxx_rows, live = [], None
+    try:
+        ch = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/SOXX?interval=1d&range=10y",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+        res = ch["chart"]["result"][0]
+        ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
+        for t, c in zip(ts, cl):
+            if c is None:
+                continue
+            ds = datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d")
+            soxx_rows.append((ds, c))
+        live = (res.get("meta") or {}).get("regularMarketPrice") or (soxx_rows[-1][1] if soxx_rows else None)
+    except Exception:
+        return prev or None
+
+    # 4) 涵蓋率夠 + 有 SOXX 即時 → 累積今天一點;否則沿用既有
+    coverage = ""
+    if agg and live:
+        idx_pe, incl, total = agg
+        coverage = f"{incl}/{total}"
+        if incl / total >= 0.70:
+            et = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)
+            # 用 SOXX 最後實際交易日(非週末)作為 eps_hist 鍵,避免週末無收盤造成 rows 過濾空集合
+            last_trading_day = soxx_rows[-1][0] if soxx_rows else et.date().isoformat()
+            today = min(et.date().isoformat(), last_trading_day) if last_trading_day <= et.date().isoformat() else et.date().isoformat()
+            implied_eps = round(live / idx_pe, 4)            # 映射到 SOXX 價位的隱含 fwd EPS
+            ym = today[:7]
+            if today not in eps_hist and not any(k[:7] == ym for k in eps_hist):
+                eps_hist[today] = implied_eps                 # 每月一筆,粒度同 sp500
+            elif today in eps_hist:
+                eps_hist[today] = implied_eps                 # 同日重跑則更新
+
+    eps_hist = dict(sorted(eps_hist.items())[-96:])
+    if not eps_hist:
+        return None
+    sorted_eps = sorted(eps_hist.items())
+    latest_eps = sorted_eps[-1][1]
+    earliest = sorted_eps[0][0]
+
+    def eps_at(day):
+        e = sorted_eps[0][1]
+        for dt, val in sorted_eps:
+            if dt <= day:
+                e = val
+            else:
+                break
+        return e
+
+    rows = [(d, c) for d, c in soxx_rows if d >= earliest]
+    if not rows:
+        return None
+    samp = rows[::5]
+    if samp[-1] != rows[-1]:
+        samp.append(rows[-1])
+    dates = [d for d, _ in samp]
+    pe = [round(c / eps_at(d), 1) for d, c in samp]
+    cur = round(live / latest_eps, 1) if live else pe[-1]
+    return {"label": "半導體 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
+            "report_date": sorted_eps[-1][0], "eps_hist": eps_hist,
+            "dates": dates, "pe": pe, "thr": {"high": 30, "low": 20, "oversold": 15},
+            "coverage": coverage, "src": "SOXX成分 forward PE 中位數(Yahoo v7 quote)+ SOXX日價·H1累積"}
 
 
 def fetch_0dte():
@@ -774,6 +918,7 @@ def build():
         "fear_greed": fng,
         "leverage": leverage,
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
+        "semi_fwd_pe": fetch_semi_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,
     }

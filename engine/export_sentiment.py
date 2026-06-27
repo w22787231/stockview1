@@ -437,6 +437,30 @@ def _factset_week(dd, _io):
     return None
 
 
+def _aggregate_semi_fwd_pe(quotes):
+    """SOXX 成分 forward PE 市值加權(調和平均)+ 離群防護。
+    quotes: list of {epsForward, marketCap, price}。回 (weighted_fwd_pe, included, total) 或 None。"""
+    total = len(quotes)
+    num = 0.0   # Σ marketCap
+    den = 0.0   # Σ marketCap / fwdPE
+    incl = 0
+    for q in quotes:
+        ef = q.get("epsForward")
+        mc = q.get("marketCap")
+        px = q.get("price")
+        if not ef or not mc or not px or ef <= 0 or mc <= 0 or px <= 0:
+            continue
+        fwd_pe = px / ef
+        if fwd_pe < 3 or fwd_pe > 150:        # 離群:絕對不合理的個股 fwdPE(含 glitch)
+            continue
+        num += mc
+        den += mc / fwd_pe
+        incl += 1
+    if incl == 0 or den <= 0:
+        return None
+    return (round(num / den, 2), incl, total)
+
+
 def fetch_sp500_fwd_pe():
     """S&P500 forward P/E:逐「週」抓 FactSet Earnings Insight 取「當週」forward EPS(反推),
     配 ^GSPC 日收盤 → 每天用「該日所屬週的實際 EPS」算 forward P/E(歷史準確,非用現值近似)。

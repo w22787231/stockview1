@@ -1666,6 +1666,18 @@ function drawCotSpx(v,years){
     ],
   },true);
   ch.resize();
+  // 圖例切換時把左軸縮放到「目前可見的線」範圍:收掉 CTA → 機構線+%線填滿全圖、拉得開、好讀
+  const _vals=arr=>arr.filter(x=>x!=null);
+  function _fitY(sel){
+    const v=[];
+    if(!sel || sel['Leveraged (CTA)']!==false) v.push(..._vals(lev));
+    if(!sel || sel['Asset Manager']!==false)   v.push(..._vals(am));
+    if(v.length<2) return;
+    const mn=Math.min(...v), mx=Math.max(...v), pad=(mx-mn)*0.06||1000;
+    ch.setOption({yAxis:[{min:Math.floor((mn-pad)/1000)*1000, max:Math.ceil((mx+pad)/1000)*1000},{}]});
+  }
+  _fitY(null);
+  ch.off('legendselectchanged'); ch.on('legendselectchanged', p=>_fitY(p.selected));
   if(!el._ro){el._ro=()=>ch.resize();window.addEventListener('resize',el._ro);}
 }
 async function loadSentiment(){

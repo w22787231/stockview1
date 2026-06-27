@@ -438,23 +438,29 @@ def _factset_week(dd, _io):
 
 
 def _aggregate_semi_fwd_pe(quotes):
-    """SOXX 成分 forward PE 取「中位數」(穩健、免疫離群/髒資料)+ 合理範圍過濾。
-    quotes: list of {epsForward, marketCap, price}。回 (median_fwd_pe, included, total) 或 None。"""
-    import statistics
+    """SOXX 成分 forward PE「市值加權」(正統指數 PE = ΣmktCap / Σ獲利 = 調和平均)。
+    合理範圍 [8,120] 過濾:下界 8 剔除髒資料(如 Yahoo 對 MU 的錯值 fwdPE~7.6),
+    上界 120 擋極端;市值加權的調和形式對「大市值低 PE」敏感,故下界把關尤其重要。
+    quotes: list of {epsForward, marketCap, price}。回 (capweighted_fwd_pe, included, total) 或 None。"""
     total = len(quotes)
-    pes = []
+    num = 0.0   # Σ marketCap
+    den = 0.0   # Σ marketCap / fwdPE
+    incl = 0
     for q in quotes:
         ef = q.get("epsForward")
+        mc = q.get("marketCap")
         px = q.get("price")
-        if not ef or not px or ef <= 0 or px <= 0:
+        if not ef or not mc or not px or ef <= 0 or mc <= 0 or px <= 0:
             continue
         fwd_pe = px / ef
-        if fwd_pe < 3 or fwd_pe > 150:   # 合理範圍:剔除明顯髒資料(epsForward 錯值)
+        if fwd_pe < 8 or fwd_pe > 120:   # 合理範圍:剔除明顯髒資料(epsForward 錯值,如 MU)
             continue
-        pes.append(fwd_pe)
-    if not pes:
+        num += mc
+        den += mc / fwd_pe
+        incl += 1
+    if incl == 0 or den <= 0:
         return None
-    return (round(statistics.median(pes), 2), len(pes), total)
+    return (round(num / den, 2), incl, total)
 
 
 def fetch_sp500_fwd_pe():
@@ -607,8 +613,8 @@ def _yahoo_quote_fields(symbols):
 
 
 def fetch_semi_fwd_pe():
-    """半導體 Forward P/E:SOXX 成分股 forward PE 取中位數 → 指數 fwdPE(穩健免疫離群);
-    H1 累積(讀回已發布 json),配 SOXX 日線逐日算 PE。門檻 30/20/15,無 avg5/avg10。"""
+    """半導體 Forward P/E:SOXX 成分股 forward PE 市值加權(正統指數 PE)→ 指數 fwdPE;
+    H1 累積(讀回已發布 json),配 SOXX 日線逐日算 PE。門檻 27/17/13,無 avg5/avg10。"""
     # 1) 讀回已發布 json 以累積 eps_hist
     prev = {}
     try:
@@ -685,8 +691,8 @@ def fetch_semi_fwd_pe():
     cur = round(live / latest_eps, 1) if live else pe[-1]
     return {"label": "半導體 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
             "report_date": sorted_eps[-1][0], "eps_hist": eps_hist,
-            "dates": dates, "pe": pe, "thr": {"high": 30, "low": 20, "oversold": 15},
-            "coverage": coverage, "src": "SOXX成分 forward PE 中位數(Yahoo v7 quote)+ SOXX日價·H1累積"}
+            "dates": dates, "pe": pe, "thr": {"high": 27, "low": 17, "oversold": 13},
+            "coverage": coverage, "src": "SOXX成分 forward PE 市值加權·正統指數PE(Yahoo v7 quote)+ SOXX日價·H1累積"}
 
 
 def fetch_0dte():

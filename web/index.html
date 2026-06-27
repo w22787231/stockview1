@@ -1510,14 +1510,14 @@ function _renderFwdPe(){
 let SEMI_FWDPE_RANGE="3y";   // 半導體 forward PE 圖時間範圍
 function semiFwdPeBox(v){
   if(!v || !v.pe || !v.pe.length) return '';
-  const cur=v.cur, t=Object.assign({high:30,low:20,oversold:15}, v.thr||{});
+  const cur=v.cur, t=Object.assign({high:27,low:17,oversold:13}, v.thr||{});
   const vd = cur>=t.high?{t:"偏高",c:"neg"}:(cur<t.oversold?{t:"超賣",c:"pos"}:(cur<t.low?{t:"偏低",c:"pos"}:{t:"中性",c:"dim"}));
   const _rb=(k,lab)=>'<button class="ntab'+(SEMI_FWDPE_RANGE===k?" on":"")+'" data-fr="'+k+'">'+lab+'</button>';
   return '<div class="guide" style="margin-top:12px">'+
     '<div class="gtitle">半導體 Forward P/E · <b class="'+vd.c+'">'+cur+'x（'+vd.t+'）</b></div>'+
     '<div id="semiFwdpeChart" class="m1m2-chart"></div>'+
     '<div id="semiFwdpeRange" class="news-tabs" style="margin:4px 0 2px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+'</div>'+
-    '<div class="ex">SOXX 成分股 forward P/E 取<b>中位數</b>（涵蓋 '+esc(v.coverage||"")+' 檔，穩健免疫離群）÷ 逐日累積（H1·歷史會逐漸變長）。'+
+    '<div class="ex">SOXX 成分股 forward P/E <b>市值加權</b>（正統指數 PE，涵蓋 '+esc(v.coverage||"")+' 檔）÷ 逐日累積（H1·歷史會逐漸變長）。'+
       '<b class="neg">&gt;'+t.high+' 偏高</b> · <b class="pos">&lt;'+t.low+' 偏低</b> · <b class="pos">&lt;'+t.oversold+' 超賣</b>。'+
       'forward＝用未來12個月預估EPS,故低於 trailing。</div>'+
     '<div class="ex" style="margin-top:4px;color:var(--red);font-weight:600">延伸參考 →'+
@@ -1538,7 +1538,7 @@ function drawSemiFwdPe(v){
 function _renderSemiFwdPe(){
   const v=window._semifwdpe, el=document.getElementById("semiFwdpeChart");
   if(!el || !window.echarts || !v || !v.pe || !v.pe.length) return;
-  const t=Object.assign({high:30,low:20,oversold:15}, v.thr||{});
+  const t=Object.assign({high:27,low:17,oversold:13}, v.thr||{});
   const n={"1y":52,"3y":156,"5y":260,"all":v.pe.length}[SEMI_FWDPE_RANGE]||v.pe.length;
   const dates=v.dates.slice(-n), pe=v.pe.slice(-n);
   const lo=Math.min(t.oversold,Math.min.apply(null,pe)), hi=Math.max(t.high,Math.max.apply(null,pe));

@@ -438,27 +438,23 @@ def _factset_week(dd, _io):
 
 
 def _aggregate_semi_fwd_pe(quotes):
-    """SOXX 成分 forward PE 市值加權(調和平均)+ 離群防護。
-    quotes: list of {epsForward, marketCap, price}。回 (weighted_fwd_pe, included, total) 或 None。"""
+    """SOXX 成分 forward PE 取「中位數」(穩健、免疫離群/髒資料)+ 合理範圍過濾。
+    quotes: list of {epsForward, marketCap, price}。回 (median_fwd_pe, included, total) 或 None。"""
+    import statistics
     total = len(quotes)
-    num = 0.0   # Σ marketCap
-    den = 0.0   # Σ marketCap / fwdPE
-    incl = 0
+    pes = []
     for q in quotes:
         ef = q.get("epsForward")
-        mc = q.get("marketCap")
         px = q.get("price")
-        if not ef or not mc or not px or ef <= 0 or mc <= 0 or px <= 0:
+        if not ef or not px or ef <= 0 or px <= 0:
             continue
         fwd_pe = px / ef
-        if fwd_pe < 3 or fwd_pe > 150:        # 離群:絕對不合理的個股 fwdPE(含 glitch)
+        if fwd_pe < 3 or fwd_pe > 150:   # 合理範圍:剔除明顯髒資料(epsForward 錯值)
             continue
-        num += mc
-        den += mc / fwd_pe
-        incl += 1
-    if incl == 0 or den <= 0:
+        pes.append(fwd_pe)
+    if not pes:
         return None
-    return (round(num / den, 2), incl, total)
+    return (round(statistics.median(pes), 2), len(pes), total)
 
 
 def fetch_sp500_fwd_pe():

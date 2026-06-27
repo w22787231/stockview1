@@ -2811,7 +2811,7 @@ function switchView(v){
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   const isPoolView = (v==="trend"||v==="cross");  // 交叉分頁與趨勢共用池分頁列
   $(".toolbar").style.display = isPoolView ? "flex" : "none";
-  document.querySelector(".search").style.display = (v==="news"||v==="reddit"||v==="smart") ? "none" : "flex";
+  document.querySelector(".search").style.display = (v==="news"||v==="reddit"||v==="smart"||v==="valuation") ? "none" : "flex";
   if(v==="macro") loadMacro();
   else if(v==="news") loadNewsFeed();
   else if(v==="chain") loadChain();
@@ -2824,7 +2824,12 @@ function switchView(v){
   else if(v==="capital") loadCapital();
   else if(v==="reddit") loadReddit();
   else if(v==="smart") loadSmart();
+  else if(v==="valuation") loadValuation();
   else { TREND_SUB = v; load(); }   // v 為 "trend" 或 "cross"
+}
+// 估值看板:嵌入獨立頁 valuation.html(同時可單獨開 /valuation.html)
+function loadValuation(){
+  $("#content").innerHTML='<iframe src="valuation.html" title="估值看板" style="width:100%;height:calc(100vh - 120px);border:0;background:#0f1115;border-radius:8px"></iframe>';
 }
 // ── 主分頁:動態渲染 + 可拖曳重排(順序存 localStorage navOrder)──
 const NAV=[
@@ -2834,6 +2839,7 @@ const NAV=[
   {view:"trend",   label:"趨勢動能榜"},
   {view:"cross",   label:"交叉訊號"},
   {view:"strong",  label:"強勢股"},
+  {view:"valuation",label:"估值"},
   {view:"chain",   label:"產業鏈"},
   {view:"supply",  label:"供應鏈選股"},
   {view:"etf",     label:"ETF持股異動"},

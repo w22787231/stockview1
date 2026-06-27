@@ -3,6 +3,7 @@
 /data/stock/
 /web/data/*.json
 !/web/data/supply_chain.json
+!/web/data/valuations.json
 /web/data/stock/
 # Python
 __pycache__/
@@ -12,3 +13,4 @@ venv/
 # 系統
 .DS_Store
 Thumbs.db
+web/data/spec.json

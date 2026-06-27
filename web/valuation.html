@@ -1,0 +1,107 @@
+<!doctype html><html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>估值看板 · stockview</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--bd:#2a2f3a;--tx:#e6e8ec;--mut:#8a93a3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,"Noto Sans TC",sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:20px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--mut);font-size:13px;margin-bottom:16px}
+a{color:#60a5fa}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+input,select{background:#0c0e12;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:9px 12px;font-size:15px}
+button{background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:15px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.v{display:inline-block;padding:2px 9px;border-radius:6px;font-weight:700;font-size:13px}
+.折價{background:#16653433;color:#4ade80}.公允偏折價{background:#16653422;color:#86efac}
+.公允{background:#7a5c0033;color:#fcd34d}.公允偏貴{background:#7c2d1233;color:#fdba74}.真貴{background:#7f1d1d44;color:#fca5a5}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 8px;border-bottom:1px solid var(--bd);text-align:center}
+th{color:var(--mut);cursor:pointer;white-space:nowrap}td.l{text-align:left}tr:hover{background:#ffffff08}
+.pos{color:#4ade80}.neg{color:#fca5a5}.mut{color:var(--mut)}
+#card{display:none}.kv{display:grid;grid-template-columns:90px 1fr;gap:4px 10px;font-size:14px}
+.kv b{color:var(--mut);font-weight:400}
+</style></head><body><div class="wrap">
+<h1>估值看板 <span class="mut" style="font-size:13px">/股價估價 自動化</span> <a href="/" target="_top" style="font-size:13px">↗ 開整站</a></h1>
+<div class="sub">輸入代號 → 命中已估的秒回；未估的自動排隊由本地 agent 跑完整 /股價估價(含本地券商報告)。判定＝雙鏡頭加權(折價/公允/真貴)。資料更新時點見全表。<b>非投資建議。</b></div>
+
+<div class="box">
+  <input id="t" placeholder="輸入代號 (例 2330 / NVDA)" style="width:240px" onkeydown="if(event.key==='Enter')go()">
+  <button id="b" onclick="go()">估價</button>
+  <span id="st" class="mut" style="margin-left:10px"></span>
+  <div id="card" style="margin-top:14px">
+    <div style="font-size:18px;font-weight:700"><span id="c_n"></span> <span id="c_t" class="mut"></span> <span id="c_v" class="v"></span></div>
+    <div class="kv" style="margin-top:8px">
+      <b>現價</b><span id="c_p"></span><b>forward P/E</b><span id="c_pe"></span>
+      <b>BEAR/BASE/BULL</b><span id="c_bbb"></span><b>保守%/成長%</b><span id="c_pct"></span>
+      <b>動作</b><span id="c_a"></span><b>決勝變數</b><span id="c_k"></span>
+      <b>共識目標</b><span id="c_cs"></span><b>本地</b><span id="c_lo"></span><b>信心</b><span id="c_cf"></span>
+    </div>
+  </div>
+</div>
+
+<div class="box">
+  <div style="margin-bottom:8px">
+    <select id="fmkt" onchange="render()"><option value="">全部市場</option><option>US</option><option>TW</option></select>
+    <select id="fv" onchange="render()"><option value="">全部判定</option><option>折價</option><option>公允偏折價</option><option>公允</option><option>公允偏貴</option><option>真貴</option></select>
+    <select id="fc" onchange="render()"><option value="">全部分類</option></select>
+    <input id="fq" placeholder="搜尋代號/公司" oninput="render()" style="width:160px">
+    <span id="cnt" class="mut" style="margin-left:8px"></span>
+  </div>
+  <div style="overflow:auto;max-height:64vh">
+  <table><thead><tr>
+    <th onclick="srt('market')">市</th><th onclick="srt('ticker')">代號</th><th class="l" onclick="srt('company')">公司</th>
+    <th onclick="srt('class')">分類</th><th onclick="srt('price')">現價</th><th onclick="srt('fwd_pe')">fwd P/E</th>
+    <th onclick="srt('cons_pct')">保守%</th><th onclick="srt('grow_pct')">成長%</th><th onclick="srt('verdict')">判定</th><th class="l">決勝變數</th>
+  </tr></thead><tbody id="tb"></tbody></table></div>
+</div>
+
+<script>
+let ALL=[], sk='cons_pct', sd=-1;
+const num=s=>{const m=String(s).replace(/,/g,'').match(/-?\d+(\.\d+)?/);return m?+m[0]:-999};
+const pctc=s=>{const n=num(s);return `<span class="${n>=0?'pos':'neg'}">${s}</span>`};
+const $=id=>document.getElementById(id);
+
+async function load(){
+  try{const r=await fetch('/data/valuations.json');const d=await r.json();ALL=d.stocks||[];}
+  catch(e){$('cnt').textContent='讀取全表失敗';}
+  const cs=[...new Set(ALL.map(s=>s.class).filter(Boolean))].sort();
+  $('fc').insertAdjacentHTML('beforeend',cs.map(c=>`<option>${c}</option>`).join(''));
+  render();
+}
+function srt(k){sd=(sk===k)?-sd:1;sk=k;render()}
+function render(){
+  const fm=$('fmkt').value,fv=$('fv').value,fc=$('fc').value,q=$('fq').value.trim().toUpperCase();
+  let r=ALL.filter(s=>(!fm||s.market===fm)&&(!fv||s.verdict===fv)&&(!fc||s.class===fc)
+     &&(!q||s.ticker.includes(q)||(s.company||'').toUpperCase().includes(q)));
+  const isn=['cons_pct','grow_pct','price'].includes(sk);
+  r.sort((a,b)=>(isn?(num(a[sk])-num(b[sk])):String(a[sk]).localeCompare(String(b[sk])))*sd);
+  $('cnt').textContent=r.length+' 檔';
+  $('tb').innerHTML=r.map(s=>`<tr>
+    <td>${s.market}</td><td>${s.ticker}</td><td class="l">${s.company||''}</td><td class="mut">${s.class||''}</td>
+    <td>${s.price}</td><td>${s.fwd_pe||''}</td><td>${pctc(s.cons_pct)}</td><td>${pctc(s.grow_pct)}</td>
+    <td><span class="v ${s.verdict}">${s.verdict}</span></td><td class="l mut">${s.key_var||''}</td></tr>`).join('');
+}
+async function go(){
+  const t=$('t').value.trim().toUpperCase();if(!t)return;
+  const b=$('b'),st=$('st');b.disabled=true;st.textContent='下單中…';$('card').style.display='none';
+  try{
+    const r=await(await fetch('/api/val/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker:t})})).json();
+    if(r.status==='done'){show(r.data);b.disabled=false;st.textContent='(已估)';return;}
+    if(r.status==='busy'){st.textContent='佇列已滿,稍後再試';b.disabled=false;return;}
+    if(r.status==='no_queue'){st.textContent='此代號未估過(尚未啟用排隊)';b.disabled=false;return;}
+    st.textContent='排隊中,本地 agent 估價約 2–3 分鐘…';
+    const poll=setInterval(async()=>{
+      const s=await(await fetch('/api/val/status?ticker='+t)).json();
+      if(s.status==='done'){clearInterval(poll);show(s.data);b.disabled=false;st.textContent='完成';load();}
+    },5000);
+  }catch(e){st.textContent='錯誤:'+e.message;b.disabled=false;}
+}
+function show(d){
+  $('card').style.display='block';
+  $('c_n').textContent=d.company||'';$('c_t').textContent=d.ticker;$('c_v').textContent=d.verdict;$('c_v').className='v '+d.verdict;
+  $('c_p').textContent=d.price+' '+(d.currency||'');$('c_pe').textContent=d.fwd_pe||'';
+  $('c_bbb').textContent=`${d.bear} / ${d.base} / ${d.bull}`;$('c_pct').innerHTML=pctc(d.cons_pct)+' / '+pctc(d.grow_pct);
+  $('c_a').textContent=d.action||'';$('c_k').textContent=d.key_var||'';$('c_cs').textContent=d.consensus_tp||'';
+  $('c_lo').textContent=d.local||'';$('c_cf').textContent=d.confidence||'';
+}
+load();
+</script></div></body></html>

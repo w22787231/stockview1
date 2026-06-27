@@ -454,6 +454,52 @@ async function handlePush(request, env, action) {
   return _pjson({ ok: true, n: watchlist.length });
 }
 
+// ── 估值(/股價估價 自動化):全表靜態直讀 /data/valuations.json;下單佇列複用 PUSH_SUBS KV(req: 前綴) ──
+async function _valAll(request, env) {
+  try { const r = await env.ASSETS.fetch(new URL("/data/valuations.json", request.url)); return await r.json(); }
+  catch (e) { return { stocks: [] }; }
+}
+async function handleValRequest(request, env) {
+  if (request.method === "OPTIONS") return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" } });
+  if (request.method !== "POST") return _pjson({ error: "POST only" }, 405);
+  let body; try { body = await request.json(); } catch (e) { return _pjson({ error: "bad_json" }, 400); }
+  const t = String((body && body.ticker) || "").trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,8}$/.test(t)) return _pjson({ error: "代號格式不符" }, 400);
+  const all = await _valAll(request, env);
+  const hit = (all.stocks || []).find(s => s.ticker === t);
+  if (hit) return _pjson({ status: "done", cached: true, data: hit });
+  if (!env || !env.PUSH_SUBS) return _pjson({ status: "no_queue", msg: "未綁定 KV,僅能查已估的" }, 503);
+  const lst = await env.PUSH_SUBS.list({ prefix: "req:" });
+  let pending = 0;
+  for (const k of lst.keys) { const v = await env.PUSH_SUBS.get(k.name); if (v && JSON.parse(v).status === "pending") pending++; }
+  if (pending >= 5) return _pjson({ status: "busy", msg: "估價佇列已滿,稍後再試" }, 429);
+  await env.PUSH_SUBS.put("req:" + t, JSON.stringify({ status: "pending", ts: Date.now() }), { expirationTtl: 1800 });
+  return _pjson({ status: "queued", ticker: t });
+}
+async function handleValStatus(request, env) {
+  const t = String(new URL(request.url).searchParams.get("ticker") || "").trim().toUpperCase();
+  if (!env || !env.PUSH_SUBS) return _pjson({ status: "unknown" });
+  const v = await env.PUSH_SUBS.get("req:" + t);
+  return v ? new Response(v, { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } }) : _pjson({ status: "unknown" });
+}
+async function handleValPending(request, env) {   // PC poller 取待辦(token 保護)
+  if (request.headers.get("x-poller-token") !== env.POLLER_TOKEN) return _pjson({ error: "unauthorized" }, 401);
+  if (!env || !env.PUSH_SUBS) return _pjson({ tickers: [] });
+  const lst = await env.PUSH_SUBS.list({ prefix: "req:" });
+  const out = [];
+  for (const k of lst.keys) { const v = await env.PUSH_SUBS.get(k.name); if (v && JSON.parse(v).status === "pending") out.push(k.name.slice(4)); }
+  return _pjson({ tickers: out });
+}
+async function handleValResult(request, env) {
+  if (request.method !== "POST") return _pjson({ error: "POST only" }, 405);
+  if (!env || !env.PUSH_SUBS) return _pjson({ error: "no_queue" }, 503);
+  if (request.headers.get("x-poller-token") !== env.POLLER_TOKEN) return _pjson({ error: "unauthorized" }, 401);
+  let body; try { body = await request.json(); } catch (e) { return _pjson({ error: "bad_json" }, 400); }
+  const t = String(body.ticker || "").trim().toUpperCase();
+  await env.PUSH_SUBS.put("req:" + t, JSON.stringify({ status: "done", data: body.data, ts: Date.now() }), { expirationTtl: 1800 });
+  return _pjson({ ok: true });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -465,6 +511,10 @@ export default {
     if (url.pathname === "/api/stockfull") return handleStockFull(request);
     if (url.pathname === "/api/push/subscribe") return handlePush(request, env, "subscribe");
     if (url.pathname === "/api/push/unsubscribe") return handlePush(request, env, "unsubscribe");
+    if (url.pathname === "/api/val/request") return handleValRequest(request, env);
+    if (url.pathname === "/api/val/status") return handleValStatus(request, env);
+    if (url.pathname === "/api/val/pending") return handleValPending(request, env);
+    if (url.pathname === "/api/val/result") return handleValResult(request, env);
     return env.ASSETS.fetch(request);   // 其餘交給靜態資產(index.html、data/* 等)
   },
 };

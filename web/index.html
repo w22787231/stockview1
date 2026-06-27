@@ -1426,11 +1426,12 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+semiFwdPeBox(d.semi_fwd_pe)+cotSpxBox(d.cot_spx)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+semiFwdPeBox(d.semi_fwd_pe)+twFwdPeBox(d.tw_fwd_pe)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
   if(d.semi_fwd_pe) drawSemiFwdPe(d.semi_fwd_pe);
+  if(d.tw_fwd_pe) drawTwFwdPe(d.tw_fwd_pe);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
 }
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
@@ -1507,6 +1508,65 @@ function _renderFwdPe(){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
+let TW_FWDPE_RANGE="3y";   // 台股 forward PE 圖時間範圍
+function twFwdPeBox(v){
+  if(!v || !v.pe || !v.pe.length) return '';
+  const cur=v.cur, t=Object.assign({high:20,low:14,oversold:11}, v.thr||{});
+  const vd = cur>=t.high?{t:"偏高",c:"neg"}:(cur<t.oversold?{t:"超賣",c:"pos"}:(cur<t.low?{t:"偏低",c:"pos"}:{t:"中性",c:"dim"}));
+  const _rb=(k,lab)=>'<button class="ntab'+(TW_FWDPE_RANGE===k?" on":"")+'" data-fr="'+k+'">'+lab+'</button>';
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">台股 Forward P/E · <b class="'+vd.c+'">'+cur+'x（'+vd.t+'）</b></div>'+
+    '<div id="twFwdpeChart" class="m1m2-chart"></div>'+
+    '<div id="twFwdpeRange" class="news-tabs" style="margin:4px 0 2px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+'</div>'+
+    '<div class="ex">0050 前 50 大成分股 forward P/E <b>市值加權</b>（正統指數 PE，涵蓋 '+esc(v.coverage||"")+' 檔）÷ 0050.TW，逐日累積（H1·歷史會逐漸變長）。'+
+      '<b class="neg">&gt;'+t.high+' 偏高</b> · <b class="pos">&lt;'+t.low+' 偏低</b> · <b class="pos">&lt;'+t.oversold+' 超賣</b>。'+
+      '<b>前瞻 P/E</b>（用分析師預估 EPS），故<b>低於證交所 trailing 本益比</b>。</div>'+
+    '</div>';
+}
+function drawTwFwdPe(v){
+  window._twfwdpe=v;
+  const rb=document.getElementById("twFwdpeRange");
+  if(rb) rb.querySelectorAll(".ntab").forEach(b=>b.onclick=()=>{
+    TW_FWDPE_RANGE=b.dataset.fr;
+    rb.querySelectorAll(".ntab").forEach(x=>x.classList.toggle("on",x.dataset.fr===TW_FWDPE_RANGE));
+    _renderTwFwdPe();
+  });
+  _renderTwFwdPe();
+}
+function _renderTwFwdPe(){
+  const v=window._twfwdpe, el=document.getElementById("twFwdpeChart");
+  if(!el || !window.echarts || !v || !v.pe || !v.pe.length) return;
+  const t=Object.assign({high:20,low:14,oversold:11}, v.thr||{});
+  const n={"1y":52,"3y":156,"5y":260,"all":v.pe.length}[TW_FWDPE_RANGE]||v.pe.length;
+  const dates=v.dates.slice(-n), pe=v.pe.slice(-n);
+  const lo=Math.min(t.oversold,Math.min.apply(null,pe)), hi=Math.max(t.high,Math.max.apply(null,pe));
+  const series=[{name:"Forward P/E",type:"line",data:pe,smooth:true,symbol:"none",yAxisIndex:0,
+      lineStyle:{width:2,color:"#1f6feb"},itemStyle:{color:"#1f6feb"},areaStyle:{color:"#1f6feb12"},
+      markLine:{silent:true,symbol:"none",data:[
+        {yAxis:t.high,lineStyle:{color:"#e11d48",type:"dashed"},label:{formatter:"偏高 "+t.high,fontSize:10,color:"#e11d48",position:"insideEndTop"}},
+        {yAxis:t.low,lineStyle:{color:"#16a34a",type:"dashed"},label:{formatter:"偏低 "+t.low,fontSize:10,color:"#16a34a",position:"insideEndBottom"}},
+        {yAxis:t.oversold,lineStyle:{color:"#0a7d3a",type:"dashed"},label:{formatter:"超賣 "+t.oversold,fontSize:10,color:"#0a7d3a",position:"insideEndBottom"}}]},
+      markArea:{silent:true,data:[
+        [{yAxis:t.high,itemStyle:{color:"#e11d480e"}},{yAxis:1000}],
+        [{yAxis:0,itemStyle:{color:"#16a34a0e"}},{yAxis:t.low}]]},
+  }];
+  const yAxes=[{type:"value",min:Math.floor(lo-0.5),max:Math.ceil(hi+0.5),axisLabel:{fontSize:10,formatter:"{value}x"},splitLine:{lineStyle:{opacity:.3}}}];
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:38,right:14,top:14,bottom:30},
+    tooltip:{trigger:"axis",formatter:function(ps){
+      if(!ps||!ps.length) return "";
+      let s=ps[0].axisValueLabel||ps[0].axisValue;
+      ps.forEach(p=>{ s+="<br>"+p.marker+p.seriesName+": "+(p.value==null?"-":p.value+"x"); });
+      return s;
+    }},
+    dataZoom:[{type:"inside"}],
+    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
+    yAxis:yAxes,
+    series:series,
+  }, true);
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
 let SEMI_FWDPE_RANGE="3y";   // 半導體 forward PE 圖時間範圍
 function semiFwdPeBox(v){
   if(!v || !v.pe || !v.pe.length) return '';

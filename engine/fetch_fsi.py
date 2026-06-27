@@ -5,7 +5,7 @@ CSV 欄位:Date, OFR FSI, Credit, Equity valuation, Safe assets, Funding, Volati
           United States, Other advanced economies, Emerging markets。
 產出:FSI + 20MA + 50MA + S&P500 疊圖序列 + 5 類/3 地區「最新」拆解。
 OFR FSI 已標準化(0=正常,正=壓力高於常態),不需再算 z。"""
-import urllib.request, io, csv
+import urllib.request, io, csv, json, time
 
 OFR_URL = "https://www.financialresearch.gov/financial-stress-index/data/fsi.csv"
 KEEP = 10000  # 落盤保留(OFR 全史 ~6700 點/2000 至今,夠 10年/全部 窗;tail 取最近 N)
@@ -80,29 +80,52 @@ def align_sp500(dates, sp_map):
     return out
 
 
-def fetch_sp500_map(start):
-    """yfinance 抓 ^GSPC 日收盤 → {date_iso: close}。失敗回 {}。"""
+def fetch_sp500_map(start, retries=4):
+    """yfinance 抓 ^GSPC 日收盤 → {date_iso: close}。重試數次(避開 CI 對 Yahoo 的暫時限流);全失敗回 {}。"""
     try:
         import yfinance as yf
     except ImportError:
         return {}
-    try:
-        df = yf.download("^GSPC", start=start, auto_adjust=True, progress=False, threads=False)
-        close = df["Close"]
-        if hasattr(close, "columns"):   # MultiIndex/DataFrame → 取首欄
-            close = close.iloc[:, 0]
-        m = {}
-        for ts, val in close.items():
-            try:
-                fv = float(val)
-            except (TypeError, ValueError):
-                continue
-            if fv == fv:   # 非 NaN
-                m[ts.date().isoformat()] = round(fv, 2)
-        return m
-    except Exception as e:
-        print("[fsi] ^GSPC 抓取失敗:", e)
-        return {}
+    for attempt in range(retries):
+        try:
+            df = yf.download("^GSPC", start=start, progress=False, threads=False)
+            if df is None or len(df) == 0:
+                raise RuntimeError("empty df")
+            close = df["Close"]
+            if hasattr(close, "columns"):   # MultiIndex/DataFrame → 取首欄
+                close = close.iloc[:, 0]
+            m = {}
+            for ts, val in close.items():
+                try:
+                    fv = float(val)
+                except (TypeError, ValueError):
+                    continue
+                if fv == fv:   # 非 NaN
+                    m[ts.date().isoformat()] = round(fv, 2)
+            if m:
+                return m
+            raise RuntimeError("0 rows parsed")
+        except Exception as e:
+            print("[fsi] ^GSPC 嘗試 %d/%d 失敗: %s" % (attempt + 1, retries, e))
+            time.sleep(2 * (attempt + 1))
+    return {}
+
+
+def sp_map_from_online():
+    """抓 ^GSPC 全失敗時的備援:從線上既有 fsi.json(其次 pi.json)撈回 {date: sp500},維持 last-good。"""
+    for url in ("https://stockview1.pages.dev/data/fsi.json",
+                "https://stockview1.pages.dev/data/pi.json"):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Chrome/124"})
+            j = json.loads(urllib.request.urlopen(req, timeout=20).read().decode("utf-8"))
+            s = j.get("series", {})
+            m = {d: v for d, v in zip(s.get("dates", []), s.get("sp500", [])) if v is not None}
+            if m:
+                print("[fsi] 用 %s 的 sp500 備援(%d 點)" % (url.rsplit("/", 1)[-1], len(m)))
+                return m
+        except Exception as e:
+            print("[fsi] 備援讀取 %s 失敗: %s" % (url, e))
+    return {}
 
 
 def build_fsi_json(records, sp_map, today, keep=KEEP):
@@ -147,6 +170,9 @@ def build_live(today):
     if not records:
         return None
     sp_map = fetch_sp500_map(records[0]["date"])
+    if not sp_map:
+        print("[fsi] ^GSPC 全失敗 → 改用線上既有 sp500 備援")
+        sp_map = sp_map_from_online()
     return build_fsi_json(records, sp_map, today)
 
 

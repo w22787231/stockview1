@@ -4237,14 +4237,17 @@ async function loadFsi(){
 
 let PI_DATA = null;
 let PI_WIN  = "5y";
+let PI_INV  = false;   // 反轉視角:顯示 −PI(與股市同向)
 const PI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
 
-function drawPiChart(id, dates, piArr, sp500Arr){
+function drawPiChart(id, dates, piArr, sp500Arr, inv){
   const el = $("#"+id);
   if(!el || !window.echarts) return;
   // dispose 舊實例後重建，避免 innerHTML 重建後 stale 重用
   const _old = echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch = echarts.init(el, null, {renderer:"canvas"});
+  const sgn = inv ? -1 : 1;
+  const piName = inv ? "流動性寬鬆 −PI" : "流動性壓力 PI";
   const toMs = s => new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
   ch.setOption({
     grid:{left:56, right:56, top:32, bottom:30},
@@ -4253,14 +4256,14 @@ function drawPiChart(id, dates, piArr, sp500Arr){
     xAxis:{type:"time", axisLabel:{fontSize:9, hideOverlap:true,
       formatter:(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:[
-      {type:"value", name:"PI", nameTextStyle:{fontSize:10}, scale:true,
+      {type:"value", name:(inv?"−PI":"PI"), nameTextStyle:{fontSize:10}, scale:true,
        axisLabel:{fontSize:10}, splitLine:{lineStyle:{opacity:.3}}},
       {type:"value", name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
        axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"}
     ],
     series:[
-      {name:"流動性壓力 PI", type:"line", smooth:true, showSymbol:false, yAxisIndex:0,
-       data:dates.map((d,i)=>[toMs(d), piArr[i]]),
+      {name:piName, type:"line", smooth:true, showSymbol:false, yAxisIndex:0,
+       data:dates.map((d,i)=>[toMs(d), piArr[i]==null?null:sgn*piArr[i]]),
        lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
        areaStyle:{color:"#e8923a", opacity:.07},
        markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}},
@@ -4277,9 +4280,10 @@ function drawPiChart(id, dates, piArr, sp500Arr){
 function renderPI(d){
   const box = $("#piBlock");
   if(!box) return;
-  const win = PI_WIN;
+  const win = PI_WIN, inv = PI_INV, sgn = inv ? -1 : 1;
   const cur = (d.current_by_window||{})[win] || {};
-  const pi  = cur.pi   != null ? cur.pi.toFixed(2)   : "—";
+  const piRaw = cur.pi;
+  const pi  = piRaw != null ? (sgn*piRaw).toFixed(2) : "—";
   const pct = cur.pctile != null ? cur.pctile.toFixed(1) : "—";
   const comps = cur.components || {};
   const meta  = d.factors_meta || [];
@@ -4290,6 +4294,7 @@ function renderPI(d){
     '<button class="btn'+(w===win?" active":"")+'" data-piw="'+w+'">'+
       (PI_WIN_LABEL[w]||w)+'</button>'
   ).join("");
+  const invBtn = '<button class="btn'+(inv?" active":"")+'" id="piInvBtn" title="反轉視角:顯示 −PI,讓壓力線與 S&amp;P500 同向(正相關),較直覺">🔄 反轉視角'+(inv?"(−PI)":"")+'</button>';
 
   // 六因子橫條
   const barWidth = 200; // px base for 100% z=3
@@ -4311,18 +4316,20 @@ function renderPI(d){
     '</div>';
   }).join("");
 
-  // PI 當前讀數卡
-  const piColor = Number(pi)>0 ? "#e11d48" : "#16a34a";
+  // PI 當前讀數卡(顏色依原始壓力:>0 紅;反轉時顯示 −PI)
+  const piColor = (piRaw!=null && piRaw>0) ? "#e11d48" : "#16a34a";
   const piCardStyle = 'border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:130px;margin-right:12px';
 
   box.innerHTML =
     '<section>'+
       '<div class="sec-head"><h2>流動性壓力指數(PI)</h2>'+
         '<span class="tag">六因子 z 加權合成</span>'+
-        '<span class="hint">PI>0 流動性偏緊、PI<0 流動性寬鬆；歷史分位愈高風險愈大</span></div>'+
+        '<span class="hint">'+(inv
+          ? '反轉視角:顯示 <b>−PI</b>(↑=流動性寬鬆、與股市<b class="pos">同向</b>);數值已取負'
+          : 'PI>0 流動性偏緊、PI<0 流動性寬鬆；歷史分位愈高風險愈大')+'</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
         '<div style="'+piCardStyle+'">'+
-          '<div class="cap-lab">PI 當前值</div>'+
+          '<div class="cap-lab">'+(inv?"−PI 當前值":"PI 當前值")+'</div>'+
           '<div class="cap-big" style="color:'+piColor+'">'+esc(pi)+'</div>'+
         '</div>'+
         '<div style="'+piCardStyle+'">'+
@@ -4330,11 +4337,12 @@ function renderPI(d){
           '<div class="cap-big">'+esc(pct)+'%</div>'+
         '</div>'+
       '</div>'+
-      '<div style="margin-bottom:8px">'+btns+'</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+
+        '<span style="width:1px;height:18px;background:var(--line);margin:0 4px"></span>'+invBtn+'</div>'+
       '<div id="piChart" class="cap-chart" style="height:260px"></div>'+
       '<div class="cap-sub2" style="margin-top:14px">六因子分解(z 偏差;紅=對應方向加壓)</div>'+
       '<div style="max-width:520px;margin-top:6px">'+factorBars+'</div>'+
-      '<div class="legend" style="margin-top:10px">資料來源:FRED + Yahoo Finance。PI 為六因子加權 z 分數合成，視窗 '+esc(PI_WIN_LABEL[win]||win)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED + Yahoo Finance。PI 為六因子加權 z 分數合成，視窗 '+esc(PI_WIN_LABEL[win]||win)+'。'+(inv?'<b>(反轉視角:線與卡為 −PI;下方六因子仍為原始壓力口徑)</b>':'')+'</div>'+
     '</section>';
 
   // 繪圖：依窗口截取最近 N 筆，讓 x 軸範圍隨窗口縮放
@@ -4348,7 +4356,7 @@ function renderPI(d){
   const sp500  = allSp500.slice(-n);
   const piSer  = allPiSer.slice(-n);
   if(dates.length>=2 && piSer.length>=2){
-    drawPiChart("piChart", dates, piSer, sp500);
+    drawPiChart("piChart", dates, piSer, sp500, inv);
   } else {
     const c=$("#piChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
   }
@@ -4358,6 +4366,8 @@ function renderPI(d){
     PI_WIN = b.dataset.piw;
     renderPI(PI_DATA);
   });
+  const pib = box.querySelector("#piInvBtn");
+  if(pib) pib.onclick=()=>{ PI_INV = !PI_INV; renderPI(PI_DATA); };
 }
 
 async function loadPI(){

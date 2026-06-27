@@ -667,9 +667,11 @@ def fetch_cot_spx():
         am_net  = [r["am_l"]  - r["am_s"]  for r in rows]
 
         def _pctile(arr):
+            # 排名分位:有幾%的歷史值 <= 現值(與圖上 decile 線/過多過空門檻同口徑)。
+            # 舊版用 min-max 區間位置會被極端值拉歪、與圖對不上,已改。
             if len(arr) < 2: return 50
-            lo, hi = min(arr), max(arr)
-            return round((arr[-1] - lo) / (hi - lo) * 100) if hi != lo else 50
+            cur = arr[-1]; n = len(arr)
+            return round(sum(1 for x in arr if x <= cur) / n * 100)
 
         lev_prev = lev_net[-2] if len(lev_net) >= 2 else lev_net[-1]
         am_prev  = am_net[-2]  if len(am_net)  >= 2 else am_net[-1]

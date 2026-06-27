@@ -686,7 +686,7 @@ def fetch_semi_fwd_pe():
     return {"label": "半導體 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
             "report_date": sorted_eps[-1][0], "eps_hist": eps_hist,
             "dates": dates, "pe": pe, "thr": {"high": 30, "low": 20, "oversold": 15},
-            "coverage": coverage, "src": "SOXX成分 forward EPS 加權(Yahoo v7 quote)+ SOXX日價·H1累積"}
+            "coverage": coverage, "src": "SOXX成分 forward PE 中位數(Yahoo v7 quote)+ SOXX日價·H1累積"}
 
 
 def fetch_0dte():

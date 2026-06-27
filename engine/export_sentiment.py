@@ -437,7 +437,7 @@ def _factset_week(dd, _io):
     return None
 
 
-def _aggregate_semi_fwd_pe(quotes):
+def _aggregate_capw_fwd_pe(quotes):
     """SOXX 成分 forward PE「市值加權」(正統指數 PE = ΣmktCap / Σ獲利 = 調和平均)。
     合理範圍 [8,120] 過濾:下界 8 剔除髒資料(如 Yahoo 對 MU 的錯值 fwdPE~7.6),
     上界 120 擋極端;市值加權的調和形式對「大市值低 PE」敏感,故下界把關尤其重要。
@@ -628,7 +628,7 @@ def fetch_semi_fwd_pe():
 
     # 2) 今日成分加權 fwdPE
     quotes = _yahoo_quote_fields(_SEMI_TICKERS)
-    agg = _aggregate_semi_fwd_pe(quotes) if quotes else None
+    agg = _aggregate_capw_fwd_pe(quotes) if quotes else None
 
     # 3) 取 SOXX 即時 + 日線
     soxx_rows, live = [], None
@@ -693,6 +693,102 @@ def fetch_semi_fwd_pe():
             "report_date": sorted_eps[-1][0], "eps_hist": eps_hist,
             "dates": dates, "pe": pe, "thr": {"high": 27, "low": 17, "oversold": 13},
             "coverage": coverage, "src": "SOXX成分 forward PE 市值加權·正統指數PE(Yahoo v7 quote)+ SOXX日價·H1累積"}
+
+
+def _tw50_tickers():
+    """讀 engine/universe/tw150.txt 前 50 檔(市值前 50 ≈ 0050)。"""
+    path = os.path.join(HERE, "universe", "tw150.txt")
+    out = []
+    try:
+        for line in open(path, encoding="utf-8"):
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            out.append(s)
+            if len(out) >= 50:
+                break
+    except Exception:
+        return []
+    return out
+
+
+def fetch_tw_fwd_pe():
+    """台股 Forward P/E:0050(tw150 前50)成分 forward PE 市值加權(正統指數 PE)→ 指數 fwdPE;
+    H1 累積(讀回已發布 json),配 0050.TW 日線逐日算 PE。門檻 20/14/11,無 avg5/avg10。"""
+    prev = {}
+    try:
+        pj = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://stockview1.pages.dev/data/sentiment.json",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=10).read().decode("utf-8", "ignore"))
+        prev = pj.get("tw_fwd_pe") or {}
+    except Exception:
+        pass
+    eps_hist = dict(prev.get("eps_hist") or {})
+
+    tickers = _tw50_tickers()
+    quotes = _yahoo_quote_fields(tickers) if tickers else []
+    agg = _aggregate_capw_fwd_pe(quotes) if quotes else None
+
+    idx_rows, live = [], None
+    try:
+        ch = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/0050.TW?interval=1d&range=10y",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+        res = ch["chart"]["result"][0]
+        ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
+        for t, c in zip(ts, cl):
+            if c is None:
+                continue
+            ds = datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d")
+            idx_rows.append((ds, c))
+        live = (res.get("meta") or {}).get("regularMarketPrice") or (idx_rows[-1][1] if idx_rows else None)
+    except Exception:
+        return prev or None
+
+    coverage = ""
+    if agg and live:
+        idx_pe, incl, total = agg
+        coverage = f"{incl}/{total}"
+        if incl / total >= 0.70:
+            et = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=8)  # 台北時間
+            last_trading_day = idx_rows[-1][0] if idx_rows else et.date().isoformat()
+            today = min(et.date().isoformat(), last_trading_day) if last_trading_day <= et.date().isoformat() else et.date().isoformat()
+            implied_eps = round(live / idx_pe, 4)
+            ym = today[:7]
+            if today not in eps_hist and not any(k[:7] == ym for k in eps_hist):
+                eps_hist[today] = implied_eps
+            elif today in eps_hist:
+                eps_hist[today] = implied_eps
+
+    eps_hist = dict(sorted(eps_hist.items())[-96:])
+    if not eps_hist:
+        return None
+    sorted_eps = sorted(eps_hist.items())
+    latest_eps = sorted_eps[-1][1]
+    earliest = sorted_eps[0][0]
+
+    def eps_at(day):
+        e = sorted_eps[0][1]
+        for dt, val in sorted_eps:
+            if dt <= day:
+                e = val
+            else:
+                break
+        return e
+
+    rows = [(d, c) for d, c in idx_rows if d >= earliest]
+    if not rows:
+        return None
+    samp = rows[::5]
+    if samp[-1] != rows[-1]:
+        samp.append(rows[-1])
+    dates = [d for d, _ in samp]
+    pe = [round(c / eps_at(d), 1) for d, c in samp]
+    cur = round(live / latest_eps, 1) if live else pe[-1]
+    return {"label": "台股 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
+            "report_date": sorted_eps[-1][0], "eps_hist": eps_hist,
+            "dates": dates, "pe": pe, "thr": {"high": 20, "low": 14, "oversold": 11},
+            "coverage": coverage, "src": "0050前50成分 forward PE 市值加權·正統指數PE(Yahoo v7 quote)+ 0050.TW日價·H1累積"}
 
 
 def fetch_0dte():
@@ -925,6 +1021,7 @@ def build():
         "leverage": leverage,
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
         "semi_fwd_pe": fetch_semi_fwd_pe(),
+        "tw_fwd_pe": fetch_tw_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,
     }

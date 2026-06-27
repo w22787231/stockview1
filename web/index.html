@@ -1584,7 +1584,7 @@ function cotSpxBox(v){
     '<div class="gtitle">CFTC COT — S&amp;P 500 期貨定位'+
       '<span class="legend" style="font-weight:normal;margin-left:8px">E-mini / 每週二部位(週五發布)</span></div>'+
     '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 8px">'+
-      '<span><b style="color:#3b82f6">Leveraged (CTA代理)</b> '+_k(v.lev_cur)+_wow(v.lev_wow)+' · '+_pc(lp)+'</span>'+
+      '<span><b style="color:#3b82f6">Leveraged (CTA代理)</b> '+_k(v.lev_cur)+_wow(v.lev_wow)+'</span>'+
       '<span><b style="color:#f59e0b">Asset Manager (機構)</b> '+_k(v.am_cur)+_wow(v.am_wow)+' · '+_pc(ap)+'</span>'+
     '</div>'+
     '<div style="margin:6px 0 2px;display:flex;gap:6px;align-items:center">'+'<span style="font-size:11px;color:var(--dim)">期間：</span>'+['1Y','3Y','5Y','全部'].map(l=>'<button class="cot-rb" data-y="'+(l==='全部'?0:parseInt(l))+'" style="font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--fg)">'+(l)+'</button>').join('')+'</div>'+
@@ -1616,12 +1616,12 @@ function drawCotSpx(v,years){
   const lo=v.lo_thresh!=null?v.lo_thresh:null;
   const hi=v.hi_thresh!=null?v.hi_thresh:null;
   const fmt=(n)=>n==null?'-':(n>=0?'+':'')+Math.round(n/1000)+'K';
-  // 每 10% 位子參考線(依目前視窗的 Leveraged CTA 分布算 p10~p90;高位=做多過頭、低位=做空過頭)
+  // 每 10% 位子參考線(依目前視窗的 Asset Manager(機構)分布算 p10~p90;高位=機構過度看多)
   const _pv=(arr,p)=>{const a=arr.filter(x=>x!=null).slice().sort((x,y)=>x-y);if(!a.length)return null;const i=(p/100)*(a.length-1),f=Math.floor(i),c=Math.ceil(i);return f===c?a[f]:a[f]+(a[c]-a[f])*(i-f);};
   const decLines=[];
-  for(let p=10;p<=90;p+=10){const y=_pv(lev,p);if(y==null)continue;
-    decLines.push({yAxis:y,lineStyle:{color:'#94a3b8',type:'dashed',width:p===50?1:0.7,opacity:p===50?0.5:0.28},
-      label:{formatter:p+'%',fontSize:8.5,color:'#94a3b8',position:'insideStartTop',opacity:0.85}});}
+  for(let p=10;p<=90;p+=10){const y=_pv(am,p);if(y==null)continue;
+    decLines.push({yAxis:y,lineStyle:{color:'#f59e0b',type:'dashed',width:p===50?1:0.7,opacity:p===50?0.45:0.26},
+      label:{formatter:p+'%',fontSize:8.5,color:'#b45309',position:'insideStartTop',opacity:0.85}});}
   const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:'canvas'});
   ch.setOption({
     grid:{left:52,right:64,top:26,bottom:36},

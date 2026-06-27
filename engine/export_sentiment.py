@@ -607,7 +607,7 @@ def _yahoo_quote_fields(symbols):
 
 
 def fetch_semi_fwd_pe():
-    """半導體 Forward P/E:SOXX 成分 forward EPS 市值加權 → 指數 fwdPE;
+    """半導體 Forward P/E:SOXX 成分股 forward PE 取中位數 → 指數 fwdPE(穩健免疫離群);
     H1 累積(讀回已發布 json),配 SOXX 日線逐日算 PE。門檻 30/20/15,無 avg5/avg10。"""
     # 1) 讀回已發布 json 以累積 eps_hist
     prev = {}

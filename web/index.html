@@ -1552,6 +1552,12 @@ function drawCotSpx(v,years){
   const lo=v.lo_thresh!=null?v.lo_thresh:null;
   const hi=v.hi_thresh!=null?v.hi_thresh:null;
   const fmt=(n)=>n==null?'-':(n>=0?'+':'')+Math.round(n/1000)+'K';
+  // 每 10% 位子參考線(依目前視窗的 Leveraged CTA 分布算 p10~p90;高位=做多過頭、低位=做空過頭)
+  const _pv=(arr,p)=>{const a=arr.filter(x=>x!=null).slice().sort((x,y)=>x-y);if(!a.length)return null;const i=(p/100)*(a.length-1),f=Math.floor(i),c=Math.ceil(i);return f===c?a[f]:a[f]+(a[c]-a[f])*(i-f);};
+  const decLines=[];
+  for(let p=10;p<=90;p+=10){const y=_pv(lev,p);if(y==null)continue;
+    decLines.push({yAxis:y,lineStyle:{color:'#94a3b8',type:'dashed',width:p===50?1:0.7,opacity:p===50?0.5:0.28},
+      label:{formatter:p+'%',fontSize:8.5,color:'#94a3b8',position:'insideStartTop',opacity:0.85}});}
   const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:'canvas'});
   ch.setOption({
     grid:{left:52,right:64,top:26,bottom:36},
@@ -1580,6 +1586,7 @@ function drawCotSpx(v,years){
         lineStyle:{width:2,color:'#3b82f6'},itemStyle:{color:'#3b82f6'},
         areaStyle:{color:'rgba(239,68,68,0.10)'},
         markLine:{silent:true,symbol:'none',data:[
+          ...decLines,
           {yAxis:0,lineStyle:{color:'#888',type:'solid',width:1.5},label:{show:false}},
           ...(hi!=null?[{yAxis:hi,lineStyle:{color:'#ef4444',type:'dashed',width:1},label:{formatter:'過多 '+Math.round(hi/1000)+'K',fontSize:9,color:'#ef4444',position:'insideEndTop'}}]:[]),
           ...(lo!=null?[{yAxis:lo,lineStyle:{color:'#16a34a',type:'dashed',width:1},label:{formatter:'過空 '+Math.round(lo/1000)+'K',fontSize:9,color:'#16a34a',position:'insideEndBottom'}}]:[]),

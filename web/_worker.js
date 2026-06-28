@@ -5,6 +5,7 @@
 // (Google News、BBC、Al Jazeera 等會被邊緣資料中心 IP 擋,故不用。)
 const CNBC = (id) => `https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=${id}`;
 const GROUPS = {
+  market: [],
   tw: [
     { url: "https://news.cnyes.com/rss/v1/news/category/tw_stock", src: "鉅亨·台股" },
     { url: "https://news.cnyes.com/rss/v1/news/category/headline", src: "鉅亨·頭條" },
@@ -109,13 +110,12 @@ function _htmlEsc(s) {
   return String(s || "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 }
 async function loadDigestItems(env, feedKey) {
-  if (!env || !env.PUSH_SUBS || (feedKey !== "tw" && feedKey !== "finance")) return [];
+  if (!env || !env.PUSH_SUBS || feedKey !== "market") return [];
   try {
     const lst = await env.PUSH_SUBS.list({ prefix: "digest:", limit: 20 });
     const vals = await Promise.all(lst.keys.map(k => env.PUSH_SUBS.get(k.name)));
     return vals.map(v => { try { return JSON.parse(v); } catch (e) { return null; } })
       .filter(Boolean)
-      .filter(d => !d.feed || d.feed === feedKey || (feedKey === "tw" && d.feed === "main"))
       .sort((a, b) => Date.parse(b.time || 0) - Date.parse(a.time || 0))
       .slice(0, 5)
       .map(d => ({
@@ -136,7 +136,7 @@ async function handleNewsIngest(request, env) {
   const title = String((body && body.title) || "").trim().slice(0, 160);
   const text = String((body && (body.body || body.summary || body.text)) || "").trim().slice(0, 24000);
   if (!title || !text) return _pjson({ error: "title_and_body_required" }, 400);
-  const feed = (["tw", "finance", "main"].includes(body.feed) ? body.feed : "tw");
+  const feed = (["market", "tw", "finance", "main"].includes(body.feed) ? body.feed : "market");
   const id = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
   const item = { id, feed, title, body: text, src: body.src || "Codex市場總覽", time: body.time || new Date().toISOString() };
   await env.PUSH_SUBS.put("digest:" + id, JSON.stringify(item), { expirationTtl: 60 * 60 * 24 * 14 });
@@ -160,7 +160,7 @@ async function handleNews(request, env) {
   const cache = caches.default;
   const cacheKey = new Request("https://news.cache/api/news?feed=" + feedKey);  // 穩定 key,忽略 &t=
   const hit = await cache.match(cacheKey);
-  const hasDigestOverlay = (feedKey === "tw" || feedKey === "finance");
+  const hasDigestOverlay = (feedKey === "market");
   if (hit && !hasDigestOverlay) return hit;
   const feeds = GROUPS[feedKey] || GROUPS.tw;
   const lists = await Promise.all(feeds.map(fetchFeed));

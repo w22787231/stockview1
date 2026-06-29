@@ -582,6 +582,7 @@ export default {
     if (url.pathname === "/api/stockfull") return handleStockFull(request);
     if (url.pathname === "/api/push/subscribe") return handlePush(request, env, "subscribe");
     if (url.pathname === "/api/push/unsubscribe") return handlePush(request, env, "unsubscribe");
+    if (url.pathname === "/api/val/all") return _pjson(await _valAll(request, env));
     if (url.pathname === "/api/val/request") return handleValRequest(request, env);
     if (url.pathname === "/api/val/status") return handleValStatus(request, env);
     if (url.pathname === "/api/val/pending") return handleValPending(request, env);

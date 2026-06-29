@@ -507,10 +507,26 @@ async function handlePush(request, env, action) {
   return _pjson({ ok: true, n: watchlist.length });
 }
 
-// ── 估值(/股價估價 自動化):全表靜態直讀 /data/valuations.json;下單佇列複用 PUSH_SUBS KV(req: 前綴) ──
+// ── 估值(/股價估價 自動化):靜態全表 + KV 新估值;下單佇列複用 PUSH_SUBS KV(req: 前綴) ──
 async function _valAll(request, env) {
-  try { const r = await env.ASSETS.fetch(new URL("/data/valuations.json", request.url)); return await r.json(); }
-  catch (e) { return { stocks: [] }; }
+  let out;
+  try { const r = await env.ASSETS.fetch(new URL("/data/valuations.json", request.url)); out = await r.json(); }
+  catch (e) { out = { stocks: [] }; }
+  if (!env || !env.PUSH_SUBS) return out;
+  const byTicker = new Map((out.stocks || []).map(s => [String(s.ticker || "").toUpperCase(), s]));
+  const lst = await env.PUSH_SUBS.list({ prefix: "req:" });
+  for (const k of lst.keys) {
+    const raw = await env.PUSH_SUBS.get(k.name);
+    if (!raw) continue;
+    let rec; try { rec = JSON.parse(raw); } catch (e) { continue; }
+    if (rec.status !== "done" || !rec.data) continue;
+    const t = String(rec.data.ticker || k.name.slice(4)).toUpperCase();
+    byTicker.set(t, rec.data);
+  }
+  out.stocks = Array.from(byTicker.values());
+  out.count = out.stocks.length;
+  out.updated = out.updated || new Date().toISOString();
+  return out;
 }
 async function handleValRequest(request, env) {
   if (request.method === "OPTIONS") return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" } });
@@ -549,7 +565,7 @@ async function handleValResult(request, env) {
   if (request.headers.get("x-poller-token") !== env.POLLER_TOKEN) return _pjson({ error: "unauthorized" }, 401);
   let body; try { body = await request.json(); } catch (e) { return _pjson({ error: "bad_json" }, 400); }
   const t = String(body.ticker || "").trim().toUpperCase();
-  await env.PUSH_SUBS.put("req:" + t, JSON.stringify({ status: "done", data: body.data, ts: Date.now() }), { expirationTtl: 1800 });
+  await env.PUSH_SUBS.put("req:" + t, JSON.stringify({ status: "done", data: body.data, ts: Date.now() }));
   return _pjson({ ok: true });
 }
 

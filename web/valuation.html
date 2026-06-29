@@ -67,7 +67,7 @@ const pctc=s=>{const n=num(s);return `<span class="${n>=0?'pos':'neg'}">${s}</sp
 const $=id=>document.getElementById(id);
 
 async function load(){
-  try{const r=await fetch('/data/valuations.json');const d=await r.json();ALL=d.stocks||[];}
+  try{const r=await fetch('/api/val/all');const d=await r.json();ALL=d.stocks||[];}
   catch(e){$('cnt').textContent='讀取全表失敗';}
   const cs=[...new Set(ALL.map(s=>s.class).filter(Boolean))].sort();
   $('fc').insertAdjacentHTML('beforeend',cs.map(c=>`<option>${c}</option>`).join(''));

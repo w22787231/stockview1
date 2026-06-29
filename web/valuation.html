@@ -1,6 +1,6 @@
 <!doctype html><html lang="zh-Hant"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>估值看板 · stockview</title>
+<title>估價看板 · stockview</title>
 <style>
 :root{--bg:#0f1115;--card:#171a21;--bd:#2a2f3a;--tx:#e6e8ec;--mut:#8a93a3}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,"Noto Sans TC",sans-serif}
@@ -20,8 +20,8 @@ th{color:var(--mut);cursor:pointer;white-space:nowrap}td.l{text-align:left}tr:ho
 #card{display:none}.kv{display:grid;grid-template-columns:90px 1fr;gap:4px 10px;font-size:14px}
 .kv b{color:var(--mut);font-weight:400}
 </style></head><body><div class="wrap">
-<h1>估值看板 <span class="mut" style="font-size:13px">/股價估價 自動化</span> <a href="/" target="_top" style="font-size:13px">↗ 開整站</a></h1>
-<div class="sub">輸入代號 → 命中已估的秒回；未估的自動排隊由本地 agent 跑完整 /股價估價(含本地券商報告)。判定＝雙鏡頭加權(折價/公允/真貴)。資料更新時點見全表。<b>非投資建議。</b></div>
+<h1>估價看板 <span class="mut" style="font-size:13px">/股票估值 自動化</span> <a href="/" target="_top" style="font-size:13px">↗ 開整站</a></h1>
+<div class="sub">輸入代號 → 命中已估的秒回；未估的自動排隊由本地 agent 跑完整 /股票估值(含本地券商報告)。判定＝雙鏡頭加權(折價/公允/真貴)。資料更新時點見全表。<b>非投資建議。</b></div>
 
 <div class="box">
   <input id="t" placeholder="輸入代號 (例 2330 / NVDA)" style="width:240px" onkeydown="if(event.key==='Enter')go()">

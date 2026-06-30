@@ -1,6 +1,6 @@
 {
  "updated": "2026-06-30",
- "count": 229,
+ "count": 228,
  "stocks": [
   {
    "market": "US",
@@ -335,30 +335,6 @@
    "verdict": "真貴",
    "action": "已漲4倍且高於最高目標,避/等回檔$90以下",
    "key_var": "Q4F26後訂單能見度,週期peak-EPS×高PE雙殺風險",
-   "confidence": "中",
-   "local": "本地:無"
-  },
-  {
-   "market": "US",
-   "class": "金融/控股",
-   "ticker": "POW",
-   "company": "Power Corp(加拿大,POW.TO)",
-   "price": "86.47",
-   "currency": "CAD",
-   "mktcap": "CAD55.4B",
-   "fwd_pe": "14.25",
-   "consensus_tp": "82.56",
-   "px_vs_consensus": "-5%",
-   "bear": "68",
-   "base": "84",
-   "bull": "99",
-   "cons_w": "80.7",
-   "cons_pct": "-6.7%",
-   "grow_w": "86.9",
-   "grow_pct": "+0.5%",
-   "verdict": "公允偏貴",
-   "action": "加拿大控股,現價≈均目標,3.2%股息可抱,等回檔80以下",
-   "key_var": "Lifeco/IGM獲利能否維持雙位數撐14x",
    "confidence": "中",
    "local": "本地:無"
   },

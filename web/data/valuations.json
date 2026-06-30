@@ -1,6 +1,6 @@
 {
  "updated": "2026-06-30",
- "count": 228,
+ "count": 227,
  "stocks": [
   {
    "market": "US",
@@ -4008,30 +4008,6 @@
    "action": "避/等回檔,backlog利多已priced-in,微流通量情緒衝高",
    "key_var": "$100M+ backlog能否轉FY27營收(EPS從~$0.55跳$1+)",
    "confidence": "中",
-   "local": "本地:無"
-  },
-  {
-   "market": "US",
-   "class": "ETF(非個股)",
-   "ticker": "FOTO",
-   "company": "Tuttle Photonics ETF(非個股)",
-   "price": "23.65",
-   "currency": "USD",
-   "mktcap": "AUM(2026/5剛成立)",
-   "fwd_pe": "N/A",
-   "consensus_tp": "N/A",
-   "px_vs_consensus": "N/A",
-   "bear": "N/A",
-   "base": "N/A",
-   "bull": "N/A",
-   "cons_w": "N/A",
-   "cons_pct": "N/A",
-   "grow_w": "N/A",
-   "grow_pct": "N/A",
-   "verdict": "ETF非個股",
-   "action": "FOTO是光子學主題ETF(Tuttle),非單一公司無法個股估值;要光子學個股請給LWLG/POET/LITE等代號",
-   "key_var": "N/A",
-   "confidence": "高",
    "local": "本地:無"
   },
   {

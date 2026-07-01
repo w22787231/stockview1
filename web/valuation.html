@@ -67,7 +67,11 @@ const pctc=s=>{const n=num(s);return `<span class="${n>=0?'pos':'neg'}">${s}</sp
 const $=id=>document.getElementById(id);
 
 async function load(){
-  try{const r=await fetch('/api/val/all');const d=await r.json();ALL=d.stocks||[];}
+  try{
+    let r=await fetch('/api/val/all?ts='+Date.now(),{cache:'no-store'});
+    if(!r.ok) r=await fetch('/data/valuations.json?ts='+Date.now(),{cache:'no-store'});
+    const d=await r.json();ALL=d.stocks||[];
+  }
   catch(e){$('cnt').textContent='讀取全表失敗';}
   const cs=[...new Set(ALL.map(s=>s.class||s.category).filter(Boolean))].sort();
   $('fc').insertAdjacentHTML('beforeend',cs.map(c=>`<option>${c}</option>`).join(''));

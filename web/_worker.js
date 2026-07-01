@@ -515,13 +515,16 @@ async function _valAll(request, env) {
   if (!env || !env.PUSH_SUBS) return out;
   const byTicker = new Map((out.stocks || []).map(s => [String(s.ticker || "").toUpperCase(), s]));
   const lst = await env.PUSH_SUBS.list({ prefix: "req:" });
-  for (const k of lst.keys) {
+  const kvRows = await Promise.all(lst.keys.map(async k => {
     const raw = await env.PUSH_SUBS.get(k.name);
-    if (!raw) continue;
-    let rec; try { rec = JSON.parse(raw); } catch (e) { continue; }
-    if (rec.status !== "done" || !rec.data) continue;
+    if (!raw) return null;
+    let rec; try { rec = JSON.parse(raw); } catch (e) { return null; }
+    if (rec.status !== "done" || !rec.data) return null;
     const t = String(rec.data.ticker || k.name.slice(4)).toUpperCase();
-    byTicker.set(t, rec.data);
+    return [t, rec.data];
+  }));
+  for (const row of kvRows) {
+    if (row) byTicker.set(row[0], row[1]);
   }
   out.stocks = Array.from(byTicker.values());
   out.count = out.stocks.length;

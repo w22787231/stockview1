@@ -36,7 +36,7 @@ th{color:var(--mut);cursor:pointer;white-space:nowrap}td.l{text-align:left}tr:ho
       <b>現價</b><span id="c_p"></span><b>forward P/E</b><span id="c_pe"></span>
       <b>BEAR/BASE/BULL</b><span id="c_bbb"></span><b>保守價/成長價</b><span id="c_w"></span>
       <b>保守%/成長%</b><span id="c_pct"></span>
-      <b>動作</b><span id="c_a"></span><b>決勝變數</b><span id="c_k"></span>
+      <b>題材預期價</b><span id="c_ep"></span><b>動作</b><span id="c_a"></span><b>決勝變數</b><span id="c_k"></span>
       <b>共識目標</b><span id="c_cs"></span><b>本地</b><span id="c_lo"></span><b>信心</b><span id="c_cf"></span>
     </div>
   </div>
@@ -56,7 +56,7 @@ th{color:var(--mut);cursor:pointer;white-space:nowrap}td.l{text-align:left}tr:ho
     <th onclick="srt('class')">分類</th><th onclick="srt('price')">現價</th><th onclick="srt('fwd_pe')">fwd P/E</th>
     <th onclick="srt('cons_w')">保守價</th><th onclick="srt('cons_pct')">保守%</th>
     <th onclick="srt('grow_w')">成長價</th><th onclick="srt('grow_pct')">成長%</th>
-    <th onclick="srt('verdict')">判定</th><th class="l">決勝變數</th>
+    <th onclick="srt('expected_px')">題材價</th><th onclick="srt('verdict')">判定</th><th class="l">決勝變數</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
 </div>
 
@@ -69,23 +69,23 @@ const $=id=>document.getElementById(id);
 async function load(){
   try{const r=await fetch('/api/val/all');const d=await r.json();ALL=d.stocks||[];}
   catch(e){$('cnt').textContent='讀取全表失敗';}
-  const cs=[...new Set(ALL.map(s=>s.class).filter(Boolean))].sort();
+  const cs=[...new Set(ALL.map(s=>s.class||s.category).filter(Boolean))].sort();
   $('fc').insertAdjacentHTML('beforeend',cs.map(c=>`<option>${c}</option>`).join(''));
   render();
 }
 function srt(k){sd=(sk===k)?-sd:1;sk=k;render()}
 function render(){
   const fm=$('fmkt').value,fv=$('fv').value,fc=$('fc').value,q=$('fq').value.trim().toUpperCase();
-  let r=ALL.filter(s=>(!fm||s.market===fm)&&(!fv||s.verdict===fv)&&(!fc||s.class===fc)
-     &&(!q||s.ticker.includes(q)||(s.company||'').toUpperCase().includes(q)));
-  const isn=['cons_w','grow_w','cons_pct','grow_pct','price'].includes(sk);
+  let r=ALL.filter(s=>(!fm||s.market===fm)&&(!fv||s.verdict===fv)&&(!fc||(s.class||s.category)===fc)
+     &&(!q||s.ticker.includes(q)||(s.company||s.name||'').toUpperCase().includes(q)));
+  const isn=['cons_w','grow_w','cons_pct','grow_pct','price','expected_px'].includes(sk);
   r.sort((a,b)=>(isn?(num(a[sk])-num(b[sk])):String(a[sk]).localeCompare(String(b[sk])))*sd);
   $('cnt').textContent=r.length+' 檔';
   $('tb').innerHTML=r.map(s=>`<tr>
-    <td>${s.market}</td><td>${s.ticker}</td><td class="l">${s.company||''}</td><td class="mut">${s.class||''}</td>
+    <td>${s.market}</td><td>${s.ticker}</td><td class="l">${s.company||s.name||''}</td><td class="mut">${s.class||s.category||''}</td>
     <td>${s.price}</td><td>${s.fwd_pe||''}</td><td class="px">${s.cons_w||''}</td><td>${pctc(s.cons_pct)}</td>
     <td class="px">${s.grow_w||''}</td><td>${pctc(s.grow_pct)}</td>
-    <td><span class="v ${s.verdict}">${s.verdict}</span></td><td class="l mut">${s.key_var||''}</td></tr>`).join('');
+    <td class="px">${s.expected_px||s.market_expected_px||s.topic_px||''}</td><td><span class="v ${s.verdict}">${s.verdict}</span></td><td class="l mut">${s.key_var||s.key||''}</td></tr>`).join('');
 }
 async function go(){
   const t=$('t').value.trim().toUpperCase();if(!t)return;
@@ -104,13 +104,15 @@ async function go(){
 }
 function show(d){
   $('card').style.display='block';
-  $('c_n').textContent=d.company||'';$('c_t').textContent=d.ticker;$('c_v').textContent=d.verdict;$('c_v').className='v '+d.verdict;
+  $('c_n').textContent=d.company||d.name||'';$('c_t').textContent=d.ticker;$('c_v').textContent=d.verdict;$('c_v').className='v '+d.verdict;
   $('c_p').textContent=d.price+' '+(d.currency||'');$('c_pe').textContent=d.fwd_pe||'';
   $('c_bbb').textContent=`${d.bear} / ${d.base} / ${d.bull}`;
   $('c_w').innerHTML=`<span class="pair"><span class="p">${d.cons_w||''}</span><span class="mut">/</span><span class="p">${d.grow_w||''}</span></span>`;
   $('c_pct').innerHTML=pctc(d.cons_pct)+' / '+pctc(d.grow_pct);
-  $('c_a').textContent=d.action||'';$('c_k').textContent=d.key_var||'';$('c_cs').textContent=d.consensus_tp||'';
+  $('c_ep').textContent=d.expected_px||d.market_expected_px||d.topic_px||'';
+  $('c_a').textContent=d.action||'';$('c_k').textContent=d.key_var||d.key||'';$('c_cs').textContent=d.consensus_tp||'';
   $('c_lo').textContent=d.local||'';$('c_cf').textContent=d.confidence||'';
 }
 load();
 </script></div></body></html>
+

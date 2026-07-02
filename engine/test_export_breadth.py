@@ -35,3 +35,27 @@ def test_core_fields_math():
     assert row["ad_diff"] == 5
     assert row["ad_ratio"] == 3.5
     assert row["ad_line"] == [3, 2]
+
+
+def test_build_payload_is_us_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(b, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(b, "OUT", str(tmp_path / "breadth.json"))
+    monkeypatch.setattr(
+        b,
+        "build_us",
+        lambda: b._with_core_fields(
+            "美股騰落",
+            ["2026-01-01", "2026-01-02"],
+            [2, -1],
+            [100, 101],
+            {"advancers": 3, "decliners": 1, "unchanged": 0},
+            "unit-test",
+        ),
+    )
+    b.build()
+    import json
+
+    payload = json.loads((tmp_path / "breadth.json").read_text(encoding="utf-8"))
+    assert "us" in payload
+    assert "tw" not in payload
+    assert payload["us"]["date"] == "2026-01-02"

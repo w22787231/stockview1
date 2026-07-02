@@ -143,7 +143,7 @@ jobs:
           python -m pip install pypdf -q || true   # FactSet PDF 解析(forward EPS)
           python export_sentiment.py || true
 
-      - name: Export advance-decline breadth (TW + US)
+      - name: Export advance-decline breadth (US 10Y)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:
           PYTHONUTF8: "1"
@@ -151,8 +151,11 @@ jobs:
         run: |
           cd engine
           python export_breadth.py || echo "[breadth] 失敗,沿用線上"
+          if [ -s ../data/breadth.json ]; then
+            python -c "import json; d=json.load(open('../data/breadth.json',encoding='utf-8')); assert isinstance(d,dict) and isinstance(d.get('us'),dict) and len(d['us'].get('dates') or [])>0" || rm -f ../data/breadth.json
+          fi
           if [ ! -s ../data/breadth.json ]; then
-            python -c "import json,urllib.request; raw=urllib.request.urlopen(urllib.request.Request('https://stockview1.pages.dev/data/breadth.json',headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read().decode('utf-8-sig'); d=json.loads(raw); assert isinstance(d,dict) and isinstance(d.get('tw'),dict) and isinstance(d.get('us'),dict); open('../data/breadth.json','w',encoding='utf-8').write(json.dumps(d,ensure_ascii=False,separators=(',',':')))" && echo "[breadth] 已沿用線上" || echo "[breadth] 線上沿用也失敗"
+            python -c "import json,urllib.request; raw=urllib.request.urlopen(urllib.request.Request('https://stockview1.pages.dev/data/breadth.json',headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read().decode('utf-8-sig'); d=json.loads(raw); assert isinstance(d,dict) and isinstance(d.get('us'),dict); open('../data/breadth.json','w',encoding='utf-8').write(json.dumps(d,ensure_ascii=False,separators=(',',':')))" && echo "[breadth] 已沿用線上" || echo "[breadth] 線上沿用也失敗"
           fi
 
       - name: Export speculation temperature (投機溫度)

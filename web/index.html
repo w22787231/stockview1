@@ -66,11 +66,16 @@
   /* 指數總覽卡 */
   .idx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:4px}
   .m1m2-chart{width:100%;height:260px}
-  .breadth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:4px}
+  .breadth-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:4px}
   .breadth-panel{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 14px;min-width:0;box-shadow:var(--shadow)}
   .breadth-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
   .breadth-head h3{margin:0;font-size:14px;font-weight:760}
   .breadth-date{font-family:var(--mono);font-size:11px;color:var(--ink3);white-space:nowrap}
+  .breadth-ranges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+  .breadth-range{border:1px solid var(--line);background:var(--panel2);color:var(--ink2);border-radius:8px;
+    padding:5px 9px;font-family:var(--mono);font-size:11px;font-weight:760;cursor:pointer}
+  .breadth-range:hover{color:var(--ink);border-color:var(--blue)}
+  .breadth-range.active{background:var(--blue);border-color:var(--blue);color:white}
   .breadth-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
   .breadth-metric{border:1px solid var(--line);border-radius:8px;padding:8px 9px;background:var(--panel2);min-width:0}
   .breadth-metric .k{font-size:10.5px;color:var(--ink3);white-space:nowrap}
@@ -1307,12 +1312,27 @@ function breadthAlertHtml(b){
 function breadthMetric(k,v,clsName){
   return '<div class="breadth-metric"><div class="k">'+esc(k)+'</div><div class="v '+(clsName||"")+'">'+v+'</div></div>';
 }
+const BREADTH_RANGES=[
+  ["3M",92],
+  ["6M",183],
+  ["1Y",366],
+  ["3Y",1096],
+  ["5Y",1827],
+  ["10Y",null],
+];
+let breadthRange="1Y";
+function breadthRangeHtml(){
+  return '<div class="breadth-ranges">'+BREADTH_RANGES.map(([label])=>
+    '<button type="button" class="breadth-range '+(label===breadthRange?'active':'')+'" data-range="'+label+'">'+label+'</button>'
+  ).join("")+'</div>';
+}
 function breadthPanel(key,b){
   if(!b) return '<div class="breadth-panel"><div class="note">暫無資料</div></div>';
   const diff=Number(b.ad_diff||0);
   const ratio=(b.ad_ratio==null)?"N/A":bnum(b.ad_ratio,2);
   return '<div class="breadth-panel">'+
-    '<div class="breadth-head"><h3>'+esc(b.label||(key==="tw"?"台股騰落":"美股騰落"))+'</h3><span class="breadth-date">'+esc(b.date||"")+'</span></div>'+
+    '<div class="breadth-head"><h3>'+esc(b.label||"美股騰落")+'</h3><span class="breadth-date">'+esc(b.date||"")+'</span></div>'+
+    breadthRangeHtml()+
     '<div class="breadth-cards">'+
       breadthMetric("上漲",bnum(b.advancers,0),"pos")+
       breadthMetric("下跌",bnum(b.decliners,0),"neg")+
@@ -1327,10 +1347,28 @@ function breadthPanel(key,b){
 function renderBreadth(d){
   const box=$("#breadthBox");
   if(!box) return;
-  box.innerHTML='<div class="breadth-grid">'+breadthPanel("tw",d.tw)+breadthPanel("us",d.us)+'</div>'+
+  box.innerHTML='<div class="breadth-grid">'+breadthPanel("us",d.us)+'</div>'+
     '<div class="legend">騰落線＝每日「上漲家數−下跌家數」累積。指數創高但騰落線不創高＝頂背離；指數創低但騰落線不創低＝底背離。這是市場內部警示，不是買賣建議。</div>';
-  drawBreadthChart("tw",d.tw);
+  box.querySelectorAll(".breadth-range").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      breadthRange=btn.dataset.range||"1Y";
+      box.querySelectorAll(".breadth-range").forEach(x=>x.classList.toggle("active",x.dataset.range===breadthRange));
+      drawBreadthChart("us",d.us);
+    });
+  });
   drawBreadthChart("us",d.us);
+}
+function filterBreadthSeries(b){
+  const dates=b.dates||[], ad=b.ad_line||[], idx=b.index_series||[];
+  const range=BREADTH_RANGES.find(x=>x[0]===breadthRange);
+  const days=range?range[1]:366;
+  if(!days || !dates.length) return {dates,ad,idx};
+  const end=new Date(dates[dates.length-1]+"T00:00:00");
+  const start=new Date(end);
+  start.setDate(start.getDate()-days);
+  let first=dates.findIndex(d=>new Date(d+"T00:00:00")>=start);
+  if(first<0) first=0;
+  return {dates:dates.slice(first),ad:ad.slice(first),idx:idx.slice(first)};
 }
 function drawBreadthChart(key,b){
   const el=document.getElementById("breadthChart_"+key);
@@ -1339,7 +1377,8 @@ function drawBreadthChart(key,b){
   const blue=css.getPropertyValue("--blue").trim()||"#1f6feb";
   const green=css.getPropertyValue("--green").trim()||"#16a34a";
   const red=css.getPropertyValue("--red").trim()||"#e11d48";
-  const dates=b.dates||[], ad=b.ad_line||[], idx=b.index_series||[];
+  const sliced=filterBreadthSeries(b);
+  const dates=sliced.dates, ad=sliced.ad, idx=sliced.idx;
   const divs=(b.divergences||[]).filter(x=>x.type==="bearish"||x.type==="bullish");
   const markData=divs.map(x=>{
     const i=dates.indexOf(x.date);

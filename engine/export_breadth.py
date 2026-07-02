@@ -180,9 +180,34 @@ def _latest_index(sym):
         df = yf.download(sym, period="10d", interval="1d", progress=False, auto_adjust=False)
         if df is None or df.empty:
             return None
-        return _round(float(df["Close"].dropna().iloc[-1]), 2)
+        closes = _close_series(df, sym)
+        if closes is None or closes.dropna().empty:
+            return None
+        return _round(float(closes.dropna().iloc[-1]), 2)
     except Exception:
         return None
+
+
+def _close_series(df, sym=None):
+    if df is None or df.empty:
+        return None
+    cols = getattr(df, "columns", None)
+    if getattr(cols, "nlevels", 1) > 1:
+        try:
+            if "Close" in cols.get_level_values(0):
+                close = df["Close"]
+            else:
+                close = df.xs("Close", axis=1, level=-1)
+            if getattr(close, "ndim", 1) == 1:
+                return close
+            if sym and sym in close.columns:
+                return close[sym]
+            return close.iloc[:, 0]
+        except Exception:
+            return None
+    if "Close" not in df:
+        return None
+    return df["Close"]
 
 
 def build_tw(live):
@@ -239,11 +264,13 @@ def build_us(pool="sp500", limit=60):
     unch_series = []
     idx_series = []
     index_by_date = {}
-    try:
-        for dt, row in idx.dropna().iterrows():
-            index_by_date[dt.strftime("%Y-%m-%d")] = _round(row["Close"], 2)
-    except Exception:
-        pass
+    closes = _close_series(idx, "^GSPC")
+    if closes is not None:
+        try:
+            for dt, val in closes.dropna().items():
+                index_by_date[dt.strftime("%Y-%m-%d")] = _round(val, 2)
+        except Exception:
+            pass
     if getattr(df.columns, "nlevels", 1) <= 1:
         return _with_core_fields("美股騰落", [], [], [], {}, "yfinance S&P500 pool")
 

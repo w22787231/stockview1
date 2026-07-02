@@ -108,11 +108,19 @@ def _with_core_fields(label, dates, ad_diff, index_series, today_counts, source,
 
 
 def _detect_divergences(dates, index_series, ad_line, window=20):
-    if len(dates) < window or len(index_series) < window or len(ad_line) < window:
+    points = []
+    for date, idx, breadth in zip(dates, index_series, ad_line):
+        idx = _num(idx)
+        breadth = _num(breadth)
+        if idx is not None and breadth is not None:
+            points.append((date, idx, breadth))
+    if len(points) < window:
         return [{"type": "pending", "date": dates[-1] if dates else None,
                  "message": "資料累積中"}]
-    idx = index_series[-window:]
-    breadth = ad_line[-window:]
+    recent = points[-window:]
+    idx = [p[1] for p in recent]
+    breadth = [p[2] for p in recent]
+    latest_date = recent[-1][0]
     latest_i = idx[-1]
     latest_b = breadth[-1]
     prev_idx_hi = max(idx[:-1])
@@ -120,13 +128,12 @@ def _detect_divergences(dates, index_series, ad_line, window=20):
     prev_b_hi = max(breadth[:-1])
     prev_b_lo = min(breadth[:-1])
     out = []
-    if latest_i is not None and latest_b is not None:
-        if latest_i >= prev_idx_hi and latest_b < prev_b_hi:
-            out.append({"type": "bearish", "date": dates[-1],
-                        "message": "頂背離：指數創高，但騰落線未同步創高"})
-        if latest_i <= prev_idx_lo and latest_b > prev_b_lo:
-            out.append({"type": "bullish", "date": dates[-1],
-                        "message": "底背離：指數創低，但騰落線未同步創低"})
+    if latest_i >= prev_idx_hi and latest_b < prev_b_hi:
+        out.append({"type": "bearish", "date": latest_date,
+                    "message": "頂背離：指數創高，但騰落線未同步創高"})
+    if latest_i <= prev_idx_lo and latest_b > prev_b_lo:
+        out.append({"type": "bullish", "date": latest_date,
+                    "message": "底背離：指數創低，但騰落線未同步創低"})
     return out
 
 

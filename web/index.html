@@ -66,6 +66,20 @@
   /* 指數總覽卡 */
   .idx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:4px}
   .m1m2-chart{width:100%;height:260px}
+  .breadth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:4px}
+  .breadth-panel{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 14px;min-width:0;box-shadow:var(--shadow)}
+  .breadth-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+  .breadth-head h3{margin:0;font-size:14px;font-weight:760}
+  .breadth-date{font-family:var(--mono);font-size:11px;color:var(--ink3);white-space:nowrap}
+  .breadth-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+  .breadth-metric{border:1px solid var(--line);border-radius:8px;padding:8px 9px;background:var(--panel2);min-width:0}
+  .breadth-metric .k{font-size:10.5px;color:var(--ink3);white-space:nowrap}
+  .breadth-metric .v{font-family:var(--mono);font-size:17px;font-weight:760;line-height:1.15;margin-top:2px}
+  .breadth-chart{width:100%;height:250px}
+  .breadth-alert{margin-top:8px;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:720;line-height:1.55;border:1px solid var(--line);background:var(--panel2)}
+  .breadth-alert.bearish{border-color:var(--red);background:#fff5f6;color:var(--red)}
+  .breadth-alert.bullish{border-color:var(--green);background:#f2fbf5;color:var(--green)}
+  .breadth-alert.pending{color:var(--ink3)}
   .idx-card{border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:var(--panel);
     box-shadow:var(--shadow)}
   .idx-card .ic-label{font-size:12.5px;color:var(--ink2);font-weight:650;margin-bottom:2px}
@@ -468,6 +482,9 @@
     #chart{height:280px}
     /* 新分頁/圖表的手機微調(桌面不受影響)*/
     .m1m2-chart{height:210px}
+    .breadth-grid{grid-template-columns:1fr}
+    .breadth-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .breadth-chart{height:220px}
     .hold-add{gap:6px}
     #holdInput,.holdInput{flex:1 1 100%;min-width:0}
     .cal-ev{gap:7px;padding:6px 4px;flex-wrap:wrap}
@@ -1210,6 +1227,10 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<section id="breadthSec"><div class="sec-head"><h2>騰落指標</h2><span class="tag">Advance / Decline</span>'+
+      '<span class="hint">台股與美股分開看，檢查指數是否由多數股票同步支撐</span></div>'+
+      '<div id="breadthBox"><div class="loading-screen">載入騰落指標 …</div></div>'+
+    '</section>'+
     '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
     '<div id="specBlock"></div>'+
@@ -1226,6 +1247,7 @@ function renderMacro(d){
     '</section>';
   if(d.m1b_m2) drawM1M2(d.m1b_m2);
   loadSentiment();
+  loadBreadth();
   loadThemes();
   loadFsi();
   loadPI();
@@ -1251,6 +1273,93 @@ function drawM1M2(m){
         data:sp.map(v=>({value:v,itemStyle:{color:(v>=0?"#16a34a":"#e11d48"),opacity:.4}}))},
       {name:"M1B年增",type:"line",data:m1b,smooth:true,symbol:"none",lineStyle:{width:2,color:"#1f6feb"},itemStyle:{color:"#1f6feb"}},
       {name:"M2年增",type:"line",data:m2,smooth:true,symbol:"none",lineStyle:{width:2,color:"#8b949e"},itemStyle:{color:"#8b949e"}},
+    ],
+  });
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+
+async function loadBreadth(){
+  const box=$("#breadthBox");
+  if(!box) return;
+  try{
+    const res=await fetch("data/breadth.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const d=await res.json();
+    renderBreadth(d);
+  }catch(e){
+    box.innerHTML='<div class="note">⚠️ 找不到騰落資料(data/breadth.json)。請在 GitHub Actions 跑一次 export。</div>';
+  }
+}
+function bnum(n,dec){
+  if(n==null || n==="") return "N/A";
+  const v=Number(n);
+  if(!isFinite(v)) return "N/A";
+  return v.toLocaleString("en-US",{minimumFractionDigits:dec||0,maximumFractionDigits:dec||0});
+}
+function breadthAlertHtml(b){
+  const ds=(b&&Array.isArray(b.divergences))?b.divergences:[];
+  if(!ds.length) return '<div class="breadth-alert">目前未偵測到頂背離或底背離。</div>';
+  return ds.map(x=>{
+    const cls=x.type==="bearish"?"bearish":(x.type==="bullish"?"bullish":"pending");
+    return '<div class="breadth-alert '+cls+'">'+esc(x.message||"資料累積中")+'</div>';
+  }).join("");
+}
+function breadthMetric(k,v,clsName){
+  return '<div class="breadth-metric"><div class="k">'+esc(k)+'</div><div class="v '+(clsName||"")+'">'+v+'</div></div>';
+}
+function breadthPanel(key,b){
+  if(!b) return '<div class="breadth-panel"><div class="note">暫無資料</div></div>';
+  const diff=Number(b.ad_diff||0);
+  const ratio=(b.ad_ratio==null)?"N/A":bnum(b.ad_ratio,2);
+  return '<div class="breadth-panel">'+
+    '<div class="breadth-head"><h3>'+esc(b.label||(key==="tw"?"台股騰落":"美股騰落"))+'</h3><span class="breadth-date">'+esc(b.date||"")+'</span></div>'+
+    '<div class="breadth-cards">'+
+      breadthMetric("上漲",bnum(b.advancers,0),"pos")+
+      breadthMetric("下跌",bnum(b.decliners,0),"neg")+
+      breadthMetric("平盤",bnum(b.unchanged,0),"dim")+
+      breadthMetric("A-D / Ratio",'<span class="'+(diff>=0?"pos":"neg")+'">'+(diff>0?"+":"")+bnum(diff,0)+'</span> <span class="dim">/ '+ratio+'</span>')+
+    '</div>'+
+    '<div id="breadthChart_'+key+'" class="breadth-chart"></div>'+
+    breadthAlertHtml(b)+
+    '<div class="legend" style="border:none;margin-top:8px;padding:0">'+esc(b.notes||"")+'</div>'+
+  '</div>';
+}
+function renderBreadth(d){
+  const box=$("#breadthBox");
+  if(!box) return;
+  box.innerHTML='<div class="breadth-grid">'+breadthPanel("tw",d.tw)+breadthPanel("us",d.us)+'</div>'+
+    '<div class="legend">騰落線＝每日「上漲家數−下跌家數」累積。指數創高但騰落線不創高＝頂背離；指數創低但騰落線不創低＝底背離。這是市場內部警示，不是買賣建議。</div>';
+  drawBreadthChart("tw",d.tw);
+  drawBreadthChart("us",d.us);
+}
+function drawBreadthChart(key,b){
+  const el=document.getElementById("breadthChart_"+key);
+  if(!el || !window.echarts || !b || !(b.dates||[]).length){ if(el) el.innerHTML='<div class="legend">暫無圖表資料</div>'; return; }
+  const css=getComputedStyle(document.documentElement);
+  const blue=css.getPropertyValue("--blue").trim()||"#1f6feb";
+  const green=css.getPropertyValue("--green").trim()||"#16a34a";
+  const red=css.getPropertyValue("--red").trim()||"#e11d48";
+  const dates=b.dates||[], ad=b.ad_line||[], idx=b.index_series||[];
+  const divs=(b.divergences||[]).filter(x=>x.type==="bearish"||x.type==="bullish");
+  const markData=divs.map(x=>{
+    const i=dates.indexOf(x.date);
+    return i<0?null:{name:x.type==="bearish"?"頂背離":"底背離",coord:[x.date,ad[i]],value:x.type==="bearish"?"頂背離":"底背離",
+      itemStyle:{color:x.type==="bearish"?red:green},label:{formatter:x.type==="bearish"?"頂背離":"底背離",fontSize:10}};
+  }).filter(Boolean);
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:42,right:48,top:28,bottom:32},
+    legend:{data:["騰落線","指數"],top:0,textStyle:{fontSize:11},itemWidth:16,itemHeight:9},
+    tooltip:{trigger:"axis"},
+    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/7))}},
+    yAxis:[
+      {type:"value",name:"A/D",axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",name:"指數",scale:true,position:"right",axisLabel:{fontSize:10},splitLine:{show:false}},
+    ],
+    series:[
+      {name:"騰落線",type:"line",data:ad,smooth:true,symbol:"none",lineStyle:{width:2,color:blue},areaStyle:{color:blue+"14"},
+        markPoint:{symbolSize:58,data:markData}},
+      {name:"指數",type:"line",data:idx,smooth:true,symbol:"none",yAxisIndex:1,lineStyle:{width:1.6,color:"#9333ea",opacity:.9}},
     ],
   });
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }

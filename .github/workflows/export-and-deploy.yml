@@ -143,6 +143,18 @@ jobs:
           python -m pip install pypdf -q || true   # FactSet PDF 解析(forward EPS)
           python export_sentiment.py || true
 
+      - name: Export advance-decline breadth (TW + US)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_breadth.py || echo "[breadth] 失敗,沿用線上"
+          if [ ! -s ../data/breadth.json ]; then
+            python -c "import urllib.request; open('../data/breadth.json','wb').write(urllib.request.urlopen(urllib.request.Request('https://stockview1.pages.dev/data/breadth.json',headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read())" && echo "[breadth] 已沿用線上" || echo "[breadth] 線上沿用也失敗"
+          fi
+
       - name: Export speculation temperature (投機溫度)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

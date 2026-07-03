@@ -32,6 +32,11 @@ on:
         required: false
         type: boolean
         default: false
+      theme_flow_only:
+        description: "輕量部署:沿用線上資料,只重算美股細分產業資金流"
+        required: false
+        type: boolean
+        default: false
   repository_dispatch:
     types: [refresh-data]
 
@@ -236,6 +241,15 @@ jobs:
         run: |
           cd engine
           python pull_live_data.py || true
+
+      - name: Export US theme flow only (light deploy)
+        if: ${{ github.event.inputs.theme_flow_only == 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_us_theme_flow.py
 
       - name: Export industry median PE (for holdings 同業PE)
         if: ${{ github.event.inputs.web_only != 'true' }}

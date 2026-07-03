@@ -1228,6 +1228,7 @@ function renderMacro(d){
         '<div class="ex">M1B 含活存(資金活水)、M2 含定存。<b class="pos">M1B 年增 &gt; M2(差為正)＝黃金交叉</b>,資金動能轉強、偏多股市;<b class="neg">M1B &lt; M2 ＝死亡交叉</b>。月資料,來源中央銀行貨幣總計數。</div>'+
       '</div>' : '')+
     '</section>'+
+    '<div id="chicagoFciBlock"></div>'+
     '<section id="sentSec"><div class="sec-head"><h2>情緒指標</h2><span class="tag">波動 / 廣度 / 貪婪恐懼</span>'+
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
@@ -1253,6 +1254,7 @@ function renderMacro(d){
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
   if(d.m1b_m2) drawM1M2(d.m1b_m2);
+  loadChicagoFci();
   loadSentiment();
   loadBreadth();
   loadThemes();
@@ -1285,6 +1287,96 @@ function drawM1M2(m){
     ],
   });
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+
+// ── Chicago Fed NFCI + S&P 500 ──
+let CHICAGO_FCI_DATA=null;
+let CHICAGO_FCI_WIN="1y";
+const CHICAGO_FCI_WINS=[["3m",13,"3M"],["6m",26,"6M"],["1y",52,"1Y"],["3y",156,"3Y"],["5y",260,"5Y"],["10y",520,"10Y"]];
+const CHICAGO_FCI_LABEL={"3m":"3M","6m":"6M","1y":"1Y","3y":"3Y","5y":"5Y","10y":"10Y"};
+
+function drawChicagoFciChart(d){
+  const el=$("#chicagoFciChart");
+  if(!el || !window.echarts) return;
+  const ser=d.series||{}, allDates=ser.dates||[];
+  const win=CHICAGO_FCI_WINS.find(x=>x[0]===CHICAGO_FCI_WIN) || CHICAGO_FCI_WINS[2];
+  const n=Math.min(win[1], allDates.length);
+  if(n<2){ el.innerHTML='<div class="legend">資料點不足,無法繪圖。</div>'; return; }
+  const dates=allDates.slice(-n), nfci=(ser.nfci||[]).slice(-n), spx=(ser.sp500||[]).slice(-n);
+  const toMs=s=>new Date(s+"T00:00:00").getTime();
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:56,right:64,top:34,bottom:32},
+    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:["NFCI","S&P 500"]},
+    tooltip:{trigger:"axis",axisPointer:{type:"cross"}},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:[
+      {type:"value",name:"NFCI",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",name:"S&P500",scale:true,position:"right",nameTextStyle:{fontSize:10},axisLabel:{fontSize:10},splitLine:{show:false}}
+    ],
+    series:[
+      {name:"NFCI",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,
+       data:dates.map((x,i)=>[toMs(x),nfci[i]??null]),
+       lineStyle:{color:"#e11d48",width:2.4},itemStyle:{color:"#e11d48"},
+       markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.65},data:[{yAxis:0}]}},
+      {name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,
+       data:dates.map((x,i)=>[toMs(x),spx[i]??null]),
+       lineStyle:{color:"#2563eb",width:1.6,type:"dashed"},itemStyle:{color:"#2563eb"}}
+    ]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize",el._ro);
+}
+
+function renderChicagoFci(d){
+  const box=$("#chicagoFciBlock");
+  if(!box) return;
+  const cur=d.current, chg=d.weekly_change;
+  const tight=cur!=null && cur>0;
+  const chgCls=chg>0?"neg":(chg<0?"pos":"dim");
+  const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:125px;margin-right:12px';
+  const btns=CHICAGO_FCI_WINS.map(w=>'<button class="btn'+(CHICAGO_FCI_WIN===w[0]?' active':'')+'" data-cfciw="'+w[0]+'">'+w[2]+'</button>').join("");
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>芝加哥聯儲金融狀況指數</h2>'+
+        '<span class="tag">NFCI · 每週</span>'+
+        '<span class="hint">NFCI&gt;0＝金融狀況偏緊；NFCI&lt;0＝偏寬鬆。與 S&amp;P 500 疊圖看風險資產壓力。</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
+        '<div style="'+card+'"><div class="cap-lab">NFCI 最新</div>'+
+          '<div class="cap-big '+(tight?'neg':'pos')+'">'+(cur==null?'—':(cur>0?'+':'')+Number(cur).toFixed(3))+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">週變化</div>'+
+          '<div class="cap-big '+chgCls+'">'+(chg==null?'—':(chg>0?'+':'')+Number(chg).toFixed(3))+'</div></div>'+
+        '<div class="dim" style="font-size:12px">資料週期 '+esc(d.as_of||"")+'</div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="chicagoFciChart" class="cap-chart" style="height:260px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:'+esc(d.source||"FRED NFCI + Yahoo Finance ^GSPC")+'。'+esc(d.note||"")+' 時段 '+esc(CHICAGO_FCI_LABEL[CHICAGO_FCI_WIN]||CHICAGO_FCI_WIN)+'。</div>'+
+    '</section>';
+  box.querySelectorAll("[data-cfciw]").forEach(b=>b.onclick=()=>{
+    CHICAGO_FCI_WIN=b.dataset.cfciw||"1y";
+    renderChicagoFci(CHICAGO_FCI_DATA);
+  });
+  drawChicagoFciChart(d);
+}
+
+async function loadChicagoFci(){
+  const box=$("#chicagoFciBlock");
+  if(!box) return;
+  if(CHICAGO_FCI_DATA){ renderChicagoFci(CHICAGO_FCI_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入芝加哥聯儲金融狀況指數 …</div>';
+  try{
+    const res=await fetch("data/chicago_fci.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    CHICAGO_FCI_DATA=await res.json();
+    if(CHICAGO_FCI_DATA.default_window) CHICAGO_FCI_WIN=CHICAGO_FCI_DATA.default_window;
+    renderChicagoFci(CHICAGO_FCI_DATA);
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>芝加哥聯儲金融狀況指數</h2></div>'+
+      '<div class="legend">⚠️ chicago_fci.json 尚未產生('+esc(e.message)+')。請先在 GitHub Actions 執行 export。</div></section>';
+  }
 }
 
 async function loadBreadth(){

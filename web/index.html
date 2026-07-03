@@ -1230,6 +1230,7 @@ function renderMacro(d){
     '</section>'+
     '<div id="chicagoFciBlock"></div>'+
     '<div id="onRpBlock"></div>'+
+    '<div id="onRpLiquidityBlock"></div>'+
     '<section id="sentSec"><div class="sec-head"><h2>情緒指標</h2><span class="tag">波動 / 廣度 / 貪婪恐懼</span>'+
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
@@ -1257,6 +1258,7 @@ function renderMacro(d){
   if(d.m1b_m2) drawM1M2(d.m1b_m2);
   loadChicagoFci();
   loadOnRp();
+  loadOnRpLiquidity();
   loadSentiment();
   loadBreadth();
   loadThemes();
@@ -1389,17 +1391,19 @@ async function loadChicagoFci(){
   }
 }
 
-// ── Fed ON RRP ──
+// ── Fed ON RRP + ON RP ──
 let ON_RP_DATA=null;
 let ON_RP_WIN="1y";
+let ON_RP_LIQ_DATA=null;
+let ON_RP_LIQ_WIN="1y";
 const ON_RP_WINS=[["3m",66,"3M"],["6m",132,"6M"],["1y",264,"1Y"],["3y",792,"3Y"],["5y",1320,"5Y"],["10y",2640,"10Y"]];
 const ON_RP_LABEL={"3m":"3M","6m":"6M","1y":"1Y","3y":"3Y","5y":"5Y","10y":"10Y"};
 
-function drawOnRpChart(d){
-  const el=$("#onRpChart");
+function drawFedRepoChart(d, elId, activeWin, lineName, color){
+  const el=$("#"+elId);
   if(!el || !window.echarts) return;
   const ser=d.series||{}, allDates=ser.dates||[];
-  const win=ON_RP_WINS.find(x=>x[0]===ON_RP_WIN) || ON_RP_WINS[2];
+  const win=ON_RP_WINS.find(x=>x[0]===activeWin) || ON_RP_WINS[2];
   const n=Math.min(win[1], allDates.length);
   if(n<2){ el.innerHTML='<div class="legend">資料點不足,無法繪圖。</div>'; return; }
   const dates=allDates.slice(-n), val=(ser.value||[]).slice(-n), ma20=(ser.ma20||[]).slice(-n), ma60=(ser.ma60||[]).slice(-n);
@@ -1408,14 +1412,14 @@ function drawOnRpChart(d){
   const ch=echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
     grid:{left:58,right:18,top:34,bottom:32},
-    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:["ON RRP","20MA","60MA"]},
+    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:[lineName,"20MA","60MA"]},
     tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:0})+" 十億美元"},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:{type:"value",name:"十億美元",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
     series:[
-      {name:"ON RRP",type:"line",smooth:true,showSymbol:false,data:dates.map((x,i)=>[toMs(x),val[i]??null]),
-       lineStyle:{color:"#2563eb",width:2.2},itemStyle:{color:"#2563eb"},areaStyle:{color:"#2563eb",opacity:.06}},
+      {name:lineName,type:"line",smooth:true,showSymbol:false,data:dates.map((x,i)=>[toMs(x),val[i]??null]),
+       lineStyle:{color:color,width:2.2},itemStyle:{color:color},areaStyle:{color:color,opacity:.06}},
       {name:"20MA",type:"line",smooth:true,showSymbol:false,data:dates.map((x,i)=>[toMs(x),ma20[i]??null]),
        lineStyle:{color:"#f59e0b",width:1.5},itemStyle:{color:"#f59e0b"}},
       {name:"60MA",type:"line",smooth:true,showSymbol:false,data:dates.map((x,i)=>[toMs(x),ma60[i]??null]),
@@ -1425,6 +1429,14 @@ function drawOnRpChart(d){
   if(el._ro) window.removeEventListener("resize",el._ro);
   el._ro=()=>ch.resize();
   window.addEventListener("resize",el._ro);
+}
+
+function drawOnRpChart(d){
+  drawFedRepoChart(d, "onRpChart", ON_RP_WIN, "ON RRP", "#2563eb");
+}
+
+function drawOnRpLiquidityChart(d){
+  drawFedRepoChart(d, "onRpLiquidityChart", ON_RP_LIQ_WIN, "ON RP", "#16a34a");
 }
 
 function rpVal(v){
@@ -1440,7 +1452,7 @@ function renderOnRp(d){
   const btns=ON_RP_WINS.map(w=>'<button class="btn'+(ON_RP_WIN===w[0]?' active':'')+'" data-rpw="'+w[0]+'">'+w[2]+'</button>').join("");
   box.innerHTML=
     '<section>'+
-      '<div class="sec-head"><h2>美國-聯準會隔夜回購操作(ON RP)</h2>'+
+      '<div class="sec-head"><h2>美國-聯準會隔夜逆回購操作(ON RRP)</h2>'+
         '<span class="tag">RRPONTSYD · FRED</span>'+
         '<span class="hint">數值越高代表越多資金停泊在聯準會逆回購工具；下降通常表示資金釋回市場體系。</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
@@ -1465,7 +1477,7 @@ async function loadOnRp(){
   const box=$("#onRpBlock");
   if(!box) return;
   if(ON_RP_DATA){ renderOnRp(ON_RP_DATA); return; }
-  box.innerHTML='<div class="dim" style="padding:8px">載入聯準會 ON RP …</div>';
+  box.innerHTML='<div class="dim" style="padding:8px">載入聯準會 ON RRP …</div>';
   try{
     const res=await fetch("data/on_rp.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(res.status);
@@ -1473,8 +1485,55 @@ async function loadOnRp(){
     if(ON_RP_DATA.default_window) ON_RP_WIN=ON_RP_DATA.default_window;
     renderOnRp(ON_RP_DATA);
   }catch(e){
-    box.innerHTML='<section><div class="sec-head"><h2>美國-聯準會隔夜回購操作(ON RP)</h2></div>'+
+    box.innerHTML='<section><div class="sec-head"><h2>美國-聯準會隔夜逆回購操作(ON RRP)</h2></div>'+
       '<div class="legend">⚠️ on_rp.json 尚未產生('+esc(e.message)+')。請先在 GitHub Actions 執行 export。</div></section>';
+  }
+}
+
+function renderOnRpLiquidity(d){
+  const box=$("#onRpLiquidityBlock");
+  if(!box) return;
+  const cur=d.current, chg=d.daily_change, ma20=d.ma20_last, ma60=d.ma60_last;
+  const chgCls=chg>0?"pos":(chg<0?"neg":"dim");
+  const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:125px;margin-right:12px';
+  const btns=ON_RP_WINS.map(w=>'<button class="btn'+(ON_RP_LIQ_WIN===w[0]?' active':'')+'" data-rpliqw="'+w[0]+'">'+w[2]+'</button>').join("");
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>美國-聯準會隔夜回購操作(ON RP)</h2>'+
+        '<span class="tag">RPONTSYD · FRED</span>'+
+        '<span class="hint">數值越高代表聯準會透過回購提供短期流動性；下降代表該工具使用減少。</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
+        '<div style="'+card+'"><div class="cap-lab">最新</div><div class="cap-big">'+rpVal(cur)+'</div><div class="dim" style="font-size:11px">'+esc(d.unit||"十億美元")+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">日變化</div><div class="cap-big '+chgCls+'">'+(chg==null?'—':(chg>0?'+':'')+rpVal(chg))+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">20MA</div><div class="cap-big" style="color:#f59e0b">'+rpVal(ma20)+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">60MA</div><div class="cap-big" style="color:#9333ea">'+rpVal(ma60)+'</div></div>'+
+        '<div class="dim" style="font-size:12px">資料日 '+esc(d.as_of||"")+'</div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="onRpLiquidityChart" class="cap-chart" style="height:260px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:'+esc(d.source||"FRED RPONTSYD")+'。'+esc(d.note||"")+' 時段 '+esc(ON_RP_LABEL[ON_RP_LIQ_WIN]||ON_RP_LIQ_WIN)+'。</div>'+
+    '</section>';
+  box.querySelectorAll("[data-rpliqw]").forEach(b=>b.onclick=()=>{
+    ON_RP_LIQ_WIN=b.dataset.rpliqw||"1y";
+    renderOnRpLiquidity(ON_RP_LIQ_DATA);
+  });
+  drawOnRpLiquidityChart(d);
+}
+
+async function loadOnRpLiquidity(){
+  const box=$("#onRpLiquidityBlock");
+  if(!box) return;
+  if(ON_RP_LIQ_DATA){ renderOnRpLiquidity(ON_RP_LIQ_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入聯準會 ON RP …</div>';
+  try{
+    const res=await fetch("data/on_rp_liquidity.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    ON_RP_LIQ_DATA=await res.json();
+    if(ON_RP_LIQ_DATA.default_window) ON_RP_LIQ_WIN=ON_RP_LIQ_DATA.default_window;
+    renderOnRpLiquidity(ON_RP_LIQ_DATA);
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>美國-聯準會隔夜回購操作(ON RP)</h2></div>'+
+      '<div class="legend">⚠️ on_rp_liquidity.json 尚未產生('+esc(e.message)+')。請先在 GitHub Actions 執行 export。</div></section>';
   }
 }
 

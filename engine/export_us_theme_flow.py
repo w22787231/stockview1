@@ -254,14 +254,20 @@ def summarize(rows):
     return out
 
 
+def _theme_universe():
+    pool = set(_load_universe())
+    syms = sorted(s for s in _theme_map() if s in pool)
+    return syms
+
+
 def build():
-    symbols = _load_universe()
+    symbols = _theme_universe()
     rows, failed = build_rows(symbols)
     payload = {
         "generated_at": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "yfinance daily close, universe/us5000.txt",
+        "source": "yfinance daily close, curated theme symbols from universe/us5000.txt",
         "periods": [{"key": k, "days": n, "label": lab} for k, n, lab in PERIODS],
-        "universe": "us5000",
+        "universe": "us_theme_curated",
         "total_symbols": len(symbols),
         "priced_symbols": len(rows),
         "failed_symbols": failed,

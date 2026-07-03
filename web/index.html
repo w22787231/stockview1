@@ -4651,7 +4651,7 @@ function renderSpec(){
 }
 // ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
 
-// ── 美股細分產業資金流: us5000 題材族群 1D/5D/20D/60D ────────────────────────────────
+// ── 美股細分產業資金流: 已分類題材股 1D/5D/20D/60D ────────────────────────────────────
 let US_THEME_FLOW=null, US_THEME_SORT={key:"r1",dir:-1}, US_THEME_OPEN="";
 async function loadUsThemeFlow(){
   const host=document.getElementById("usThemeFlowBlock"); if(!host) return;
@@ -4694,9 +4694,9 @@ function renderUsThemeFlow(){
   });
   const arrow=key=>US_THEME_SORT.key===key?(US_THEME_SORT.dir<0?" ▼":" ▲"):"";
   const th=(key,lab)=>'<th class="sortable" data-k="'+key+'">'+lab+arrow(key)+'</th>';
-  let h='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2><span class="tag">us5000 · 投資題材分類</span>'+
+  let h='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2><span class="tag">題材股清單 · 投資題材分類</span>'+
     '<span class="hint">放在投機交易下方；用 1D/5D/20D/60D 看資金流到哪個題材</span></div>'+
-    '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔。'+
+    '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔；只抓已分類題材股，不掃全市場。'+
     '<b>短線流入</b>=1D/5D 強；<b>波段主線</b>=20D/60D 強。點族群可展開成分股。</div>'+
     '<table class="cap-tbl wide"><thead><tr><th>族群</th>'+th("count","檔數")+th("r1","1D")+th("r5","5D")+th("r20","20D")+th("r60","60D")+th("up_ratio","上漲比")+'<th>代表強勢股</th><th>代表弱勢股</th><th>可信度</th></tr></thead><tbody>';
   groups.forEach(g=>{

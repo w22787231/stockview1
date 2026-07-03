@@ -258,7 +258,7 @@
   .pos{color:var(--green)} .neg{color:var(--red)} .dim{color:var(--ink3)}
   .up{color:var(--green)} .down{color:var(--red)} .flat{color:var(--ink3)}
   .badge{font-size:10px;padding:1px 7px;border-radius:5px;font-weight:700}
-  .badge.in{background:#e6f6ec;color:var(--green)} .badge.add{background:#fdf2d9;color:var(--amber)}
+  .badge.in{background:#e6f6ec;color:var(--green)} .badge.add{background:#fdf2d9;color:var(--amber)} .badge.out{background:var(--panel2);color:var(--ink3)}
   .bar{display:inline-block;height:7px;border-radius:2px;background:var(--green);vertical-align:middle;margin-left:6px;opacity:.5}
   th.sortable{cursor:pointer;user-select:none}
   th.sortable:hover{color:var(--ink);background:#e7edf6}
@@ -1239,6 +1239,7 @@ function renderMacro(d){
     '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
     '<div id="specBlock"></div>'+
+    '<div id="usThemeFlowBlock"></div>'+
     '<section>'+
       '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
         '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
@@ -1257,6 +1258,7 @@ function renderMacro(d){
   loadFsi();
   loadPI();
   loadSpec();
+  loadUsThemeFlow();
 }
 // 台灣 M1B/M2 年增率 + M1B−M2 差(資金黃金/死亡交叉)線圖。
 function drawM1M2(m){
@@ -4648,6 +4650,71 @@ function renderSpec(){
   host.querySelectorAll("[data-spw]").forEach(b=>b.onclick=()=>{ SPEC_WIN=b.dataset.spw; renderSpec(); });
 }
 // ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
+
+// ── 美股細分產業資金流: us5000 題材族群 1D/5D/20D/60D ────────────────────────────────
+let US_THEME_FLOW=null, US_THEME_SORT={key:"r1",dir:-1}, US_THEME_OPEN="";
+async function loadUsThemeFlow(){
+  const host=document.getElementById("usThemeFlowBlock"); if(!host) return;
+  if(US_THEME_FLOW){ renderUsThemeFlow(); return; }
+  host.innerHTML='<div class="dim" style="padding:8px">載入美股細分產業資金流 …</div>';
+  try{
+    const res=await fetch("data/us_theme_flow.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    US_THEME_FLOW=await res.json();
+    renderUsThemeFlow();
+  }catch(e){
+    host.innerHTML='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2></div>'+
+      '<div class="legend">⚠️ us_theme_flow.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export。</div></section>';
+  }
+}
+function _tfVal(v){ return v==null?'<span class="dim">—</span>':'<span class="'+(v>0?"pos":(v<0?"neg":"dim"))+'">'+(v>0?"+":"")+Number(v).toFixed(2)+'%</span>'; }
+function _tfSyms(arr,key){
+  return (arr||[]).slice(0,3).map(x=>'<span class="sym clickable" data-stk="'+esc(x.sym)+'">'+esc(x.sym)+'</span> '+_tfVal(x[key]||0)).join('<br>');
+}
+function _tfMembers(g){
+  const rows=(g.members||[]).slice(0,80);
+  if(!rows.length) return "";
+  let h='<tr class="tf-detail"><td colspan="10"><div style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel2)">'+
+    '<table class="cap-tbl wide"><thead><tr><th>代號</th><th>1D</th><th>5D</th><th>20D</th><th>60D</th><th>收盤</th><th>分類</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    h+='<tr><td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(r.sym)+'</td>'+
+      '<td>'+_tfVal(r.r1)+'</td><td>'+_tfVal(r.r5)+'</td><td>'+_tfVal(r.r20)+'</td><td>'+_tfVal(r.r60)+'</td>'+
+      '<td class="dim">'+(r.close!=null?fmtNum(r.close,2):"—")+'</td><td class="dim">'+esc(r.method||"")+'</td></tr>';
+  });
+  return h+'</tbody></table></div></td></tr>';
+}
+function renderUsThemeFlow(){
+  const host=document.getElementById("usThemeFlowBlock"); if(!host||!US_THEME_FLOW) return;
+  const d=US_THEME_FLOW, groups=(d.groups||[]).filter(g=>g.count>0);
+  const k=US_THEME_SORT.key, dir=US_THEME_SORT.dir;
+  groups.sort((a,b)=>{
+    const av=k==="count"?a.count:(k==="up_ratio"?a.up_ratio:((a.avg||{})[k]));
+    const bv=k==="count"?b.count:(k==="up_ratio"?b.up_ratio:((b.avg||{})[k]));
+    if(av==null)return 1; if(bv==null)return -1; return (av-bv)*dir;
+  });
+  const arrow=key=>US_THEME_SORT.key===key?(US_THEME_SORT.dir<0?" ▼":" ▲"):"";
+  const th=(key,lab)=>'<th class="sortable" data-k="'+key+'">'+lab+arrow(key)+'</th>';
+  let h='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2><span class="tag">us5000 · 投資題材分類</span>'+
+    '<span class="hint">放在投機交易下方；用 1D/5D/20D/60D 看資金流到哪個題材</span></div>'+
+    '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔。'+
+    '<b>短線流入</b>=1D/5D 強；<b>波段主線</b>=20D/60D 強。點族群可展開成分股。</div>'+
+    '<table class="cap-tbl wide"><thead><tr><th>族群</th>'+th("count","檔數")+th("r1","1D")+th("r5","5D")+th("r20","20D")+th("r60","60D")+th("up_ratio","上漲比")+'<th>代表強勢股</th><th>代表弱勢股</th><th>可信度</th></tr></thead><tbody>';
+  groups.forEach(g=>{
+    const avg=g.avg||{}, open=US_THEME_OPEN===g.theme;
+    h+='<tr class="tf-row" data-theme="'+esc(g.theme)+'" style="cursor:pointer">'+
+      '<td style="text-align:left"><b>'+esc(g.theme)+'</b>'+(g.theme==="未細分"?'<span class="dim"> · 未人工歸類</span>':'')+'</td>'+
+      '<td>'+fmtNum(g.count,0)+'</td><td>'+_tfVal(avg.r1)+'</td><td>'+_tfVal(avg.r5)+'</td><td>'+_tfVal(avg.r20)+'</td><td>'+_tfVal(avg.r60)+'</td>'+
+      '<td>'+(g.up_ratio==null?'<span class="dim">—</span>':g.up_ratio.toFixed(1)+'%')+'</td>'+
+      '<td style="text-align:left">'+_tfSyms(g.winners,"r1")+'</td><td style="text-align:left">'+_tfSyms(g.losers,"r1")+'</td>'+
+      '<td><span class="badge '+(g.confidence==="高"?"in":(g.confidence==="中"?"add":"out"))+'">'+esc(g.confidence||"")+'</span></td></tr>'+
+      (open?_tfMembers(g):"");
+  });
+  h+='</tbody></table><div class="legend">分類規則：人工題材 mapping 優先；未命中者若有產業快取則輔助歸類，否則列入「未細分」。第一版偏投資題材，不是官方產業分類。</div></section>';
+  host.innerHTML=h;
+  host.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{ const key=th.dataset.k; if(US_THEME_SORT.key===key)US_THEME_SORT.dir*=-1; else US_THEME_SORT={key:key,dir:-1}; renderUsThemeFlow(); });
+  host.querySelectorAll(".tf-row").forEach(tr=>tr.onclick=e=>{ if(e.target.closest(".clickable")) return; const t=tr.dataset.theme; US_THEME_OPEN=US_THEME_OPEN===t?"":t; renderUsThemeFlow(); });
+  host.querySelectorAll(".clickable[data-stk]").forEach(x=>x.onclick=e=>{ e.stopPropagation(); openHoldStock(x.dataset.stk,x.dataset.stk); });
+}
 
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──
 let OPT_SYM="SPY", OPT_EXP=null;

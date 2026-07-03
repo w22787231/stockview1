@@ -109,7 +109,7 @@ def _theme_map():
     for theme, blob in THEME_SYMBOLS.items():
         for sym in _symbols(blob):
             if sym:
-                out.setdefault(sym.replace(".", "-"), theme)
+                out.setdefault(sym.replace(".", "-"), []).append(theme)
     return out
 
 
@@ -132,11 +132,11 @@ def classify(sym, sym_theme=None, ind_cache=None):
     sym_theme = sym_theme if sym_theme is not None else _theme_map()
     ind_cache = ind_cache if ind_cache is not None else _load_industry_cache()
     if sym in sym_theme:
-        return sym_theme[sym], "manual"
+        return list(sym_theme[sym]), "manual"
     ind = ind_cache.get(sym)
     if ind and ind in INDUSTRY_TO_THEME:
-        return INDUSTRY_TO_THEME[ind], "industry_cache"
-    return "未細分", "unmapped"
+        return [INDUSTRY_TO_THEME[ind]], "industry_cache"
+    return ["未細分"], "unmapped"
 
 
 def _sub(df, sym):
@@ -191,17 +191,19 @@ def build_rows(symbols, batch_size=220):
                 if len(closes) < 2:
                     failed += 1
                     continue
-                theme, method = classify(sym, sym_theme, ind_cache)
-                row = {
+                themes, method = classify(sym, sym_theme, ind_cache)
+                base = {
                     "sym": sym,
-                    "theme": theme,
                     "method": method,
                     "date": closes.index[-1].strftime("%Y-%m-%d"),
                     "close": round(float(closes.iloc[-1]), 4),
                 }
                 for key, n, _ in PERIODS:
-                    row[key] = _ret(closes, n)
-                rows.append(row)
+                    base[key] = _ret(closes, n)
+                for theme in themes:
+                    row = dict(base)
+                    row["theme"] = theme
+                    rows.append(row)
             except Exception:
                 failed += 1
     return rows, failed
@@ -255,9 +257,7 @@ def summarize(rows):
 
 
 def _theme_universe():
-    pool = set(_load_universe())
-    syms = sorted(s for s in _theme_map() if s in pool)
-    return syms
+    return sorted(_theme_map())
 
 
 def build():

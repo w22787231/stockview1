@@ -5,15 +5,21 @@ import export_us_theme_flow as f
 
 
 def test_classify_manual_theme_first():
-    theme, method = f.classify("NVDA", {"NVDA": "AI晶片/GPU"}, {"NVDA": "半導體"})
-    assert theme == "AI晶片/GPU"
+    themes, method = f.classify("NVDA", {"NVDA": ["AI晶片/GPU"]}, {"NVDA": "半導體"})
+    assert themes == ["AI晶片/GPU"]
     assert method == "manual"
 
 
 def test_classify_industry_fallback():
-    theme, method = f.classify("TEST", {}, {"TEST": "半導體設備"})
-    assert theme == "半導體設備-前段"
+    themes, method = f.classify("TEST", {}, {"TEST": "半導體設備"})
+    assert themes == ["半導體設備-前段"]
     assert method == "industry_cache"
+
+
+def test_multi_theme_memory_names_present():
+    m = f._theme_map()
+    assert "HBM/記憶體/儲存" in m["MU"]
+    assert "SIMO" in f._theme_universe()
 
 
 def test_return_uses_same_price_series():

@@ -188,6 +188,16 @@ jobs:
             python -c "import json,urllib.request; raw=urllib.request.urlopen(urllib.request.Request('https://stockview1.pages.dev/data/us_theme_flow.json',headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read().decode('utf-8-sig'); d=json.loads(raw); assert isinstance(d,dict) and isinstance(d.get('groups'),list); open('../data/us_theme_flow.json','w',encoding='utf-8').write(json.dumps(d,ensure_ascii=False,separators=(',',':')))" && echo "[theme-flow] 已沿用線上" || echo "[theme-flow] 線上沿用也失敗"
           fi
 
+      - name: Export SPX 0DTE share (自算 proxy)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          pip install yfinance -q || true
+          cd engine
+          python export_0dte.py || echo "[0dte] 失敗,沿用線上"
+
       - name: Export calendar (econ data + earnings, Taipei time)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

@@ -1240,6 +1240,7 @@ function renderMacro(d){
     '<div id="piBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<div id="usThemeFlowBlock"></div>'+
+    '<div id="odteBlock"></div>'+
     '<section>'+
       '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
         '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
@@ -1259,6 +1260,7 @@ function renderMacro(d){
   loadPI();
   loadSpec();
   loadUsThemeFlow();
+  loadOdte();
 }
 // 台灣 M1B/M2 年增率 + M1B−M2 差(資金黃金/死亡交叉)線圖。
 function drawM1M2(m){
@@ -4535,6 +4537,74 @@ async function loadPI(){
     if(box) box.innerHTML =
       '<section><div class="sec-head"><h2>流動性壓力指數(PI)</h2></div>'+
       '<div class="legend">⚠️ pi.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_pi。</div></section>';
+  }
+}
+
+// ── SPX 0DTE(當日到期)占比 · 自算 proxy + CBOE 官方基準 ──────────────────────────
+let ODTE_DATA=null;
+function drawOdteChart(id, dates, pcts, cboe){
+  const el=$("#"+id); if(!el||!window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10?s+"T00:00:00":s).getTime();
+  ch.setOption({
+    grid:{left:44,right:16,top:24,bottom:26},
+    legend:{top:0,textStyle:{fontSize:10},data:["0DTE 占比(自算)"]},
+    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"-":v+"%"},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:val=>{const dt=new Date(val);return (dt.getMonth()+1)+"/"+dt.getDate();}}},
+    yAxis:{type:"value",name:"%",nameTextStyle:{fontSize:9},scale:true,axisLabel:{fontSize:10,formatter:v=>v+"%"},
+      splitLine:{lineStyle:{opacity:.3}}},
+    series:[{name:"0DTE 占比(自算)",type:"line",smooth:true,showSymbol:dates.length<40,symbolSize:5,
+      data:dates.map((d,i)=>[toMs(d),pcts[i]]),
+      lineStyle:{color:"#7c3aed",width:2},itemStyle:{color:"#7c3aed"},areaStyle:{color:"#7c3aed",opacity:.07},
+      markLine:cboe!=null?{symbol:"none",silent:true,data:[{yAxis:cboe,
+        lineStyle:{color:"#f59e0b",type:"dashed",width:1.2,opacity:.85},
+        label:{formatter:"CBOE 官方 ~"+cboe+"%",fontSize:9,color:"#b45309",position:"insideEndTop"}}]}:undefined}]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro);
+}
+function renderOdte(d){
+  const box=$("#odteBlock"); if(!box) return;
+  const cur=d.current_pct, dte=d.dte, off=d.cboe_official||{};
+  const ser=d.series||{}; const dates=ser.dates||[], pcts=ser.spx_pct||[];
+  const n=dates.length;
+  const curColor="#7c3aed";
+  const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
+  const dteTag = dte===0 ? '<span class="pos">當日到期(真 0DTE)</span>'
+              : (dte===1 ? '<span class="dim">收盤後改抓次日(1DTE)</span>' : '<span class="dim">近端到期 '+esc(dte)+'DTE</span>');
+  box.innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>SPX 0DTE 占比</h2>'+
+        '<span class="tag">當日到期選擇權 · 自算 proxy</span>'+
+        '<span class="hint">近端到期成交量 ÷ 全部到期量;越高=當日到期投機越熱</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
+        '<div style="'+card+'"><div class="cap-lab">自算 0DTE 占比</div>'+
+          '<div class="cap-big" style="color:'+curColor+'">'+(cur!=null?cur+"%":"—")+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">CBOE 官方基準</div>'+
+          '<div class="cap-big" style="color:#b45309">~'+esc(off.value!=null?off.value:"—")+'%</div>'+
+          '<div class="dim" style="font-size:11px">'+esc(off.period||"")+'</div></div>'+
+        '<div class="dim" style="font-size:12px;align-self:center">'+dteTag+'</div>'+
+      '</div>'+
+      (n>=2 ? '<div id="odteChart" class="cap-chart" style="height:180px"></div>'
+            : '<div class="legend" style="margin:4px 0">📈 自累積中('+esc(n)+' 點)——每交易日收盤後加一點,過幾天就有趨勢線。</div>')+
+      '<div class="legend" style="margin-top:10px">⚠️ <b>自算 proxy(非 CBOE 官方)</b>:用 yfinance 各到期日成交量加總算,涵蓋不全、量級<b>低於</b>官方(CBOE 2025 全年約 59%、8 月曾 62%);看<b>趨勢與相對高低</b>即可,絕對數字別跟官方對。無免費歷史→從上線日起每日自累積。</div>'+
+    '</section>';
+  if(n>=2) drawOdteChart("odteChart", dates, pcts, off.value);
+}
+async function loadOdte(){
+  const box=$("#odteBlock"); if(!box) return;
+  if(ODTE_DATA){ renderOdte(ODTE_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 SPX 0DTE 占比 …</div>';
+  try{
+    const res=await fetch("data/0dte.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    ODTE_DATA=await res.json();
+    renderOdte(ODTE_DATA);
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>SPX 0DTE 占比</h2></div>'+
+      '<div class="legend">⚠️ 0dte.json 尚未產生('+esc(e.message)+')。請在 GitHub Actions 跑一次 export_0dte(需交易日收盤後有量)。</div></section>';
   }
 }
 

@@ -48,7 +48,7 @@ UNIV = os.path.join(HERE, "universe")
 TOP = ["macro", "capital", "calendar", "etf", "sentiment", "industry_pe",
        "tw_chain", "tw_themes", "index", "tw150", "ndx100", "sp500", "sp400", "sp600",
        "us5000", "tw_all", "strong", "strong_tw", "smartmoney", "pi", "spec", "fsi",
-       "breadth", "us_theme_flow"]
+       "breadth", "us_theme_flow", "0dte"]
 
 
 def _get(path, timeout=30):

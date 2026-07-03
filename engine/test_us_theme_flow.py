@@ -22,6 +22,36 @@ def test_multi_theme_memory_names_present():
     assert "SIMO" in f._theme_universe()
 
 
+def test_manual_theme_symbols_are_clean():
+    m = f._theme_map()
+    assert "LUMENTUM" not in m
+    assert "ARISTA" not in m
+    assert "LITE" in m
+    for sym, themes in m.items():
+        assert themes == list(dict.fromkeys(themes))
+
+
+def test_reworked_theme_groups_are_present():
+    m = f._theme_map()
+    expected = {
+        "SPXC": "資料中心-散熱/機電/工程",
+        "FIX": "資料中心-散熱/機電/工程",
+        "CRDO": "CPO/光通訊/矽光子",
+        "MTSI": "CPO/光通訊/矽光子",
+        "NVMI": "半導體設備-量測/檢測",
+        "ATEYY": "半導體設備-量測/檢測",
+        "PLAB": "半導體材料/特氣/光罩",
+        "VICR": "功率半導體/SiC/GaN",
+        "RR": "機器人/自動化",
+        "KTOS": "航太國防/太空",
+        "RBRK": "資安",
+        "PLTR": "AI軟體/AI資料平台",
+        "BRUN": "AI雲端/算力/Neocloud",
+    }
+    for sym, theme in expected.items():
+        assert theme in m[sym]
+
+
 def test_return_uses_same_price_series():
     closes = pd.Series([100, 103, 106, 109, 112, 115])
     assert f._ret(closes, 1) == 2.68

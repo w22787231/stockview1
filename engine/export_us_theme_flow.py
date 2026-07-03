@@ -36,38 +36,53 @@ THEME_SYMBOLS = {
         ASML AMAT LRCX KLAC TEL TER AMKR ICHR UCTT ACMR AEHR VECO
         COHU FORM MKSI ENTG ONTO CAMT KLIC
     """,
-    "半導體材料/特氣": """
-        ENTG COHR MKSI LIN APD DD CC KRO HUN ALB LTHM QS
+    "半導體設備-量測/檢測": """
+        NVMI ONTO KLAC TER FORM COHU AEHR KEYS ATEYY CAMT
+    """,
+    "半導體材料/特氣/光罩": """
+        ENTG COHR MKSI LIN APD DD CC KRO HUN ALB LTHM QS Q AXTI
+        PLAB ESI
     """,
     "先進封裝/封測/基板": """
         AMKR TSM ASX INTC COHR KLIC TER FORM AEHR ALAB ONTO
     """,
     "CPO/光通訊/矽光子": """
-        COHR LITE CIEN AAOI IIVI FN Lumentum LUMN INFN VIAV GLW
-        MRVL AVGO ALAB ANET ARista ANET NTAP
+        COHR LITE CIEN AAOI IIVI FN LUMN INFN VIAV GLW MRVL AVGO
+        ALAB ANET NTAP MTSI CRDO POET LWLG TSEM CSCO NOK MXL KEYS
     """,
-    "資料中心/伺服器/散熱": """
-        SMCI DELL HPE VRT ETN PWR MOD TT GEV CLS FLEX JBL ARW
-        ANET NTAP WDC STX CARR
+    "AI伺服器/ODM/系統": """
+        SMCI DELL HPE CLS JBL FLEX PENG
+    """,
+    "資料中心-散熱/機電/工程": """
+        VRT ETN GEV PWR FIX SPXC JCI ECG MTZ GNRC IRM CARR MOD
+        TT HUBB SBGSY PRYMY
+    """,
+    "資料中心-網通/交換器": """
+        ANET NTAP CSCO CIEN
     """,
     "電力設備/電網": """
         VRT ETN PWR GEV HUBB POWL BE FLNC STEM NRG CEG VST SMR OKLO
-        BWXT NNE LEU
+        BWXT NNE LEU SBGSY PRYMY GNRC
     """,
     "核能/鈾": """
         CEG VST SMR OKLO BWXT NNE LEU CCJ UUUU UEC URG DNN NXE
     """,
     "功率半導體/SiC/GaN": """
-        ON WOLF NVTS POWI STM IFNNY LSCC MCHP MPWR AEHR
+        ON WOLF NVTS POWI STM IFNNY LSCC MCHP MPWR AEHR VICR IPWR
+        AOSL LFUS VSH
     """,
     "機器人/自動化": """
-        ISRG TER SYM PATH ROK IRBT ZBRA CGNX HON EMR ABBNY AME
+        ISRG TER SYM PATH ROK IRBT ZBRA CGNX HON EMR ABBNY AME RR
+        PDYN OII
     """,
     "航太國防/太空": """
         RTX LMT NOC GD BA LHX HWM TDG PL RKLB ACHR JOBY SPCE ASTS VSAT
+        KTOS AVAV ONDS LUNR RDW SATS FLY SATL GILT VOYG KRMN MDA
+        GSAT BKSY GHM IRDM SIDU SPIR CMTL FEIM
     """,
     "資安": """
-        CRWD PANW ZS NET FTNT S OKTA CYBR TENB RPD QLYS VRNS GEN
+        CRWD PANW ZS NET FTNT S OKTA CYBR TENB RPD QLYS VRNS GEN BB
+        RBRK
     """,
     "量子/新運算": """
         IONQ RGTI QBTS QUBT ARQQ IBM HON GOOGL MSFT NVDA
@@ -83,13 +98,19 @@ THEME_SYMBOLS = {
         MRNA BNTX NVAX VKTX LLY NVO REGN VRTX CRSP BEAM EDIT NTLA
         RXRX SDGR DNA TNGX ERAS PRAX RLAY
     """,
+    "AI軟體/AI資料平台": """
+        PLTR TEM INOD SOUN BBAI
+    """,
+    "AI雲端/算力/Neocloud": """
+        BRUN DOCN PENG
+    """,
 }
 
 INDUSTRY_TO_THEME = {
     "半導體": "AI晶片/GPU",
     "半導體設備": "半導體設備-前段",
     "通訊設備": "CPO/光通訊/矽光子",
-    "電腦硬體": "資料中心/伺服器/散熱",
+    "電腦硬體": "AI伺服器/ODM/系統",
     "儲存裝置": "HBM/記憶體/儲存",
     "電力設備零件": "電力設備/電網",
     "航太與國防": "航太國防/太空",
@@ -108,8 +129,11 @@ def _theme_map():
     out = {}
     for theme, blob in THEME_SYMBOLS.items():
         for sym in _symbols(blob):
-            if sym:
-                out.setdefault(sym.replace(".", "-"), []).append(theme)
+            if not sym:
+                continue
+            themes = out.setdefault(sym.replace(".", "-"), [])
+            if theme not in themes:
+                themes.append(theme)
     return out
 
 
@@ -265,11 +289,11 @@ def build():
     rows, failed = build_rows(symbols)
     payload = {
         "generated_at": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "yfinance daily close, curated theme symbols from universe/us5000.txt",
+        "source": "yfinance daily close, curated manual theme symbols",
         "periods": [{"key": k, "days": n, "label": lab} for k, n, lab in PERIODS],
         "universe": "us_theme_curated",
         "total_symbols": len(symbols),
-        "priced_symbols": len(rows),
+        "priced_symbols": len({r["sym"] for r in rows}),
         "failed_symbols": failed,
         "groups": summarize(rows),
     }

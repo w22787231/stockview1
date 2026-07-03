@@ -26,6 +26,9 @@ def test_manual_theme_symbols_are_clean():
     m = f._theme_map()
     assert "LUMENTUM" not in m
     assert "ARISTA" not in m
+    for stale in ("BITF", "CYBR", "IIVI", "INFN", "IRBT", "LTHM", "SQ"):
+        assert stale not in m
+    assert "XYZ" in m
     assert "LITE" in m
     for sym, themes in m.items():
         assert themes == list(dict.fromkeys(themes))

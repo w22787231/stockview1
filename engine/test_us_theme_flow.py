@@ -55,6 +55,18 @@ def test_reworked_theme_groups_are_present():
         assert theme in m[sym]
 
 
+def test_high_confidence_misclassifications_are_removed():
+    m = f._theme_map()
+    assert m["COHR"] == ["CPO/光通訊/矽光子"]
+    assert "AI晶片/GPU" not in m["SMCI"]
+    assert "AI晶片/GPU" not in m["DELL"]
+    assert "AI晶片/GPU" not in m["VRT"]
+    assert "HBM/記憶體/儲存" not in m["NVDA"]
+    assert "HBM/記憶體/儲存" not in m["AMD"]
+    assert "CPO/光通訊/矽光子" not in m.get("NTAP", [])
+    assert "功率半導體/SiC/GaN" not in m.get("LSCC", [])
+
+
 def test_return_uses_same_price_series():
     closes = pd.Series([100, 103, 106, 109, 112, 115])
     assert f._ret(closes, 1) == 2.68

@@ -1224,13 +1224,13 @@ function renderMacro(d){
         '<span class="hint">收益率顯示水準 + 與昨日差(bps)</span></div>'+
       '<div class="idx-grid">'+(d.indices||[]).filter(r=>r.sym!=='^VIX'&&r.sym!=='UTWO').map(idxCard).join("")+'</div>'+
     '</section>'+
-    '<div id="chicagoFciBlock"></div>'+
-    '<div id="onRpBlock"></div>'+
-    '<div id="onRpLiquidityBlock"></div>'+
     '<section id="sentSec"><div class="sec-head"><h2>情緒指標</h2><span class="tag">波動 / 廣度 / 貪婪恐懼</span>'+
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="chicagoFciBlock"></div>'+
+    '<div id="onRpBlock"></div>'+
+    '<div id="onRpLiquidityBlock"></div>'+
     '<section id="breadthSec"><div class="sec-head"><h2>騰落指標</h2><span class="tag">Advance / Decline</span>'+
       '<span class="hint">台股與美股分開看，檢查指數是否由多數股票同步支撐</span></div>'+
       '<div id="breadthBox"><div class="loading-screen">載入騰落指標 …</div></div>'+

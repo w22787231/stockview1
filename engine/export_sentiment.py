@@ -566,26 +566,29 @@ def fetch_ai_capex(keep=28):
 
 def _fred_monthly_map(sid, extra=""):
     """FRED 序列 CSV → {'May-26': value}(依日期月份)。extra 可帶 &fq=Monthly&fam=eop 讓 FRED
-    直接做月頻末值聚合(日頻大檔如 NASDAQ100 縮成 ~10KB,避免 CI 逾時/限流)。失敗回 {}。"""
-    try:
-        d = urllib.request.urlopen(urllib.request.Request(
-            f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}{extra}",
-            headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}), timeout=30
-        ).read().decode("utf-8", "ignore")
-        out = {}
-        for r in csv.reader(io.StringIO(d)):
-            if not r or len(r) < 2 or r[-1] in ("", ".", r[0]):
-                continue
-            dt, v = r[0], r[-1]
-            try:
-                y, m = int(dt[:4]), int(dt[5:7])
-                out[f"{_MON_NAMES[m - 1]}-{y % 100:02d}"] = float(v)
-            except Exception:
-                continue
-        return out
-    except Exception as e:
-        print(f"[fred:{sid}] FAIL {type(e).__name__}: {e}")   # CI 診斷
-        return {}
+    直接做月頻末值聚合。FRED 從 CI 偶爾逾時 → 重試 4 次(比照 _fetch_gdp_trillions)。失敗回 {}。"""
+    for attempt in range(4):
+        try:
+            d = urllib.request.urlopen(urllib.request.Request(
+                f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}{extra}",
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}), timeout=30
+            ).read().decode("utf-8", "ignore")
+            out = {}
+            for r in csv.reader(io.StringIO(d)):
+                if not r or len(r) < 2 or r[-1] in ("", ".", r[0]):
+                    continue
+                dt, v = r[0], r[-1]
+                try:
+                    y, m = int(dt[:4]), int(dt[5:7])
+                    out[f"{_MON_NAMES[m - 1]}-{y % 100:02d}"] = float(v)
+                except Exception:
+                    continue
+            if out:
+                return out
+        except Exception:
+            pass
+        time.sleep(1.5)
+    return {}
 
 
 def fetch_ndx_m2():

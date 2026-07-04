@@ -242,7 +242,10 @@ def fetch_leverage():
         return {"margin_t": round(margins[-1], 2), "margin_month": pairs[-1][0],
                 "gdp_t": round(gdp_t, 2), "gdp_label": gdp_label,
                 "ratio_pct": ratio_series[-1], "ratio_series": ratio_series,
-                "months": [mn for mn, _ in pairs]}
+                "months": [mn for mn, _ in pairs],
+                # 供「保證金借款」大圖:絕對融資餘額(兆)月序,build() 會併上次歷史累積成長
+                "margin_series": [round(m, 4) for m in margins],
+                "margin_months": [mn for mn, _ in pairs]}
     except Exception:
         return None
 
@@ -307,6 +310,76 @@ def fetch_tw_margin_ratio():
                 "level": ratio, "diff": diff, "spark": series, "dates": dates,
                 "url": "https://www.macromicro.me/charts/53117/taiwan-taiex-maintenance-margin",
                 "src": "財經M平方"}
+    except Exception:
+        return None
+
+
+_MON_IDX = {m: i + 1 for i, m in enumerate(
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"])}
+
+
+def _month_key(lbl):
+    """'May-26' -> 202605(供月序排序);無法解析回 0。"""
+    try:
+        mon, yy = lbl.split("-")
+        return (2000 + int(yy)) * 100 + _MON_IDX[mon]
+    except Exception:
+        return 0
+
+
+def _merge_months(pm, pv, nm, nv):
+    """併兩組(月標籤, 值)月序:同月以新值覆蓋,依月份時序排序。回 (months, values)。"""
+    d = {}
+    for m, v in zip(pm or [], pv or []):
+        d[m] = v
+    for m, v in zip(nm or [], nv or []):
+        d[m] = v
+    ks = sorted((k for k in d if _month_key(k)), key=_month_key)
+    return ks, [d[k] for k in ks]
+
+
+def _fetch_live_sentiment():
+    """讀已部署線上 sentiment.json(供跨次累積月序);失敗回 None。"""
+    try:
+        return json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://stockview1.pages.dev/data/sentiment.json",
+                                   headers={"User-Agent": "Mozilla/5.0"}), timeout=12
+        ).read().decode("utf-8", "ignore"))
+    except Exception:
+        return None
+
+
+def fetch_tw_margin_balance():
+    """台股融資餘額(億)月頻月環比。讀線上 capital.json 的 tw.margin_hist(日頻,億),
+    各月取最新一筆(月底/當月至今)組月序 → 算月環比。
+    註:CI 中 export_sentiment 早於 export_capital,本地尚無 capital.json,故讀已部署線上版
+    (月頻指標差一日無妨);失敗回 None → 前端該卡自動隱藏。"""
+    try:
+        cap = json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://stockview1.pages.dev/data/capital.json",
+                                   headers={"User-Agent": "Mozilla/5.0"}), timeout=15
+        ).read().decode("utf-8", "ignore"))
+        hist = ((cap.get("tw") or {}).get("margin_hist")) or []
+        pts = [(h["date"], h["margin_bal"]) for h in hist
+               if h.get("date") and h.get("margin_bal") is not None]
+        if len(pts) < 2:
+            return None
+        pts.sort(key=lambda x: x[0])
+        by_month = {}
+        for dt, bal in pts:
+            by_month[dt[:7]] = (dt, bal)          # 'YYYY-MM' -> 該月最後一筆 (date, bal)
+        months = sorted(by_month)
+        if len(months) < 2:
+            return None
+        series = [round(by_month[m][1], 1) for m in months]
+        as_of = by_month[months[-1]][0]
+        MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        labels = [MON[int(m[5:7]) - 1] + "-" + m[2:4] for m in months]   # 對齊美股 leverage 口徑
+        mom = round((series[-1] / series[-2] - 1) * 100, 2) if series[-2] else None
+        return {"bal": series[-1], "prev_bal": series[-2], "as_of": as_of,
+                "mom_pct": mom, "months": labels, "series": series, "unit": "億"}
     except Exception:
         return None
 
@@ -762,6 +835,22 @@ def build():
     breadth = market_breadth()
     fng = fetch_fear_greed()
     leverage = fetch_leverage()
+    tw_margin = fetch_tw_margin_balance()
+    # 「保證金借款」大圖:併上次線上 sentiment.json 的月序,讓歷史跨次累積成長(窗口漸長出 3Y/5Y)
+    prev_sent = _fetch_live_sentiment()
+    if leverage and leverage.get("margin_months") and leverage.get("margin_series"):
+        pv = (prev_sent or {}).get("leverage") or {}
+        mm, ms = _merge_months(pv.get("margin_months"), pv.get("margin_series"),
+                               leverage["margin_months"], leverage["margin_series"])
+        leverage["margin_months"], leverage["margin_series"] = mm, ms
+    if tw_margin and tw_margin.get("months") and tw_margin.get("series"):
+        pv = (prev_sent or {}).get("tw_margin") or {}
+        mm, ms = _merge_months(pv.get("months"), pv.get("series"),
+                               tw_margin["months"], tw_margin["series"])
+        tw_margin["months"], tw_margin["series"] = mm, ms
+        if len(ms) >= 2 and ms[-2]:
+            tw_margin["bal"], tw_margin["prev_bal"] = ms[-1], ms[-2]
+            tw_margin["mom_pct"] = round((ms[-1] / ms[-2] - 1) * 100, 2)
     cot_spx = fetch_cot_spx()
     if not cot_spx:
         failed.append("COT_SPX")
@@ -773,6 +862,7 @@ def build():
         "breadth": breadth,
         "fear_greed": fng,
         "leverage": leverage,
+        "tw_margin": tw_margin,
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,

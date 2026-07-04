@@ -22,6 +22,30 @@
     --mono:'SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
     --shadow:0 1px 2px rgba(16,30,54,.04),0 4px 16px rgba(16,30,54,.05);
   }
+  body.macro-dark{
+    --bg:#080d14; --panel:#0f1724; --panel2:#141f2e; --line:#253244;
+    --ink:#e7edf7; --ink2:#aebbd0; --ink3:#718098;
+    --green:#22c55e; --red:#fb7185; --amber:#f59e0b; --blue:#60a5fa;
+    --accent:#22c55e; --bluebar:#60a5fa;
+    --shadow:0 1px 2px rgba(0,0,0,.25),0 12px 28px rgba(0,0,0,.28);
+  }
+  body.macro-dark header{border-bottom-color:var(--line)}
+  body.macro-dark .wrap{background:transparent}
+  body.macro-dark .mainnav{border-bottom-color:var(--line)}
+  body.macro-dark .mtab:hover{color:var(--ink)}
+  body.macro-dark .mtab.active{color:var(--blue)}
+  body.macro-dark th{background:#111c2b;color:var(--ink2)}
+  body.macro-dark tbody tr:nth-child(even) td{background:#101928}
+  body.macro-dark tr:hover td{background:#172235}
+  body.macro-dark .news-row:hover,
+  body.macro-dark .theme-row:hover,
+  body.macro-dark .cal-ev:hover{background:#172235}
+  body.macro-dark .idx-card.alert-red{background:#2a1118}
+  body.macro-dark .idx-card.alert-green{background:#0d2518}
+  body.macro-dark .breadth-alert.bearish{background:#2a1118}
+  body.macro-dark .breadth-alert.bullish{background:#0d2518}
+  body.macro-dark .spark-thr{background:rgba(8,13,20,.78)}
+  body.macro-dark .banner.show{background:#211a0c;color:#f6c85f;border-color:#584117}
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif;
@@ -1399,13 +1423,14 @@ function renderChicagoFci(d){
     '<section>'+
       '<div class="sec-head"><h2>芝加哥聯儲金融狀況指數</h2>'+
         '<span class="tag">NFCI · 每週</span>'+
+        '<span class="tag">資料更新時間:星期五</span>'+
         '<span class="hint">'+(CHICAGO_FCI_INV?'反轉視角:顯示 -NFCI，數值越高代表金融狀況越寬鬆、較接近股市同向。':'NFCI&gt;0＝金融狀況偏緊；NFCI&lt;0＝偏寬鬆。與 S&amp;P 500 疊圖看風險資產壓力。')+'</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+'"><div class="cap-lab">'+(CHICAGO_FCI_INV?'-NFCI 最新':'NFCI 最新')+'</div>'+
           '<div class="cap-big '+(tight?'neg':'pos')+'">'+(cur==null?'—':((sgn*cur)>0?'+':'')+Number(sgn*cur).toFixed(3))+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">週變化</div>'+
           '<div class="cap-big '+chgCls+'">'+(chg==null?'—':((sgn*chg)>0?'+':'')+Number(sgn*chg).toFixed(3))+'</div></div>'+
-        '<div class="dim" style="font-size:12px">資料週期 '+esc(d.as_of||"")+'</div>'+
+        '<div class="dim" style="font-size:12px">資料週期 '+esc(d.as_of||"")+' · 更新時間:星期五</div>'+
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+
         '<span style="width:1px;height:18px;background:var(--line);margin:0 4px"></span>'+invBtn+'</div>'+
@@ -3218,6 +3243,7 @@ window.addEventListener("popstate",function(){ if(document.getElementById("backB
 function switchView(v){
   _detailReturn=null;          // 進入任一主分頁即清除詳情返回點
   VIEW = v;
+  document.body.classList.toggle("macro-dark", v==="macro");
   try{ localStorage.setItem("curView", v); }catch(e){}   // 記住當前主分頁,F5 重整後還原
   if(window._newsTimer){ clearInterval(window._newsTimer); window._newsTimer=null; }  // 離開新聞→停止輪詢
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));

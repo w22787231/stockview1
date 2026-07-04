@@ -966,9 +966,11 @@ def build():
     os.makedirs(DATA_DIR, exist_ok=True)
     with io.open(os.path.join(DATA_DIR, "sentiment.json"), "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+    _us_n = len((leverage or {}).get("margin_months") or [])
+    _tw_n = len((tw_margin or {}).get("months") or [])
     print(f"[sentiment] -> data/sentiment.json  (levels {len(levels)}, "
           f"breadth {'ok' if breadth else 'none'}, F&G {'ok' if fng else 'none'}, "
-          f"失敗 {len(failed)})")
+          f"margin US {_us_n}月/TW {_tw_n}月, 失敗 {len(failed)})")
 
 
 if __name__ == "__main__":

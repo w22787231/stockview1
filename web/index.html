@@ -5246,15 +5246,72 @@ function renderSpec(){
 
 // ── 美股細分產業資金流: 已分類題材股 1D/5D/20D/60D ────────────────────────────────────
 let US_THEME_FLOW=null, US_THEME_SORT={key:"r1",dir:-1}, US_THEME_OPEN="";
+// 自訂:把任意美股代號加進某群組,納入該群組平均報酬計算(localStorage 持久化;報酬用 /api/quotes 現算)
+let US_THEME_CUSTOM=[];      // [{sym, theme}]
+let US_THEME_CUSTOMQ={};     // {sym: {r1,r5,r20,r60,close,name}}
+function _tfLoadCustom(){ try{ US_THEME_CUSTOM=JSON.parse(localStorage.getItem("usThemeCustom")||"[]")||[]; }catch(e){ US_THEME_CUSTOM=[]; } }
+function _tfSaveCustom(){ try{ localStorage.setItem("usThemeCustom",JSON.stringify(US_THEME_CUSTOM)); }catch(e){} }
+async function _tfFetchCustom(){
+  const need=[...new Set(US_THEME_CUSTOM.map(c=>c.sym))].filter(s=>!US_THEME_CUSTOMQ[s]);
+  for(let i=0;i<need.length;i+=5){
+    const b=need.slice(i,i+5);
+    try{
+      const d=await (await fetch("/api/quotes?kline=1&kr=1y&syms="+encodeURIComponent(b.join(","))+"&t="+Date.now(),{cache:"no-store"})).json();
+      const q=(d&&d.quotes)||{};
+      b.forEach(s=>{ const cl=(q[s]&&q[s].closes)||[]; if(cl.length>2){ const L=cl.length-1, rN=n=>(L-n>=0&&cl[L-n])?+((cl[L]/cl[L-n]-1)*100).toFixed(2):null;
+        US_THEME_CUSTOMQ[s]={r1:rN(1),r5:rN(5),r20:rN(20),r60:rN(60),close:cl[L],name:(q[s]&&q[s].name)||""}; }
+        else US_THEME_CUSTOMQ[s]=US_THEME_CUSTOMQ[s]||{_miss:true}; });
+    }catch(e){}
+  }
+}
+function _tfAugmented(){   // 回傳 groups(深淺拷貝)+ 併入自訂成分股 + 重算有自訂的群組 avg/up_ratio/count
+  const groups=(US_THEME_FLOW.groups||[]).map(g=>({...g, avg:{...(g.avg||{})}, members:[...(g.members||[])]}));
+  const byTheme={}; groups.forEach(g=>byTheme[g.theme]=g);
+  const touched=new Set();
+  US_THEME_CUSTOM.forEach(c=>{
+    const g=byTheme[c.theme]; if(!g) return;
+    const q=US_THEME_CUSTOMQ[c.sym]||{};
+    g.members=g.members.filter(m=>m.sym!==c.sym);   // 若原本已在,以自訂覆蓋(避免重複)
+    g.members.unshift({sym:c.sym, r1:q.r1, r5:q.r5, r20:q.r20, r60:q.r60, close:q.close, method:"自訂", _custom:true});
+    touched.add(g.theme);
+  });
+  groups.forEach(g=>{
+    if(!touched.has(g.theme)) return;
+    const mem=g.members, mean=k=>{ const v=mem.map(m=>m[k]).filter(x=>x!=null); return v.length?+(v.reduce((a,b)=>a+b,0)/v.length).toFixed(2):null; };
+    g.avg={r1:mean("r1"),r5:mean("r5"),r20:mean("r20"),r60:mean("r60")};
+    g.count=mem.length; g._hasCustom=true;
+    const up=mem.filter(m=>m.r1>0).length, tot=mem.filter(m=>m.r1!=null).length;
+    g.up_ratio=tot?+(up/tot*100).toFixed(1):null;
+  });
+  return groups;
+}
+function _tfAddStock(){
+  const inp=document.getElementById("tfAddSym"), sel=document.getElementById("tfAddGroup");
+  if(!inp||!sel) return;
+  const sym=(inp.value||"").trim().toUpperCase(), theme=sel.value;
+  if(!sym||!theme) return;
+  if(!US_THEME_CUSTOM.some(c=>c.sym===sym&&c.theme===theme)) US_THEME_CUSTOM.push({sym,theme});
+  _tfSaveCustom(); inp.value="";
+  US_THEME_OPEN=theme;                         // 展開該群組看到剛加入的
+  delete US_THEME_CUSTOMQ[sym];
+  _tfFetchCustom().then(renderUsThemeFlow);
+  renderUsThemeFlow();                          // 先畫(顯示載入中/—),抓完再重畫
+}
+function _tfRemoveStock(sym,theme){
+  US_THEME_CUSTOM=US_THEME_CUSTOM.filter(c=>!(c.sym===sym&&c.theme===theme));
+  _tfSaveCustom(); renderUsThemeFlow();
+}
 async function loadUsThemeFlow(){
   const host=document.getElementById("usThemeFlowBlock"); if(!host) return;
-  if(US_THEME_FLOW){ renderUsThemeFlow(); return; }
+  _tfLoadCustom();
+  if(US_THEME_FLOW){ renderUsThemeFlow(); _tfFetchCustom().then(renderUsThemeFlow); return; }
   host.innerHTML='<div class="dim" style="padding:8px">載入美股細分產業資金流 …</div>';
   try{
     const res=await fetch("data/us_theme_flow.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(res.status);
     US_THEME_FLOW=await res.json();
     renderUsThemeFlow();
+    _tfFetchCustom().then(renderUsThemeFlow);
   }catch(e){
     host.innerHTML='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2></div>'+
       '<div class="legend">⚠️ us_theme_flow.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export。</div></section>';
@@ -5265,12 +5322,13 @@ function _tfSyms(arr,key){
   return (arr||[]).slice(0,3).map(x=>'<span class="sym clickable" data-stk="'+esc(x.sym)+'">'+esc(x.sym)+'</span> '+_tfVal(x[key]||0)).join('<br>');
 }
 function _tfMembers(g){
-  const rows=(g.members||[]).slice(0,80);
+  const rows=(g.members||[]).slice(0,120);
   if(!rows.length) return "";
-  let h='<tr class="tf-detail"><td colspan="10"><div style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel2)">'+
+  let h='<tr class="tf-detail"><td colspan="10"><div style="max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel2)">'+
     '<table class="cap-tbl wide"><thead><tr><th>代號</th><th>1D</th><th>5D</th><th>20D</th><th>60D</th><th>收盤</th><th>分類</th></tr></thead><tbody>';
   rows.forEach(r=>{
-    h+='<tr><td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(r.sym)+'</td>'+
+    h+='<tr'+(r._custom?' style="background:var(--panel)"':'')+'><td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(r.sym)+
+      (r._custom?' <span class="badge add">自訂</span><span class="clickable tf-rm" data-rm="'+esc(r.sym)+'" data-rmg="'+esc(g.theme)+'" title="移除" style="color:var(--red);cursor:pointer">✕</span>':'')+'</td>'+
       '<td>'+_tfVal(r.r1)+'</td><td>'+_tfVal(r.r5)+'</td><td>'+_tfVal(r.r20)+'</td><td>'+_tfVal(r.r60)+'</td>'+
       '<td class="dim">'+(r.close!=null?fmtNum(r.close,2):"—")+'</td><td class="dim">'+esc(r.method||"")+'</td></tr>';
   });
@@ -5278,7 +5336,7 @@ function _tfMembers(g){
 }
 function renderUsThemeFlow(){
   const host=document.getElementById("usThemeFlowBlock"); if(!host||!US_THEME_FLOW) return;
-  const d=US_THEME_FLOW, groups=(d.groups||[]).filter(g=>g.count>0);
+  const d=US_THEME_FLOW, groups=_tfAugmented().filter(g=>g.count>0);
   const k=US_THEME_SORT.key, dir=US_THEME_SORT.dir;
   groups.sort((a,b)=>{
     const av=k==="count"?a.count:(k==="up_ratio"?a.up_ratio:((a.avg||{})[k]));
@@ -5291,11 +5349,20 @@ function renderUsThemeFlow(){
     '<span class="hint">放在投機交易下方；用 1D/5D/20D/60D 看資金流到哪個題材</span></div>'+
     '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔；只抓已分類題材股，不掃全市場。'+
     '<b>短線流入</b>=1D/5D 強；<b>波段主線</b>=20D/60D 強。點族群可展開成分股。</div>'+
+    // 自訂:加任意美股代號到某群組,納入該群組平均報酬計算
+    '<div class="hold-add" style="margin:2px 0 8px">'+
+      '<input id="tfAddSym" class="holdInput" type="text" placeholder="美股代號,例 NVDA / AVGO" autocomplete="off" style="max-width:200px">'+
+      '<span class="dim" style="align-self:center">加入群組:</span>'+
+      '<select id="tfAddGroup" class="tw-tg" style="max-width:220px">'+groups.map(g=>'<option value="'+esc(g.theme)+'">'+esc(g.theme)+'</option>').join("")+'</select>'+
+      '<button class="btn" id="tfAddBtn">+ 加入群組</button>'+
+      (US_THEME_CUSTOM.length?'<span class="dim" style="align-self:center;margin-left:6px">已加 '+US_THEME_CUSTOM.length+' 檔</span>':'')+
+    '</div>'+
+    '<div class="legend">加入後該代號會併進所選群組、重算平均報酬與上漲比(標「自訂」;報酬用即時報價現算,近似同口徑)。清單存在本機瀏覽器。</div>'+
     '<table class="cap-tbl wide"><thead><tr><th>族群</th>'+th("count","檔數")+th("r1","1D")+th("r5","5D")+th("r20","20D")+th("r60","60D")+th("up_ratio","上漲比")+'<th>代表強勢股</th><th>代表弱勢股</th><th>可信度</th></tr></thead><tbody>';
   groups.forEach(g=>{
     const avg=g.avg||{}, open=US_THEME_OPEN===g.theme;
     h+='<tr class="tf-row" data-theme="'+esc(g.theme)+'" style="cursor:pointer">'+
-      '<td style="text-align:left"><b>'+esc(g.theme)+'</b>'+(g.theme==="未細分"?'<span class="dim"> · 未人工歸類</span>':'')+'</td>'+
+      '<td style="text-align:left"><b>'+esc(g.theme)+'</b>'+(g.theme==="未細分"?'<span class="dim"> · 未人工歸類</span>':'')+(g._hasCustom?' <span class="badge add">含自訂</span>':'')+'</td>'+
       '<td>'+fmtNum(g.count,0)+'</td><td>'+_tfVal(avg.r1)+'</td><td>'+_tfVal(avg.r5)+'</td><td>'+_tfVal(avg.r20)+'</td><td>'+_tfVal(avg.r60)+'</td>'+
       '<td>'+(g.up_ratio==null?'<span class="dim">—</span>':g.up_ratio.toFixed(1)+'%')+'</td>'+
       '<td style="text-align:left">'+_tfSyms(g.winners,"r1")+'</td><td style="text-align:left">'+_tfSyms(g.losers,"r1")+'</td>'+
@@ -5307,6 +5374,9 @@ function renderUsThemeFlow(){
   host.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{ const key=th.dataset.k; if(US_THEME_SORT.key===key)US_THEME_SORT.dir*=-1; else US_THEME_SORT={key:key,dir:-1}; renderUsThemeFlow(); });
   host.querySelectorAll(".tf-row").forEach(tr=>tr.onclick=e=>{ if(e.target.closest(".clickable")) return; const t=tr.dataset.theme; US_THEME_OPEN=US_THEME_OPEN===t?"":t; renderUsThemeFlow(); });
   host.querySelectorAll(".clickable[data-stk]").forEach(x=>x.onclick=e=>{ e.stopPropagation(); openHoldStock(x.dataset.stk,x.dataset.stk); });
+  host.querySelectorAll(".tf-rm").forEach(x=>x.onclick=e=>{ e.stopPropagation(); _tfRemoveStock(x.dataset.rm,x.dataset.rmg); });
+  const _ab=document.getElementById("tfAddBtn"); if(_ab) _ab.onclick=_tfAddStock;
+  const _ai=document.getElementById("tfAddSym"); if(_ai) _ai.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.isComposing&&e.keyCode!==229){ e.preventDefault(); _tfAddStock(); } });
 }
 
 // ── 選擇權:任意代號(SPY/QQQ/個股)選擇權鏈 → PCR / Max Pain / 未平倉分布 / IV(/api/options)──

@@ -495,6 +495,75 @@ def fetch_insider_ratio(prev=None, refresh_months=2):
         return None
 
 
+_AI_CAPEX_COMP = [
+    ("MSFT",  "0000789019", "PaymentsToAcquirePropertyPlantAndEquipment"),
+    ("AMZN",  "0001018724", "PaymentsToAcquireProductiveAssets"),
+    ("GOOGL", "0001652044", "PaymentsToAcquirePropertyPlantAndEquipment"),
+    ("META",  "0001326801", "PaymentsToAcquirePropertyPlantAndEquipment"),
+]
+
+
+def _sec_quarterly_capex(cik, concept):
+    """SEC XBRL 單概念 → 日曆季 capex($B)。以財年起始日錨定 FYTD 點逐季差分(排除 TTM/年度誤植)。
+    財年起始 = 各點 start 的 (月,日) 眾數;只留 start 落該日的 FYTD 點,依財年分組後累計差分。回 {'2026Q1':30.9,...}。"""
+    from collections import Counter
+    def cq(d):
+        y, m = int(d[:4]), int(d[5:7]); return f"{y}Q{(m - 1) // 3 + 1}"
+    try:
+        j = json.loads(urllib.request.urlopen(urllib.request.Request(
+            f"https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{concept}.json",
+            headers={"User-Agent": "stockview-research contact@stockview.example"}),
+            timeout=25).read().decode("utf-8", "ignore"))
+        pts = [(u["start"], u["end"], u["val"]) for u in j.get("units", {}).get("USD", [])
+               if u.get("start") and u.get("end") and u.get("val") is not None]
+        if len(pts) < 8:
+            return {}
+        md = Counter((s[5:7], s[8:10]) for s, _, _ in pts).most_common(1)[0][0]
+        fysuffix = f"-{md[0]}-{md[1]}"
+        grp = {}
+        for s, e, v in pts:
+            if s.endswith(fysuffix):
+                grp.setdefault(s, {})[e] = v          # 同 end 多筆取後者(值一致)
+        disc = {}
+        for s, d in grp.items():
+            prev = 0.0
+            for e in sorted(d):
+                disc[cq(e)] = round((d[e] - prev) / 1e9, 3); prev = d[e]
+        return disc
+    except Exception:
+        return {}
+
+
+def _q_index(q):
+    y, k = q.split("Q"); return int(y) * 4 + int(k) - 1
+
+
+def fetch_ai_capex(keep=28):
+    """AI/雲端巨頭季度資本開支加總(MSFT/AMZN/GOOGL/META)+ YoY/環比增速。SEC XBRL 免key。
+    回近 keep 季(4 家齊全者);失敗回 None → 前端該卡自動隱藏。"""
+    try:
+        per = {t: _sec_quarterly_capex(cik, con) for t, cik, con in _AI_CAPEX_COMP}
+        if any(len(v) < 8 for v in per.values()):
+            return None
+        common = sorted(set.intersection(*[set(v) for v in per.values()]), key=_q_index)
+        if len(common) < 6:
+            return None
+        common = common[-keep:]
+        capex = [round(sum(per[t][q] for t in per), 2) for q in common]
+        idx = {q: capex[i] for i, q in enumerate(common)}
+        yoy = [round((idx[q] / idx[f"{int(q[:4])-1}Q{q[-1]}"] - 1) * 100, 1)
+               if f"{int(q[:4])-1}Q{q[-1]}" in idx and idx[f"{int(q[:4])-1}Q{q[-1]}"] else None
+               for q in common]
+        qoq = [round((capex[i] / capex[i - 1] - 1) * 100, 1) if i and capex[i - 1] else None
+               for i in range(len(capex))]
+        return {"quarters": common, "capex": capex, "yoy": yoy, "qoq": qoq,
+                "companies": [t for t, _, _ in _AI_CAPEX_COMP],
+                "current": capex[-1], "current_yoy": yoy[-1], "current_qoq": qoq[-1],
+                "as_of_q": common[-1], "unit": "$B"}
+    except Exception:
+        return None
+
+
 def _fetch_live_sentiment():
     """讀已部署線上 sentiment.json(供跨次累積月序);失敗回 None。"""
     try:
@@ -1081,6 +1150,7 @@ def build():
         "leverage": leverage,
         "tw_margin": tw_margin,
         "insider_ratio": insider,
+        "ai_capex": fetch_ai_capex(),
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,
@@ -1091,9 +1161,10 @@ def build():
     _us_n = len((leverage or {}).get("margin_months") or [])
     _tw_n = len((tw_margin or {}).get("months") or [])
     _in_n = len((insider or {}).get("months") or [])
+    _cx_n = len((payload.get("ai_capex") or {}).get("quarters") or [])
     print(f"[sentiment] -> data/sentiment.json  (levels {len(levels)}, "
           f"breadth {'ok' if breadth else 'none'}, F&G {'ok' if fng else 'none'}, "
-          f"margin US {_us_n}月/TW {_tw_n}月, insider {_in_n}月, 失敗 {len(failed)})")
+          f"margin US {_us_n}月/TW {_tw_n}月, insider {_in_n}月, ai_capex {_cx_n}季, 失敗 {len(failed)})")
 
 
 if __name__ == "__main__":

@@ -2012,10 +2012,13 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
     ],
     series:[
       {name:marginName,type:"line",smooth:true,showSymbol:mData.length<=24,symbolSize:4,yAxisIndex:0,data:mData,connectNulls:true,
-       lineStyle:{color:marginColor,width:2.4},itemStyle:{color:marginColor},areaStyle:{color:marginColor,opacity:.06},
-       markLine:opts.refLine!=null?{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},
-         label:{formatter:opts.refLabel||"",fontSize:9,color:"#94a3b8",position:"insideEndTop"},
-         data:[{yAxis:opts.refLine}]}:undefined},
+       lineStyle:{color:marginColor,width:2.4},itemStyle:{color:marginColor},areaStyle:opts.noArea?undefined:{color:marginColor,opacity:.06},
+       markLine:(opts.refLines&&opts.refLines.length)?{silent:true,symbol:"none",
+         data:opts.refLines.map(r=>({yAxis:r.value,lineStyle:{color:r.color,type:"dashed",width:1.2},
+           label:{formatter:r.label,fontSize:9,color:r.color,position:"insideEndTop"}}))}
+         :(opts.refLine!=null?{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},
+           label:{formatter:opts.refLabel||"",fontSize:9,color:"#94a3b8",position:"insideEndTop"},
+           data:[{yAxis:opts.refLine}]}:undefined)},
       {name:idxName,type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:iData,connectNulls:true,
        lineStyle:{color:MARGIN_IDX_COL,width:1.6,type:"dashed"},itemStyle:{color:MARGIN_IDX_COL}}
     ]
@@ -2071,15 +2074,14 @@ function renderInsider(d){
       '</div>'+
       '<div style="margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       '<div id="insiderChart" class="cap-chart" style="height:280px"></div>'+
-      '<div class="legend" style="margin-top:10px">賣買比(紫,左軸)＋ S&P 500(藍虛線,右軸)。灰虛線=近窗中位數(常態基準),飆高=賣壓重、走低=相對偏買。逐月分開查買/賣避免截斷;歷史種子一次性回抓、之後每次更新當月。時段 '+esc(MARGIN_LABEL[INSIDER_WIN]||INSIDER_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">賣買比(紫線,左軸)＋ S&P 500(藍虛線,右軸)。<b style="color:#c98a00">橙虛線 3.5=注意</b>、<b style="color:#e11d48">紅虛線 4.0=警戒</b>:近5年實測「賣買比&gt;3.5→SPX 後1月均報酬轉負、&gt;4.0→約−1.3%/6成下跌」——屬弱訊號、僅影響約1個月,當偏空旁證。逐月分開查買/賣;歷史種子一次性回抓、之後每次更新當月。時段 '+esc(MARGIN_LABEL[INSIDER_WIN]||INSIDER_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-inw]").forEach(b=>b.onclick=()=>{ INSIDER_WIN=b.dataset.inw||"1y"; renderInsider(INSIDER_DATA); });
-  // 參考線=近窗中位數(相對基準,比固定 1 更貼近實際尺度)
-  const nWin=(MARGIN_WINS.find(w=>w[0]===INSIDER_WIN)||MARGIN_WINS[2])[1];
-  const seg=s.vals.slice(-Math.min(nWin,s.vals.length)).filter(v=>v!=null).sort((a,b)=>a-b);
-  const med=seg.length?seg[Math.floor(seg.length/2)]:null;
+  // 警戒線(近5年實測:賣買比越高、SPX 後1月越弱):注意 3.5、警戒 4.0;純線不染色
   drawMarketChart("insiderChart", s, "內部人賣買比", INSIDER_COL, "賣/買", "S&P 500",
-    INSIDER_WIN, med!=null?{refLine:+med.toFixed(3),refLabel:"中位 "+med.toFixed(2)}:{});
+    INSIDER_WIN, {noArea:true, refLines:[
+      {value:3.5, label:"注意 3.5", color:"#c98a00"},
+      {value:4.0, label:"警戒 4.0", color:"#e11d48"}]});
 }
 function renderSentiment(d){
   SENT_LAST=d;

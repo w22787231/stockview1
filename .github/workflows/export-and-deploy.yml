@@ -90,6 +90,7 @@ jobs:
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}   # 美國聯準會準備金 WRESBAL
         run: |
           cd engine
           python export_macro.py

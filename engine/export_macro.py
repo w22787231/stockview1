@@ -120,6 +120,38 @@ def fetch_m1b_m2(months=72):
         return None
 
 
+def fetch_us_reserves(series="WRESBAL", start="2010-01-01"):
+    """美國-聯準會存款機構準備金(週,WRESBAL,十億美元)← FRED API(需 FRED_API_KEY)。
+    準備金=銀行體系流動性;QT 抽準備金、QE 灌準備金,是美元流動性關鍵指標。無 key 回 None。"""
+    key = os.environ.get("FRED_API_KEY")
+    if not key:
+        print("[macro] FRED_API_KEY 未設,跳過 us_reserves")
+        return None
+    try:
+        url = ("https://api.stlouisfed.org/fred/series/observations"
+               "?series_id=%s&api_key=%s&file_type=json&observation_start=%s" % (series, key, start))
+        j = json.loads(urllib.request.urlopen(urllib.request.Request(
+            url, headers={"User-Agent": "Mozilla/5.0"}), timeout=30).read().decode("utf-8"))
+        dates, vals = [], []
+        for o in j.get("observations") or []:
+            v = o.get("value")
+            if v in (None, "", "."):
+                continue
+            try:
+                fv = float(v)
+            except ValueError:
+                continue
+            dates.append(o["date"]); vals.append(round(fv, 1))
+        if len(dates) < 2:
+            return None
+        return {"label": "美國-聯準會存款機構準備金(週)", "unit": "十億美元",
+                "dates": dates, "values": vals, "cur": vals[-1], "as_of": dates[-1],
+                "src": "FRED WRESBAL(Reserve Balances with Federal Reserve Banks)"}
+    except Exception as e:
+        print("[macro] us_reserves 失敗:", e)
+        return None
+
+
 def build():
     all_syms = [x["sym"] for x in INDICES] + [x["sym"] for x in ETFS]
     px = fetch_all(all_syms)
@@ -167,6 +199,7 @@ def build():
         "indices": indices,
         "etfs": etfs,
         "m1b_m2": fetch_m1b_m2(),
+        "us_reserves": fetch_us_reserves(),
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

@@ -583,7 +583,8 @@ def _fred_monthly_map(sid, extra=""):
             except Exception:
                 continue
         return out
-    except Exception:
+    except Exception as e:
+        print(f"[fred:{sid}] FAIL {type(e).__name__}: {e}")   # CI 診斷
         return {}
 
 
@@ -594,6 +595,7 @@ def fetch_ndx_m2():
         ndx = _fred_monthly_map("NASDAQ100", "&fq=Monthly&fam=eop&cosd=1985-01-01")  # 月頻末值(小檔)
         m2 = _fred_monthly_map("M2SL")                     # {Mon-YY: $B}
         common = sorted(set(ndx) & set(m2), key=_month_key)
+        print(f"[ndx_m2] ndx={len(ndx)} m2={len(m2)} common={len(common)}")   # CI 診斷
         if len(common) < 24:
             return None
         ndx_s = [round(ndx[m], 1) for m in common]

@@ -588,9 +588,9 @@ def _fred_monthly_map(sid):
 
 def fetch_ndx_m2():
     """Nasdaq-100 ÷ 美國 M2 貨幣供給 比值(月頻)。資產價格相對印鈔速度的估值/流動性指標。
-    ^NDX(yfinance 月線)/ M2($兆,FRED M2SL)。失敗回 None。"""
+    兩者皆用 FRED(NASDAQ100 日頻取月底 / M2SL $B),免 Yahoo 避免 CI 限流。失敗回 None。"""
     try:
-        ndx = _monthly_index_map("^NDX", "1985-01-01")     # {Mon-YY: close}
+        ndx = _fred_monthly_map("NASDAQ100")               # 日頻→各月最後一筆(月底);{Mon-YY: close}
         m2 = _fred_monthly_map("M2SL")                     # {Mon-YY: $B}
         common = sorted(set(ndx) & set(m2), key=_month_key)
         if len(common) < 24:
@@ -1177,6 +1177,7 @@ def build():
         tw_margin["twii_series"] = [tm.get(l) for l in tw_margin["months"]]
     # 全市場內部人買賣比(筆數,月頻,OpenInsider)+ S&P500 疊圖,放 PI 下方
     insider = fetch_insider_ratio(prev=(prev_sent or {}).get("insider_ratio"))
+    ndx_m2 = fetch_ndx_m2() or (prev_sent or {}).get("ndx_m2")   # FRED 失敗沿用線上 last-good
     if insider and insider.get("months"):
         gi = _monthly_index_map("^GSPC", "2005-12-01")
         insider["sp500_series"] = [gi.get(l) for l in insider["months"]]
@@ -1194,7 +1195,7 @@ def build():
         "tw_margin": tw_margin,
         "insider_ratio": insider,
         "ai_capex": fetch_ai_capex(),
-        "ndx_m2": fetch_ndx_m2(),
+        "ndx_m2": ndx_m2,
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,

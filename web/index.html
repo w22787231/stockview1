@@ -1935,7 +1935,9 @@ function renderMargin(d){
           '<div class="cap-chg">月環比 '+momHtml(mom)+'</div></div>'+
         (sub?'<div class="dim" style="font-size:12px">'+sub+'</div>':'')+
       '</div>'+
-      '<div id="'+chartId+'" class="cap-chart" style="height:250px"></div>'+
+      '<div id="'+chartId+'" class="cap-chart" style="height:230px"></div>'+
+      '<div class="dim" style="font-size:11px;margin:6px 0 0">月環比（%）</div>'+
+      '<div id="'+chartId+'Mom" class="cap-chart" style="height:130px"></div>'+
     '</div>';
   }
   const usPanel = panel(us, '🇺🇸 美股保證金借款 · 月環比（＋ S&P 500）', MARGIN_US,
@@ -1957,10 +1959,38 @@ function renderMargin(d){
   box.querySelectorAll("[data-mgw]").forEach(b=>b.onclick=()=>{ MARGIN_WIN=b.dataset.mgw||"1y"; renderMargin(MARGIN_DATA); });
   drawMarketChart("marginChartUs", us, "🇺🇸 美股 margin debt", MARGIN_US, "兆USD", "S&P 500");
   drawMarketChart("marginChartTw", tw, "🇹🇼 台股融資餘額", MARGIN_TW, "億TWD", "加權指數");
+  drawMomChart("marginChartUsMom", us, MARGIN_US, MARGIN_WIN);
+  drawMomChart("marginChartTwMom", tw, MARGIN_TW, MARGIN_WIN);
 }
-function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxName){
+// 月環比(%)線圖:由餘額序列逐月算 (本月/上月−1),零軸虛線
+function drawMomChart(elId, s, color, win){
+  const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals||s.vals.length<2) return;
+  const nWin=(MARGIN_WINS.find(w=>w[0]===(win||MARGIN_WIN))||MARGIN_WINS[2])[1];
+  const n=Math.min(nWin+1, s.months.length);          // 多取一月以算首點環比
+  const mo=s.months.slice(-n), mv=s.vals.slice(-n), pts=[];
+  for(let i=1;i<mo.length;i++){ const t=_monthMs(mo[i]), a=mv[i-1], b=mv[i];
+    if(t!=null&&a!=null&&b!=null&&a) pts.push([t, +((b/a-1)*100).toFixed(2)]); }
+  if(pts.length<1){ el.innerHTML=''; return; }
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:60,right:18,top:14,bottom:24},
+    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":(v>0?"+":"")+Number(v).toFixed(2)+"%"},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:{type:"value",name:"%",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
+    series:[{name:"月環比 %",type:"line",smooth:true,showSymbol:pts.length<=24,symbolSize:3,data:pts,connectNulls:true,
+      lineStyle:{color:color,width:1.8},itemStyle:{color:color},areaStyle:{color:color,opacity:.05},
+      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize",el._ro);
+}
+function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxName, win, opts){
   const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals.length) return;
-  const nWin=(MARGIN_WINS.find(w=>w[0]===MARGIN_WIN)||MARGIN_WINS[2])[1];
+  opts=opts||{};
+  const nWin=(MARGIN_WINS.find(w=>w[0]===(win||MARGIN_WIN))||MARGIN_WINS[2])[1];
   const n=Math.min(nWin, s.months.length);
   const mo=s.months.slice(-n), mv=s.vals.slice(-n), iv=(s.idx||[]).slice(-n);
   const mData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||mv[i]==null)?null:[t,mv[i]];}).filter(Boolean);
@@ -1982,7 +2012,10 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
     ],
     series:[
       {name:marginName,type:"line",smooth:true,showSymbol:mData.length<=24,symbolSize:4,yAxisIndex:0,data:mData,connectNulls:true,
-       lineStyle:{color:marginColor,width:2.4},itemStyle:{color:marginColor},areaStyle:{color:marginColor,opacity:.06}},
+       lineStyle:{color:marginColor,width:2.4},itemStyle:{color:marginColor},areaStyle:{color:marginColor,opacity:.06},
+       markLine:opts.refLine!=null?{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},
+         label:{formatter:opts.refLabel||"",fontSize:9,color:"#94a3b8",position:"insideEndTop"},
+         data:[{yAxis:opts.refLine}]}:undefined},
       {name:idxName,type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:iData,connectNulls:true,
        lineStyle:{color:MARGIN_IDX_COL,width:1.6,type:"dashed"},itemStyle:{color:MARGIN_IDX_COL}}
     ]
@@ -1990,6 +2023,63 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
   if(el._ro) window.removeEventListener("resize",el._ro);
   el._ro=()=>ch.resize();
   window.addEventListener("resize",el._ro);
+}
+// ── 內部人買賣比(筆數,全市場,月頻)+ S&P500 疊圖,放 PI 下方 ──
+let INSIDER_DATA=null, INSIDER_WIN="1y";
+const INSIDER_COL="#9333ea";
+function _insiderSeries(d){
+  const I=d.insider_ratio||{};
+  const s=_marginSortBy(I.months||[], I.ratio||[], I.sp500_series||[]);
+  // 買/賣筆數也依同順序帶出(供旁註)
+  const bs=_marginSortBy(I.months||[], I.buys||[], I.sells||[]);
+  return { months:s.months, vals:s.vals, idx:s.idx, buys:bs.vals, sells:bs.idx, as_of:I.as_of };
+}
+async function loadInsider(){
+  const box=document.getElementById("insiderBlock"); if(!box) return;
+  if(INSIDER_DATA){ renderInsider(INSIDER_DATA); return; }
+  box.innerHTML='<section><div class="sec-head"><h2>內部人買賣比</h2></div><div class="loading-screen">載入內部人交易 …</div></section>';
+  try{
+    const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    INSIDER_DATA=await res.json();
+    renderInsider(INSIDER_DATA);
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>內部人買賣比</h2></div>'+
+      '<div class="legend">⚠️ 內部人交易資料尚未產生（'+esc(e.message)+'）。</div></section>';
+  }
+}
+function renderInsider(d){
+  const box=document.getElementById("insiderBlock"); if(!box) return;
+  const s=_insiderSeries(d);
+  if((s.vals||[]).filter(v=>v!=null).length<2){ box.innerHTML=''; return; }
+  const avail=s.months.length;
+  const wins=MARGIN_WINS.filter(w=>w[1]<=avail); if(!wins.length) wins.push(MARGIN_WINS[0]);
+  if(!wins.find(w=>w[0]===INSIDER_WIN)) INSIDER_WIN=wins[wins.length-1][0];
+  const cur=s.vals[s.vals.length-1], cb=s.buys[s.buys.length-1], cs=s.sells[s.sells.length-1];
+  const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:150px;margin-right:12px';
+  const btns=wins.map(w=>'<button class="btn'+(INSIDER_WIN===w[0]?' active':'')+'" data-inw="'+w[0]+'">'+w[2]+'</button>').join("");
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>內部人買賣比（筆數）</h2>'+
+        '<span class="tag">OpenInsider · 全市場 · 月頻</span>'+
+        '<span class="hint">全市場內部人申報「買進筆數 ÷ 賣出筆數」。內部人本就賣多於買(選擇權/薪酬),故常態遠小於 1;看相對變化——比值衝高常見於市場底部(內部人逆勢承接)。</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
+        '<div style="'+card+';border-left:3px solid '+INSIDER_COL+'"><div class="cap-lab">最新買賣比</div>'+
+          '<div class="cap-big" style="color:'+INSIDER_COL+'">'+(cur==null?'—':Number(cur).toFixed(2))+'</div>'+
+          '<div class="cap-chg">買 '+(cb!=null?cb.toLocaleString():'—')+' / 賣 '+(cs!=null?cs.toLocaleString():'—')+' 筆</div></div>'+
+        (s.as_of?'<div class="dim" style="font-size:12px">至 '+esc(s.as_of)+'（本月至今）</div>':'')+
+      '</div>'+
+      '<div style="margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="insiderChart" class="cap-chart" style="height:280px"></div>'+
+      '<div class="legend" style="margin-top:10px">買賣比(紫,左軸)＋ S&P 500(藍虛線,右軸)。灰虛線=近窗中位數(常態基準),站上=內部人相對偏買。逐月分開查買/賣避免截斷;歷史種子一次性回抓、之後每次更新當月。時段 '+esc(MARGIN_LABEL[INSIDER_WIN]||INSIDER_WIN)+'。</div>'+
+    '</section>';
+  box.querySelectorAll("[data-inw]").forEach(b=>b.onclick=()=>{ INSIDER_WIN=b.dataset.inw||"1y"; renderInsider(INSIDER_DATA); });
+  // 參考線=近窗中位數(相對基準,比固定 1 更貼近實際尺度)
+  const nWin=(MARGIN_WINS.find(w=>w[0]===INSIDER_WIN)||MARGIN_WINS[2])[1];
+  const seg=s.vals.slice(-Math.min(nWin,s.vals.length)).filter(v=>v!=null).sort((a,b)=>a-b);
+  const med=seg.length?seg[Math.floor(seg.length/2)]:null;
+  drawMarketChart("insiderChart", s, "內部人買賣比", INSIDER_COL, "買/賣", "S&P 500",
+    INSIDER_WIN, med!=null?{refLine:+med.toFixed(3),refLabel:"中位 "+med.toFixed(2)}:{});
 }
 function renderSentiment(d){
   SENT_LAST=d;
@@ -2000,6 +2090,7 @@ function renderSentiment(d){
     '<div id="chicagoFciBlock"></div>'+
     '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
+    '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<div id="marginBlock"></div>'+
     sp500FwdPeBox(d.sp500_fwd_pe)+
@@ -2203,6 +2294,7 @@ async function loadSentiment(){
     loadChicagoFci();
     loadFsi();
     loadPI();
+    loadInsider();
     loadSpec();
     loadMargin();
   }catch(e){

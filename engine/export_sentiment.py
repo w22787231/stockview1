@@ -6,7 +6,7 @@
 輸出 ../data/sentiment.json。
 """
 import sys, os, io, json, csv, re, datetime, time, calendar
-import urllib.request
+import urllib.request, urllib.parse
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import warnings
@@ -402,6 +402,97 @@ def _monthly_index_map(sym, start):
         return out
     except Exception:
         return {}
+
+
+_OI_UA = {"User-Agent": "stockview-research contact@stockview.example"}
+
+
+def _oi_month_side(y, m, xp, xs, budget, cnt=5000):
+    """OpenInsider screener 指定月的單側筆數(xp=1 只買 / xs=1 只賣)。
+    達 cnt 上限(截斷)→ 半月拆再加總。budget=[剩餘查詢數]。失敗回 None。"""
+    last = calendar.monthrange(y, m)[1]
+    def q(d1, d2):
+        if budget[0] <= 0:
+            return None
+        budget[0] -= 1
+        rng = urllib.parse.quote(f"{m:02d}/{d1:02d}/{y} - {m:02d}/{d2:02d}/{y}")
+        url = (f"http://openinsider.com/screener?fd=-1&fdr={rng}"
+               f"&xp={xp}&xs={xs}&cnt={cnt}&sortcol=0")
+        try:
+            h = urllib.request.urlopen(urllib.request.Request(url, headers=_OI_UA),
+                                       timeout=25).read().decode("utf-8", "ignore")
+            mt = re.search(r'<table[^>]*class="[^"]*tinytable[^"]*"[^>]*>(.*?)</table>',
+                           h, re.S | re.I)
+            if not mt:
+                return 0
+            n = 0
+            for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", mt.group(1), re.S | re.I):
+                cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, re.S | re.I)
+                if len(cells) < 13:
+                    continue
+                txt = re.sub(r"<[^>]+>", "", cells[7])
+                if (xp and "P - Purchase" in txt) or (xs and "S - Sale" in txt):
+                    n += 1
+            time.sleep(0.15)
+            return n
+        except Exception:
+            return None
+    n = q(1, last)
+    if n is None:
+        return None
+    if n >= cnt:                                   # 截斷 → 半月拆
+        a, b = q(1, 15), q(16, last)
+        if a is not None and b is not None:
+            return a + b
+    return n
+
+
+def _load_insider_seed():
+    """讀 committed 靜態種子檔(engine/insider_seed.json,一次性離線回抓的歷史買/賣月序)。"""
+    try:
+        with io.open(os.path.join(HERE, "insider_seed.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def fetch_insider_ratio(prev=None, refresh_months=2):
+    """全市場內部人「買賣比(筆數)」月頻。ratio = 買筆 ÷ 賣筆(OpenInsider,分開查買/賣避免 cnt 截斷)。
+    基底=committed 種子檔(離線回抓的歷史);疊上 prev(線上累積)較新月;每次只即時刷新最近
+    refresh_months 月(含當月MTD,~40秒/月),避免 CI 逐月重抓(單月賣單查詢就 ~35 秒)。
+    失敗仍回種子。無種子且抓不到 → None(前端該卡自動隱藏)。"""
+    try:
+        base = {}                                  # 'May-26' -> (buys, sells)
+        seed = _load_insider_seed()
+        for l, b, s in zip(seed.get("months", []), seed.get("buys", []), seed.get("sells", [])):
+            if b is not None and s is not None:
+                base[l] = (b, s)
+        for l, b, s in zip((prev or {}).get("months") or [], (prev or {}).get("buys") or [],
+                           (prev or {}).get("sells") or []):
+            if b is not None and s is not None:
+                base[l] = (b, s)
+        budget = [refresh_months * 4 + 2]
+        today = datetime.date.today()
+        y, m = today.year, today.month
+        for _ in range(max(1, refresh_months)):
+            b = _oi_month_side(y, m, 1, 0, budget)
+            s = _oi_month_side(y, m, 0, 1, budget)
+            if b is not None and s is not None:
+                base[_MON_NAMES[m - 1] + "-" + f"{y % 100:02d}"] = (b, s)
+            m -= 1
+            if m == 0:
+                y -= 1; m = 12
+        if len(base) < 2:
+            return None
+        months = sorted((k for k in base if _month_key(k)), key=_month_key)
+        buys = [base[l][0] for l in months]
+        sells = [base[l][1] for l in months]
+        ratio = [round(b / s, 3) if s else None for b, s in zip(buys, sells)]
+        return {"months": months, "buys": buys, "sells": sells, "ratio": ratio,
+                "current": ratio[-1], "as_of": today.strftime("%Y-%m-%d"),
+                "unit": "買筆/賣筆"}
+    except Exception:
+        return None
 
 
 def _fetch_live_sentiment():
@@ -972,6 +1063,11 @@ def build():
     if tw_margin and tw_margin.get("months"):
         tm = _monthly_index_map("^TWII", "2016-01-01")
         tw_margin["twii_series"] = [tm.get(l) for l in tw_margin["months"]]
+    # 全市場內部人買賣比(筆數,月頻,OpenInsider)+ S&P500 疊圖,放 PI 下方
+    insider = fetch_insider_ratio(prev=(prev_sent or {}).get("insider_ratio"))
+    if insider and insider.get("months"):
+        gi = _monthly_index_map("^GSPC", "2005-12-01")
+        insider["sp500_series"] = [gi.get(l) for l in insider["months"]]
     cot_spx = fetch_cot_spx()
     if not cot_spx:
         failed.append("COT_SPX")
@@ -984,6 +1080,7 @@ def build():
         "fear_greed": fng,
         "leverage": leverage,
         "tw_margin": tw_margin,
+        "insider_ratio": insider,
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,
@@ -993,9 +1090,10 @@ def build():
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
     _us_n = len((leverage or {}).get("margin_months") or [])
     _tw_n = len((tw_margin or {}).get("months") or [])
+    _in_n = len((insider or {}).get("months") or [])
     print(f"[sentiment] -> data/sentiment.json  (levels {len(levels)}, "
           f"breadth {'ok' if breadth else 'none'}, F&G {'ok' if fng else 'none'}, "
-          f"margin US {_us_n}月/TW {_tw_n}月, 失敗 {len(failed)})")
+          f"margin US {_us_n}月/TW {_tw_n}月, insider {_in_n}月, 失敗 {len(failed)})")
 
 
 if __name__ == "__main__":

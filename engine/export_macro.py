@@ -141,7 +141,8 @@ def fetch_us_reserves(series="WRESBAL", start="2010-01-01"):
                 fv = float(v)
             except ValueError:
                 continue
-            dates.append(o["date"]); vals.append(round(fv, 1))
+            # FRED WRESBAL 原始單位=百萬美元(值 ~2,966,897)→ 換算十億美元(÷1000),前端顯示 $X.XX 兆
+            dates.append(o["date"]); vals.append(round(fv / 1000.0, 1))
         if len(dates) < 2:
             return None
         return {"label": "美國-聯準會存款機構準備金(週)", "unit": "十億美元",

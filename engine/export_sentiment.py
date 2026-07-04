@@ -564,6 +564,49 @@ def fetch_ai_capex(keep=28):
         return None
 
 
+def _fred_monthly_map(sid):
+    """FRED 月頻序列 CSV → {'May-26': value}(依日期月份)。失敗回 {}。"""
+    try:
+        d = urllib.request.urlopen(urllib.request.Request(
+            f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}",
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}), timeout=25
+        ).read().decode("utf-8", "ignore")
+        out = {}
+        for r in csv.reader(io.StringIO(d)):
+            if not r or len(r) < 2 or r[-1] in ("", ".", r[0]):
+                continue
+            dt, v = r[0], r[-1]
+            try:
+                y, m = int(dt[:4]), int(dt[5:7])
+                out[f"{_MON_NAMES[m - 1]}-{y % 100:02d}"] = float(v)
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return {}
+
+
+def fetch_ndx_m2():
+    """Nasdaq-100 ÷ 美國 M2 貨幣供給 比值(月頻)。資產價格相對印鈔速度的估值/流動性指標。
+    ^NDX(yfinance 月線)/ M2($兆,FRED M2SL)。失敗回 None。"""
+    try:
+        ndx = _monthly_index_map("^NDX", "1985-01-01")     # {Mon-YY: close}
+        m2 = _fred_monthly_map("M2SL")                     # {Mon-YY: $B}
+        common = sorted(set(ndx) & set(m2), key=_month_key)
+        if len(common) < 24:
+            return None
+        ndx_s = [round(ndx[m], 1) for m in common]
+        m2_s = [round(m2[m] / 1000, 3) for m in common]    # $兆
+        ratio = [round(ndx[m] / (m2[m] / 1000), 1) for m in common]
+        srt = sorted(ratio); cur = ratio[-1]
+        pct = round(sum(1 for x in srt if x <= cur) / len(srt) * 100)
+        return {"months": common, "ratio": ratio, "ndx": ndx_s, "m2": m2_s,
+                "current": cur, "pctile": pct, "as_of": common[-1],
+                "unit": "NDX / M2($兆)"}
+    except Exception:
+        return None
+
+
 def _fetch_live_sentiment():
     """讀已部署線上 sentiment.json(供跨次累積月序);失敗回 None。"""
     try:
@@ -1151,6 +1194,7 @@ def build():
         "tw_margin": tw_margin,
         "insider_ratio": insider,
         "ai_capex": fetch_ai_capex(),
+        "ndx_m2": fetch_ndx_m2(),
         "sp500_fwd_pe": fetch_sp500_fwd_pe(),
         "cot_spx": cot_spx,
         "failed": failed,

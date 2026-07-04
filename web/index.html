@@ -1987,6 +1987,76 @@ function drawMomChart(elId, s, color, win){
   el._ro=()=>ch.resize();
   window.addEventListener("resize",el._ro);
 }
+// ── AI/雲端巨頭季度資本開支(MSFT/AMZN/GOOGL/META 加總)+ YoY/環比 ──
+let AICX_DATA=null, AICX_WIN="5y";
+const AICX_WINS=[["2y",8,"2Y"],["3y",12,"3Y"],["5y",20,"5Y"],["all",999,"ALL"]];
+const AICX_CAP="#0ea5e9", AICX_YOY="#e11d48";
+async function loadAiCapex(){
+  const box=document.getElementById("aiCapexBlock"); if(!box) return;
+  if(AICX_DATA){ renderAiCapex(AICX_DATA); return; }
+  box.innerHTML='<section><div class="sec-head"><h2>AI 巨頭資本開支</h2></div><div class="loading-screen">載入資本開支 …</div></section>';
+  try{
+    const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    AICX_DATA=await res.json();
+    renderAiCapex(AICX_DATA);
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>AI 巨頭資本開支</h2></div>'+
+      '<div class="legend">⚠️ 資本開支資料尚未產生（'+esc(e.message)+'）。</div></section>';
+  }
+}
+function renderAiCapex(d){
+  const box=document.getElementById("aiCapexBlock"); if(!box) return;
+  const A=d.ai_capex;
+  if(!A||!A.quarters||A.quarters.length<3){ box.innerHTML=''; return; }
+  const wins=AICX_WINS.filter(w=>w[1]<=A.quarters.length||w[0]==="all");
+  if(!wins.find(w=>w[0]===AICX_WIN)) AICX_WIN="all";
+  const pos=v=>v==null?'<span class="dim">—</span>':'<span class="'+(v>0?'pos':(v<0?'neg':'dim'))+'">'+(v>0?'+':'')+Number(v).toFixed(1)+'%</span>';
+  const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
+  const btns=wins.map(w=>'<button class="btn'+(AICX_WIN===w[0]?' active':'')+'" data-acw="'+w[0]+'">'+w[2]+'</button>').join("");
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>AI 巨頭資本開支 · YoY / 環比</h2>'+
+        '<span class="tag">'+esc((A.companies||[]).join(" · "))+' · 季頻 · SEC</span>'+
+        '<span class="hint">四大雲端/AI 巨頭季度 capex 加總。YoY 高速成長＝AI 基建投資熱、對上游(晶片/光通訊/電力/資料中心)是需求動能;增速轉弱＝資本支出週期見頂訊號。</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
+        '<div style="'+card+';border-left:3px solid '+AICX_CAP+'"><div class="cap-lab">最新季合計('+esc(A.as_of_q)+')</div><div class="cap-big" style="color:'+AICX_CAP+'">$'+Number(A.current).toFixed(0)+'<span class="cap-u">B</span></div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">YoY 增速</div><div class="cap-big">'+pos(A.current_yoy)+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">環比(QoQ)</div><div class="cap-big">'+pos(A.current_qoq)+'</div></div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="aiCapexChart" class="cap-chart" style="height:280px"></div>'+
+      '<div class="legend" style="margin-top:10px">藍色長條=季度 capex 合計(左軸 $B);紅線=YoY 增速(右軸 %)。'+esc((A.companies||[]).join("/"))+' 逐家 SEC 10-Q/10-K 財年累計差分還原日曆季後加總。時段 '+esc((AICX_WINS.find(w=>w[0]===AICX_WIN)||{})[2]||AICX_WIN)+'。</div>'+
+    '</section>';
+  box.querySelectorAll("[data-acw]").forEach(b=>b.onclick=()=>{ AICX_WIN=b.dataset.acw||"all"; renderAiCapex(AICX_DATA); });
+  drawAiCapexChart(A);
+}
+function drawAiCapexChart(A){
+  const el=document.getElementById("aiCapexChart"); if(!el||!window.echarts) return;
+  const nWin=(AICX_WINS.find(w=>w[0]===AICX_WIN)||AICX_WINS[3])[1];
+  const n=Math.min(nWin,A.quarters.length);
+  const q=A.quarters.slice(-n), cap=A.capex.slice(-n), yoy=A.yoy.slice(-n);
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:52,right:52,top:30,bottom:44},
+    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:["季度 capex","YoY %"]},
+    tooltip:{trigger:"axis",axisPointer:{type:"shadow"}},
+    xAxis:{type:"category",data:q,axisLabel:{fontSize:9,hideOverlap:true,interval:Math.max(0,Math.floor(n/10))}},
+    yAxis:[
+      {type:"value",name:"$B",position:"left",nameTextStyle:{fontSize:10,color:AICX_CAP},axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",name:"YoY %",position:"right",nameTextStyle:{fontSize:10,color:AICX_YOY},axisLabel:{fontSize:10,formatter:v=>v+"%"},splitLine:{show:false}}
+    ],
+    series:[
+      {name:"季度 capex",type:"bar",yAxisIndex:0,data:cap,itemStyle:{color:AICX_CAP,opacity:.85},barMaxWidth:22},
+      {name:"YoY %",type:"line",smooth:true,showSymbol:n<=24,symbolSize:4,yAxisIndex:1,data:yoy,connectNulls:true,
+       lineStyle:{color:AICX_YOY,width:2},itemStyle:{color:AICX_YOY}}
+    ]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize",el._ro);
+}
 function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxName, win, opts){
   const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals.length) return;
   opts=opts||{};
@@ -2095,6 +2165,7 @@ function renderSentiment(d){
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<div id="marginBlock"></div>'+
+    '<div id="aiCapexBlock"></div>'+
     sp500FwdPeBox(d.sp500_fwd_pe)+
     reservesBox(MACRO_RESERVES)+m1m2Box(MACRO_M1M2)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
@@ -2299,6 +2370,7 @@ async function loadSentiment(){
     loadInsider();
     loadSpec();
     loadMargin();
+    loadAiCapex();
   }catch(e){
     const el=$("#sentBox"); if(el) el.innerHTML='<div class="legend">⚠️ 情緒指標資料尚未產生。請在 GitHub Actions 跑一次 export。</div>';
   }

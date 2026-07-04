@@ -1228,16 +1228,12 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
-    '<div id="chicagoFciBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
     '<section id="breadthSec"><div class="sec-head"><h2>騰落指標</h2><span class="tag">Advance / Decline</span>'+
       '<span class="hint">台股與美股分開看，檢查指數是否由多數股票同步支撐</span></div>'+
       '<div id="breadthBox"><div class="loading-screen">載入騰落指標 …</div></div>'+
     '</section>'+
-    '<div id="fsiBlock"></div>'+
-    '<div id="piBlock"></div>'+
-    '<div id="specBlock"></div>'+
     '<div id="usThemeFlowBlock"></div>'+
     '<div id="odteBlock"></div>'+
     '<section>'+
@@ -1251,15 +1247,11 @@ function renderMacro(d){
         '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
-  loadChicagoFci();
+  loadSentiment();
   loadOnRp();
   loadOnRpLiquidity();
-  loadSentiment();
   loadBreadth();
   loadThemes();
-  loadFsi();
-  loadPI();
-  loadSpec();
   loadUsThemeFlow();
   loadOdte();
 }
@@ -1886,7 +1878,13 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
-    breadthBox(d.breadth)+reservesBox(MACRO_RESERVES)+m1m2Box(MACRO_M1M2)+leverageBox(d.leverage)+sp500FwdPeBox(d.sp500_fwd_pe)+cotSpxBox(d.cot_spx)+
+    breadthBox(d.breadth)+leverageBox(d.leverage)+
+    '<div id="chicagoFciBlock"></div>'+
+    '<div id="fsiBlock"></div>'+
+    '<div id="piBlock"></div>'+
+    '<div id="specBlock"></div>'+
+    sp500FwdPeBox(d.sp500_fwd_pe)+
+    reservesBox(MACRO_RESERVES)+m1m2Box(MACRO_M1M2)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(MACRO_RESERVES) drawReserves(MACRO_RESERVES);
@@ -2083,6 +2081,10 @@ async function loadSentiment(){
     const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(res.status);
     renderSentiment(await res.json());
+    loadChicagoFci();
+    loadFsi();
+    loadPI();
+    loadSpec();
   }catch(e){
     const el=$("#sentBox"); if(el) el.innerHTML='<div class="legend">⚠️ 情緒指標資料尚未產生。請在 GitHub Actions 跑一次 export。</div>';
   }

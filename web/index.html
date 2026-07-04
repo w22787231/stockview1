@@ -1966,17 +1966,18 @@ function renderMargin(d){
 function drawMomChart(elId, s, color, win){
   const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals||s.vals.length<2) return;
   const nWin=(MARGIN_WINS.find(w=>w[0]===(win||MARGIN_WIN))||MARGIN_WINS[2])[1];
-  const n=Math.min(nWin+1, s.months.length);          // 多取一月以算首點環比
-  const mo=s.months.slice(-n), mv=s.vals.slice(-n), pts=[];
-  for(let i=1;i<mo.length;i++){ const t=_monthMs(mo[i]), a=mv[i-1], b=mv[i];
-    if(t!=null&&a!=null&&b!=null&&a) pts.push([t, +((b/a-1)*100).toFixed(2)]); }
-  if(pts.length<1){ el.innerHTML=''; return; }
+  const n=Math.min(nWin, s.months.length);            // 與主圖同視窗;首點環比取視窗前一月
+  const start=s.months.length-n, mo=s.months.slice(-n), pts=[];
+  for(let i=0;i<n;i++){ const gi=start+i, t=_monthMs(mo[i]), a=s.vals[gi-1], b=s.vals[gi];
+    pts.push([t, (t==null||a==null||b==null||!a)?null:+((b/a-1)*100).toFixed(2)]); }
+  if(pts.filter(p=>p[1]!=null).length<1){ el.innerHTML=''; return; }
+  const xMin=_monthMs(mo[0]), xMax=_monthMs(mo[n-1]);
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
-    grid:{left:60,right:18,top:14,bottom:24},
+    grid:{left:60,right:62,top:14,bottom:24},
     tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":(v>0?"+":"")+Number(v).toFixed(2)+"%"},
-    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+    xAxis:{type:"time",min:xMin,max:xMax,axisLabel:{fontSize:9,hideOverlap:true,
       formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:{type:"value",name:"%",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
     series:[{name:"月環比 %",type:"line",smooth:true,showSymbol:pts.length<=24,symbolSize:3,data:pts,connectNulls:true,
@@ -2066,13 +2067,14 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
   const mData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||mv[i]==null)?null:[t,mv[i]];}).filter(Boolean);
   const iData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||iv[i]==null)?null:[t,iv[i]];}).filter(Boolean);
   const hasIdx=iData.length>1;
+  const xMin=_monthMs(mo[0]), xMax=_monthMs(mo[n-1]);   // 明確鎖定,與月環比圖同時間尺
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
-    grid:{left:60,right:hasIdx?62:18,top:30,bottom:28},
+    grid:{left:60,right:62,top:30,bottom:28},
     legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:hasIdx?[marginName,idxName]:[marginName]},
     tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:2})},
-    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+    xAxis:{type:"time",min:xMin,max:xMax,axisLabel:{fontSize:9,hideOverlap:true,
       formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:[
       {type:"value",name:marginAxisName,position:"left",scale:true,nameTextStyle:{fontSize:10,color:marginColor},

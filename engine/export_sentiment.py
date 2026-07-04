@@ -487,10 +487,10 @@ def fetch_insider_ratio(prev=None, refresh_months=2):
         months = sorted((k for k in base if _month_key(k)), key=_month_key)
         buys = [base[l][0] for l in months]
         sells = [base[l][1] for l in months]
-        ratio = [round(b / s, 3) if s else None for b, s in zip(buys, sells)]
+        ratio = [round(s / b, 3) if b else None for b, s in zip(buys, sells)]   # 賣/買
         return {"months": months, "buys": buys, "sells": sells, "ratio": ratio,
                 "current": ratio[-1], "as_of": today.strftime("%Y-%m-%d"),
-                "unit": "買筆/賣筆"}
+                "unit": "賣筆/買筆"}
     except Exception:
         return None
 

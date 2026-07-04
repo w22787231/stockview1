@@ -15,6 +15,7 @@ except Exception:
 
 FRED_API = "https://api.stlouisfed.org/fred/series/observations"
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NFCI"
+SP500_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SP500"
 
 
 def _num(x):
@@ -50,6 +51,28 @@ def parse_fred_api(raw):
     return out
 
 
+def parse_sp500_csv(text):
+    rows = list(csv.DictReader(io.StringIO(text)))
+    out = {}
+    for r in rows:
+        date = (r.get("observation_date") or r.get("DATE") or r.get("Date") or "").strip()
+        val = _num(r.get("SP500"))
+        if date and val is not None:
+            out[date] = round(val, 2)
+    return out
+
+
+def parse_sp500_api(raw):
+    data = json.loads(raw)
+    out = {}
+    for r in data.get("observations") or []:
+        date = (r.get("date") or "").strip()
+        val = _num(r.get("value"))
+        if date and val is not None:
+            out[date] = round(val, 2)
+    return out
+
+
 def fetch_nfci(start="2015-01-01"):
     key = os.environ.get("FRED_API_KEY", "").strip()
     if key:
@@ -74,7 +97,31 @@ def fetch_nfci(start="2015-01-01"):
     return recs, "FRED NFCI csv"
 
 
-def fetch_sp500(start):
+def fetch_sp500_fred(start):
+    key = os.environ.get("FRED_API_KEY", "").strip()
+    if key:
+        qs = urllib.parse.urlencode({
+            "series_id": "SP500",
+            "api_key": key,
+            "file_type": "json",
+            "observation_start": start,
+            "sort_order": "asc",
+        })
+        raw = urllib.request.urlopen(urllib.request.Request(
+            FRED_API + "?" + qs, headers={"User-Agent": "Mozilla/5.0"}), timeout=30
+        ).read().decode("utf-8")
+        data = parse_sp500_api(raw)
+        if data:
+            return data, "FRED SP500"
+
+    raw = urllib.request.urlopen(urllib.request.Request(
+        SP500_CSV, headers={"User-Agent": "Mozilla/5.0"}), timeout=30
+    ).read().decode("utf-8-sig")
+    data = {k: v for k, v in parse_sp500_csv(raw).items() if k >= start}
+    return data, "FRED SP500 csv"
+
+
+def fetch_sp500_yahoo(start):
     if yf is None:
         raise RuntimeError("missing yfinance")
     df = yf.download("^GSPC", start=start, progress=False, threads=False, auto_adjust=False)
@@ -86,7 +133,17 @@ def fetch_sp500(start):
     out = {}
     for idx, val in close.dropna().items():
         out[idx.strftime("%Y-%m-%d")] = round(float(val), 2)
-    return out
+    return out, "Yahoo Finance ^GSPC"
+
+
+def fetch_sp500(start):
+    try:
+        data, src = fetch_sp500_fred(start)
+        if data:
+            return data, src
+    except Exception:
+        pass
+    return fetch_sp500_yahoo(start)
 
 
 def align_ffill(dates, values_by_date):
@@ -109,7 +166,7 @@ def build_json(nfci_recs, sp500_map, source, keep=560):
     prev = nfci[-2] if len(nfci) >= 2 else None
     return {
         "generated_at": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": source + " + Yahoo Finance ^GSPC",
+        "source": source,
         "series_id": "NFCI",
         "label": "Chicago Fed National Financial Conditions Index",
         "as_of": dates[-1] if dates else None,
@@ -127,5 +184,5 @@ def build_live():
     nfci, src = fetch_nfci(start)
     if not nfci:
         raise RuntimeError("missing NFCI")
-    spx = fetch_sp500(nfci[0]["date"])
-    return build_json(nfci, spx, src)
+    spx, spx_src = fetch_sp500(nfci[0]["date"])
+    return build_json(nfci, spx, src + " + " + spx_src)

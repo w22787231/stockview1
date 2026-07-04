@@ -1345,6 +1345,7 @@ function drawChicagoFciChart(d){
   const n=Math.min(win[1], allDates.length);
   if(n<2){ el.innerHTML='<div class="legend">資料點不足,無法繪圖。</div>'; return; }
   const dates=allDates.slice(-n), nfci=(ser.nfci||[]).slice(-n), spx=(ser.sp500||[]).slice(-n);
+  const hasSp500=spx.some(v=>v!=null && isFinite(Number(v)));
   const toMs=s=>new Date(s+"T00:00:00").getTime();
   const sgn=CHICAGO_FCI_INV?-1:1;
   const nfciName=CHICAGO_FCI_INV?"風險偏好 -NFCI":"NFCI";
@@ -1352,23 +1353,24 @@ function drawChicagoFciChart(d){
   const ch=echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
     grid:{left:56,right:64,top:34,bottom:32},
-    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:[nfciName,"S&P 500"]},
+    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:hasSp500?[nfciName,"S&P 500"]:[nfciName]},
     tooltip:{trigger:"axis",axisPointer:{type:"cross"}},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:[
       {type:"value",name:CHICAGO_FCI_INV?"-NFCI":"NFCI",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
-      {type:"value",name:"S&P500",scale:true,position:"right",nameTextStyle:{fontSize:10},axisLabel:{fontSize:10},splitLine:{show:false}}
+      {type:"value",name:hasSp500?"S&P500":"",scale:true,position:"right",nameTextStyle:{fontSize:10},axisLabel:{fontSize:10},splitLine:{show:false}}
     ],
     series:[
       {name:nfciName,type:"line",smooth:true,showSymbol:false,yAxisIndex:0,
        data:dates.map((x,i)=>[toMs(x),nfci[i]==null?null:sgn*nfci[i]]),
        lineStyle:{color:"#e11d48",width:2.4},itemStyle:{color:"#e11d48"},
-       markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.65},data:[{yAxis:0}]}},
-      {name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,
-       data:dates.map((x,i)=>[toMs(x),spx[i]??null]),
-       lineStyle:{color:"#2563eb",width:1.6,type:"dashed"},itemStyle:{color:"#2563eb"}}
-    ]
+       markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.65},data:[{yAxis:0}]}}
+    ].concat(hasSp500?[{
+      name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,
+      data:dates.map((x,i)=>[toMs(x),spx[i]??null]),
+      lineStyle:{color:"#2563eb",width:1.6,type:"dashed"},itemStyle:{color:"#2563eb"}
+    }]:[])
   },true);
   if(el._ro) window.removeEventListener("resize",el._ro);
   el._ro=()=>ch.resize();
@@ -1385,6 +1387,8 @@ function renderChicagoFci(d){
   const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:125px;margin-right:12px';
   const btns=CHICAGO_FCI_WINS.map(w=>'<button class="btn'+(CHICAGO_FCI_WIN===w[0]?' active':'')+'" data-cfciw="'+w[0]+'">'+w[2]+'</button>').join("");
   const invBtn='<button class="btn'+(CHICAGO_FCI_INV?' active':'')+'" id="chicagoFciInvBtn" title="反轉視角:顯示 -NFCI,讓線條與 S&amp;P500 同向">反轉視角'+(CHICAGO_FCI_INV?'(-NFCI)':'')+'</button>';
+  const spx=(d.series&&d.series.sp500)||[];
+  const spxWarn=spx.some(v=>v!=null && isFinite(Number(v)))?'':'<div class="legend" style="margin-top:8px;color:var(--amber)">S&amp;P 500 資料暫缺，暫時只顯示 NFCI。</div>';
   box.innerHTML=
     '<section>'+
       '<div class="sec-head"><h2>芝加哥聯儲金融狀況指數</h2>'+
@@ -1400,6 +1404,7 @@ function renderChicagoFci(d){
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+
         '<span style="width:1px;height:18px;background:var(--line);margin:0 4px"></span>'+invBtn+'</div>'+
       '<div id="chicagoFciChart" class="cap-chart" style="height:260px"></div>'+
+      spxWarn+
       '<div class="legend" style="margin-top:10px">資料來源:'+esc(d.source||"FRED NFCI + Yahoo Finance ^GSPC")+'。'+esc(d.note||"")+' 時段 '+esc(CHICAGO_FCI_LABEL[CHICAGO_FCI_WIN]||CHICAGO_FCI_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-cfciw]").forEach(b=>b.onclick=()=>{

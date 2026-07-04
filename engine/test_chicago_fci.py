@@ -17,6 +17,19 @@ def test_parse_fred_api():
     assert recs == [{"date": "2026-06-19", "nfci": -0.55}]
 
 
+def test_parse_sp500_csv():
+    txt = "observation_date,SP500\n2026-06-19,7472.79\n2026-06-22,.\n2026-06-23,7365.46\n"
+    assert F.parse_sp500_csv(txt) == {
+        "2026-06-19": 7472.79,
+        "2026-06-23": 7365.46,
+    }
+
+
+def test_parse_sp500_api():
+    raw = '{"observations":[{"date":"2026-06-19","value":"7472.79"},{"date":"2026-06-22","value":"."}]}'
+    assert F.parse_sp500_api(raw) == {"2026-06-19": 7472.79}
+
+
 def test_align_ffill():
     dates = ["2026-06-19", "2026-06-26", "2026-07-03"]
     sp = {"2026-06-18": 6000, "2026-06-25": 6100}
@@ -33,4 +46,5 @@ def test_build_json_shape():
     assert len(j["series"]["dates"]) == 10
     assert len(j["series"]["nfci"]) == 10
     assert len(j["series"]["sp500"]) == 10
+    assert any(v is not None for v in j["series"]["sp500"])
     assert j["as_of"] == recs[-1]["date"]

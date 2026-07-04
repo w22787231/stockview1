@@ -126,10 +126,10 @@ jobs:
           cd engine
           python export_chicago_fci.py || echo "[chicago-fci] 失敗,沿用線上"
           if [ -s ../data/chicago_fci.json ]; then
-            python -c "import json; d=json.load(open('../data/chicago_fci.json',encoding='utf-8')); s=d.get('series') or {}; assert s.get('dates') and s.get('nfci') and s.get('sp500')" || rm -f ../data/chicago_fci.json
+            python -c "import json; d=json.load(open('../data/chicago_fci.json',encoding='utf-8')); s=d.get('series') or {}; assert s.get('dates') and s.get('nfci') and s.get('sp500') and any(v is not None for v in s.get('sp500'))" || rm -f ../data/chicago_fci.json
           fi
           if [ ! -s ../data/chicago_fci.json ]; then
-            python -c "import json,urllib.request; raw=urllib.request.urlopen(urllib.request.Request('https://stockview1.pages.dev/data/chicago_fci.json',headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read().decode('utf-8-sig'); d=json.loads(raw); s=d.get('series') or {}; assert s.get('dates') and s.get('nfci') and s.get('sp500'); open('../data/chicago_fci.json','w',encoding='utf-8').write(json.dumps(d,ensure_ascii=False,separators=(',',':')))" && echo "[chicago-fci] 已沿用線上" || echo "[chicago-fci] 線上沿用也失敗"
+            python -c "import json,urllib.request; raw=urllib.request.urlopen(urllib.request.Request('https://stockview1.pages.dev/data/chicago_fci.json',headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read().decode('utf-8-sig'); d=json.loads(raw); s=d.get('series') or {}; assert s.get('dates') and s.get('nfci') and s.get('sp500') and any(v is not None for v in s.get('sp500')); open('../data/chicago_fci.json','w',encoding='utf-8').write(json.dumps(d,ensure_ascii=False,separators=(',',':')))" && echo "[chicago-fci] 已沿用線上" || echo "[chicago-fci] 線上沿用也失敗"
           fi
 
       - name: Export Fed ON RRP
@@ -329,7 +329,7 @@ jobs:
         run: |
           cd engine
           python export_chicago_fci.py
-          python -c "import json; d=json.load(open('../data/chicago_fci.json',encoding='utf-8')); s=d.get('series') or {}; assert s.get('dates') and s.get('nfci') and s.get('sp500')"
+          python -c "import json; d=json.load(open('../data/chicago_fci.json',encoding='utf-8')); s=d.get('series') or {}; assert s.get('dates') and s.get('nfci') and s.get('sp500') and any(v is not None for v in s.get('sp500'))"
 
       - name: Export Fed ON RRP/RP only (light deploy)
         if: ${{ github.event.inputs.on_rp_only == 'true' }}

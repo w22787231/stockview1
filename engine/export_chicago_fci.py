@@ -17,7 +17,7 @@ def main():
         print("[chicago-fci] 抓取失敗:", e)
         raise SystemExit(1)
     s = j.get("series") or {}
-    if not (s.get("dates") and s.get("nfci") and s.get("sp500")):
+    if not (s.get("dates") and s.get("nfci") and s.get("sp500") and any(v is not None for v in s.get("sp500"))):
         print("[chicago-fci] 資料不足 → 不覆寫 chicago_fci.json")
         raise SystemExit(1)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

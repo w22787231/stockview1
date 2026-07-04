@@ -22,30 +22,6 @@
     --mono:'SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
     --shadow:0 1px 2px rgba(16,30,54,.04),0 4px 16px rgba(16,30,54,.05);
   }
-  body.macro-dark{
-    --bg:#080d14; --panel:#0f1724; --panel2:#141f2e; --line:#253244;
-    --ink:#e7edf7; --ink2:#aebbd0; --ink3:#718098;
-    --green:#22c55e; --red:#fb7185; --amber:#f59e0b; --blue:#60a5fa;
-    --accent:#22c55e; --bluebar:#60a5fa;
-    --shadow:0 1px 2px rgba(0,0,0,.25),0 12px 28px rgba(0,0,0,.28);
-  }
-  body.macro-dark header{border-bottom-color:var(--line)}
-  body.macro-dark .wrap{background:transparent}
-  body.macro-dark .mainnav{border-bottom-color:var(--line)}
-  body.macro-dark .mtab:hover{color:var(--ink)}
-  body.macro-dark .mtab.active{color:var(--blue)}
-  body.macro-dark th{background:#111c2b;color:var(--ink2)}
-  body.macro-dark tbody tr:nth-child(even) td{background:#101928}
-  body.macro-dark tr:hover td{background:#172235}
-  body.macro-dark .news-row:hover,
-  body.macro-dark .theme-row:hover,
-  body.macro-dark .cal-ev:hover{background:#172235}
-  body.macro-dark .idx-card.alert-red{background:#2a1118}
-  body.macro-dark .idx-card.alert-green{background:#0d2518}
-  body.macro-dark .breadth-alert.bearish{background:#2a1118}
-  body.macro-dark .breadth-alert.bullish{background:#0d2518}
-  body.macro-dark .spark-thr{background:rgba(8,13,20,.78)}
-  body.macro-dark .banner.show{background:#211a0c;color:#f6c85f;border-color:#584117}
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif;
@@ -1900,8 +1876,8 @@ function leverageBox(L){
 let SENT_LAST=null;
 // ── 保證金借款 · 月環比(大圖):🇺🇸 FINRA margin debt(兆USD,左軸) + 🇹🇼 台股融資餘額(億TWD,右軸)──
 let MARGIN_DATA=null, MARGIN_WIN="1y";
-const MARGIN_WINS=[["3m",3,"3M"],["6m",6,"6M"],["1y",12,"1Y"],["3y",36,"3Y"],["5y",60,"5Y"]];
-const MARGIN_LABEL={"3m":"3M","6m":"6M","1y":"1Y","3y":"3Y","5y":"5Y"};
+const MARGIN_WINS=[["3m",3,"3M"],["6m",6,"6M"],["1y",12,"1Y"],["3y",36,"3Y"],["5y",60,"5Y"],["10y",120,"10Y"]];
+const MARGIN_LABEL={"3m":"3M","6m":"6M","1y":"1Y","3y":"3Y","5y":"5Y","10y":"10Y"};
 const MARGIN_US="#e8923a", MARGIN_TW="#0d9488";
 function _monthMs(lbl){ // 'May-26' -> Date(2026,4,1)
   const MON={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
@@ -3343,7 +3319,6 @@ window.addEventListener("popstate",function(){ if(document.getElementById("backB
 function switchView(v){
   _detailReturn=null;          // 進入任一主分頁即清除詳情返回點
   VIEW = v;
-  document.body.classList.toggle("macro-dark", v==="macro");
   try{ localStorage.setItem("curView", v); }catch(e){}   // 記住當前主分頁,F5 重整後還原
   if(window._newsTimer){ clearInterval(window._newsTimer); window._newsTimer=null; }  // 離開新聞→停止輪詢
   document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));

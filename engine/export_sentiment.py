@@ -5,7 +5,7 @@
 - F&G(Fear & Greed)：試爬 CNN 非官方 API，抓不到則略過。
 輸出 ../data/sentiment.json。
 """
-import sys, os, io, json, csv, re, datetime
+import sys, os, io, json, csv, re, datetime, time, calendar
 import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -223,8 +223,42 @@ def _fetch_gdp_trillions():
     return 31.8, "估值~2026Q1"
 
 
-def fetch_leverage():
-    """市場槓桿:FINRA 融資餘額(月) ÷ 名目GDP(FRED 季度年化優先) = 融資/GDP 泡沫比%。"""
+def _finra_margin_history_xlsx():
+    """FINRA 官方 margin-statistics.xlsx:完整月度 Debit Balances(margin debt,百萬美元)1997→今。
+    回 [(label 'May-26', 兆USD), ...] 舊→新;失敗回 None。openpyxl 缺席時回 None(退頁面來源)。"""
+    try:
+        import openpyxl
+        raw = urllib.request.urlopen(urllib.request.Request(
+            "https://www.finra.org/sites/default/files/2021-03/margin-statistics.xlsx",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=30).read()
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        out = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            ym = row[0] if row else None
+            debit = row[1] if row and len(row) > 1 else None
+            if ym is None or debit is None:
+                continue
+            try:
+                if hasattr(ym, "year"):                       # datetime
+                    yy, mm = ym.year, ym.month
+                else:                                         # 'YYYY-MM'
+                    p = str(ym).split("-")
+                    yy, mm = int(p[0]), int(p[1])
+                lbl = _MON_NAMES[mm - 1] + "-" + f"{yy % 100:02d}"
+                out.append(((yy, mm), lbl, round(float(debit) / 1e6, 4)))
+            except Exception:
+                continue
+        if len(out) < 12:
+            return None
+        out.sort(key=lambda x: x[0])                          # 舊→新
+        return [(lbl, v) for _, lbl, v in out]
+    except Exception:
+        return None
+
+
+def _finra_margin_history_page():
+    """後備:FINRA margin-statistics 頁面嵌入(近~12月)。回 [(label,兆),...] 舊→新 或 None。"""
     try:
         u = "https://www.finra.org/investors/learn-to-invest/advanced-investing/margin-statistics"
         html = urllib.request.urlopen(
@@ -233,19 +267,32 @@ def fetch_leverage():
         pairs = re.findall(r"([A-Z][a-z]{2}-\d{2})[\s\S]{0,400}?([1-9],\d{3},\d{3})", html)
         if not pairs:
             return None
-        pairs = pairs[:60][::-1]   # 最新在前→取 FINRA 內嵌全部月份(上限60月,通常2-3年)→反轉成時間序(舊→新);供投機溫度的融資GDP源做z
+        pairs = pairs[:60][::-1]
+        return [(mn, float(a.replace(",", "")) / 1e6) for mn, a in pairs]
+    except Exception:
+        return None
+
+
+def fetch_leverage():
+    """市場槓桿 + 保證金借款歷史。優先 FINRA 官方 xlsx(完整 1997→今 margin debt),失敗退頁面(近12月)。
+    ratio_series/ratio_pct/months = 近12月 融資/GDP%(供「市場槓桿·融資/GDP」卡);
+    margin_series/margin_months = 完整月度絕對融資餘額(兆,供「保證金借款」大圖)。"""
+    hist = _finra_margin_history_xlsx() or _finra_margin_history_page()
+    if not hist:
+        return None
+    try:
         gdp_t, gdp_label = _fetch_gdp_trillions()
-        if not gdp_t:
-            return None
-        margins = [float(a.replace(",", "")) / 1e6 for _, a in pairs]
-        ratio_series = [round(mv / gdp_t * 100, 2) for mv in margins]
-        return {"margin_t": round(margins[-1], 2), "margin_month": pairs[-1][0],
-                "gdp_t": round(gdp_t, 2), "gdp_label": gdp_label,
-                "ratio_pct": ratio_series[-1], "ratio_series": ratio_series,
-                "months": [mn for mn, _ in pairs],
-                # 供「保證金借款」大圖:絕對融資餘額(兆)月序,build() 會併上次歷史累積成長
+        months = [l for l, _ in hist]
+        margins = [v for _, v in hist]
+        recent_v = margins[-12:]
+        ratio_series = [round(mv / gdp_t * 100, 2) for mv in recent_v] if gdp_t else []
+        return {"margin_t": round(margins[-1], 2), "margin_month": months[-1],
+                "gdp_t": round(gdp_t, 2) if gdp_t else None, "gdp_label": gdp_label,
+                "ratio_pct": ratio_series[-1] if ratio_series else None,
+                "ratio_series": ratio_series, "months": months[-12:],
+                # 供「保證金借款」大圖:完整絕對融資餘額(兆)月序,build() 會併上次歷史
                 "margin_series": [round(m, 4) for m in margins],
-                "margin_months": [mn for mn, _ in pairs]}
+                "margin_months": months}
     except Exception:
         return None
 
@@ -314,9 +361,9 @@ def fetch_tw_margin_ratio():
         return None
 
 
-_MON_IDX = {m: i + 1 for i, m in enumerate(
-    ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"])}
+_MON_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+_MON_IDX = {m: i + 1 for i, m in enumerate(_MON_NAMES)}
 
 
 def _month_key(lbl):
@@ -350,36 +397,85 @@ def _fetch_live_sentiment():
         return None
 
 
-def fetch_tw_margin_balance():
-    """台股融資餘額(億)月頻月環比。讀線上 capital.json 的 tw.margin_hist(日頻,億),
-    各月取最新一筆(月底/當月至今)組月序 → 算月環比。
-    註:CI 中 export_sentiment 早於 export_capital,本地尚無 capital.json,故讀已部署線上版
-    (月頻指標差一日無妨);失敗回 None → 前端該卡自動隱藏。"""
+def _tw_margin_loan_on(ymd):
+    """TWSE MI_MARGN 指定日(YYYYMMDD)融資金額餘額(億);非交易日/失敗回 None。"""
     try:
-        cap = json.loads(urllib.request.urlopen(
-            urllib.request.Request("https://stockview1.pages.dev/data/capital.json",
-                                   headers={"User-Agent": "Mozilla/5.0"}), timeout=15
-        ).read().decode("utf-8", "ignore"))
-        hist = ((cap.get("tw") or {}).get("margin_hist")) or []
-        pts = [(h["date"], h["margin_bal"]) for h in hist
-               if h.get("date") and h.get("margin_bal") is not None]
-        if len(pts) < 2:
+        mj = json.loads(urllib.request.urlopen(urllib.request.Request(
+            f"https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={ymd}&selectType=ALL&response=json",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+        if mj.get("stat") != "OK":
             return None
-        pts.sort(key=lambda x: x[0])
-        by_month = {}
-        for dt, bal in pts:
-            by_month[dt[:7]] = (dt, bal)          # 'YYYY-MM' -> 該月最後一筆 (date, bal)
-        months = sorted(by_month)
-        if len(months) < 2:
+        tabs = mj.get("tables") or []
+        if not tabs:
             return None
-        series = [round(by_month[m][1], 1) for m in months]
-        as_of = by_month[months[-1]][0]
-        MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        labels = [MON[int(m[5:7]) - 1] + "-" + m[2:4] for m in months]   # 對齊美股 leverage 口徑
+        for row in tabs[0].get("data", []):
+            if row and "融資金額" in row[0]:
+                return round(float(row[5].replace(",", "")) * 1000 / 1e8, 1)   # 仟元→元→億
+        return None
+    except Exception:
+        return None
+
+
+def _tw_month_end_loan(y, m, budget):
+    """該月最後交易日融資餘額(億):月末日往前找最多 8 天。budget=[剩餘查詢數](就地遞減)。"""
+    last = calendar.monthrange(y, m)[1]
+    for d in range(last, max(0, last - 8), -1):
+        if budget[0] <= 0:
+            return None
+        budget[0] -= 1
+        v = _tw_margin_loan_on(f"{y:04d}{m:02d}{d:02d}")
+        if v is not None:
+            return v
+        time.sleep(0.12)
+    return None
+
+
+def fetch_tw_margin_balance(prev=None, years=10, query_budget=340):
+    """台股融資餘額(億)月頻月環比,含最多 years 年月度歷史(TWSE MI_MARGN 各月月底)。
+    增量:已在 prev(上次 sentiment.json 的 tw_margin)的月份不重查 → 首次補滿、之後幾乎零成本;
+    query_budget 上限保護 CI 時間,超出的缺月留待下次排程補齊(前端 connectNulls 容缺)。
+    失敗回 None → 前端該卡自動隱藏。"""
+    try:
+        budget = [query_budget]
+        # 以近幾日最新一筆當「現在」錨點(當月至今值)
+        now_bal = now_ym = now_date = None
+        base = datetime.date.today()
+        for i in range(0, 10):
+            dt = base - datetime.timedelta(days=i)
+            budget[0] -= 1
+            v = _tw_margin_loan_on(dt.strftime("%Y%m%d"))
+            if v is not None:
+                now_bal, now_ym, now_date = v, (dt.year, dt.month), dt.strftime("%Y-%m-%d")
+                break
+            time.sleep(0.12)
+        if now_bal is None:
+            return None
+        # 目標近 years*12 月 (y,m),舊→新
+        ymonths, y, m = [], now_ym[0], now_ym[1]
+        for _ in range(years * 12):
+            ymonths.append((y, m))
+            m -= 1
+            if m == 0:
+                y -= 1; m = 12
+        ymonths.reverse()
+        known = {lbl: v for lbl, v in zip((prev or {}).get("months") or [],
+                                          (prev or {}).get("series") or [])}
+        months, series = [], []
+        for (yy, mm) in ymonths:
+            lbl = _MON_NAMES[mm - 1] + "-" + f"{yy % 100:02d}"
+            if (yy, mm) == now_ym:
+                val = now_bal                       # 當月至今
+            elif lbl in known:
+                val = known[lbl]                    # 已知,不重查
+            else:
+                val = _tw_month_end_loan(yy, mm, budget) if budget[0] > 0 else None
+            if val is not None:
+                months.append(lbl); series.append(val)
+        if len(series) < 2:
+            return None
         mom = round((series[-1] / series[-2] - 1) * 100, 2) if series[-2] else None
-        return {"bal": series[-1], "prev_bal": series[-2], "as_of": as_of,
-                "mom_pct": mom, "months": labels, "series": series, "unit": "億"}
+        return {"bal": series[-1], "prev_bal": series[-2], "as_of": now_date,
+                "mom_pct": mom, "months": months, "series": series, "unit": "億"}
     except Exception:
         return None
 
@@ -834,10 +930,10 @@ def build():
         failed.append("ODTE_PCR")
     breadth = market_breadth()
     fng = fetch_fear_greed()
-    leverage = fetch_leverage()
-    tw_margin = fetch_tw_margin_balance()
-    # 「保證金借款」大圖:併上次線上 sentiment.json 的月序,讓歷史跨次累積成長(窗口漸長出 3Y/5Y)
+    # 「保證金借款」大圖:先讀上次線上 sentiment.json → 台股增量回補只查缺月、跨次累積成長
     prev_sent = _fetch_live_sentiment()
+    leverage = fetch_leverage()
+    tw_margin = fetch_tw_margin_balance(prev=(prev_sent or {}).get("tw_margin"))
     if leverage and leverage.get("margin_months") and leverage.get("margin_series"):
         pv = (prev_sent or {}).get("leverage") or {}
         mm, ms = _merge_months(pv.get("margin_months"), pv.get("margin_series"),

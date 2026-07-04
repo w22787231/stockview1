@@ -370,7 +370,9 @@ def _month_key(lbl):
     """'May-26' -> 202605(供月序排序);無法解析回 0。"""
     try:
         mon, yy = lbl.split("-")
-        return (2000 + int(yy)) * 100 + _MON_IDX[mon]
+        y = int(yy)
+        y = 2000 + y if y <= 50 else 1900 + y   # 世紀 pivot:26→2026、97→1997(FINRA 全史回到1997)
+        return y * 100 + _MON_IDX[mon]
     except Exception:
         return 0
 

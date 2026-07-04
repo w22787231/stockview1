@@ -1878,24 +1878,25 @@ let SENT_LAST=null;
 let MARGIN_DATA=null, MARGIN_WIN="1y";
 const MARGIN_WINS=[["3m",3,"3M"],["6m",6,"6M"],["1y",12,"1Y"],["3y",36,"3Y"],["5y",60,"5Y"],["10y",120,"10Y"]];
 const MARGIN_LABEL={"3m":"3M","6m":"6M","1y":"1Y","3y":"3Y","5y":"5Y","10y":"10Y"};
-const MARGIN_US="#e8923a", MARGIN_TW="#0d9488";
+const MARGIN_US="#e8923a", MARGIN_TW="#0d9488", MARGIN_IDX_COL="#2563eb";
 function _monthMs(lbl){ // 'May-26' -> Date(2026,4,1)
   const MON={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
   const p=String(lbl).split("-"); if(p.length<2||!(p[0] in MON)) return null;
   let y=+p[1]; y = y<=50 ? 2000+y : 1900+y;   // 世紀 pivot:26→2026、97→1997
   return new Date(y, MON[p[0]], 1).getTime();
 }
-function _marginSortPairs(months, vals){   // 依月份時序排序(防資料端次序異常),回 {months,vals}
-  const pairs=months.map((m,i)=>[m, vals[i]]).filter(p=>_monthMs(p[0])!=null)
-    .sort((a,b)=>_monthMs(a[0])-_monthMs(b[0]));
-  return { months:pairs.map(p=>p[0]), vals:pairs.map(p=>p[1]) };
+function _marginSortBy(months, vals, idx){   // 依月份時序排序(防資料端次序異常),同步排 vals+idx
+  const ord=months.map((m,i)=>i).filter(i=>_monthMs(months[i])!=null)
+    .sort((a,b)=>_monthMs(months[a])-_monthMs(months[b]));
+  const pick=(arr)=>ord.map(i=>(arr&&arr[i]!=null)?arr[i]:null);
+  return { months:ord.map(i=>months[i]), vals:pick(vals), idx:pick(idx) };
 }
 function _marginSeries(d){
   const L=d.leverage||{}, T=d.tw_margin||{};
-  const u=_marginSortPairs(L.margin_months||L.months||[], L.margin_series||[]);
-  const t=_marginSortPairs(T.months||[], T.series||[]);
-  return { us:{ months:u.months, vals:u.vals, gdp:L.gdp_t },
-           tw:{ months:t.months, vals:t.vals, as_of:T.as_of, mom:T.mom_pct } };
+  const u=_marginSortBy(L.margin_months||L.months||[], L.margin_series||[], L.sp500_series||[]);
+  const t=_marginSortBy(T.months||[], T.series||[], T.twii_series||[]);
+  return { us:{ months:u.months, vals:u.vals, idx:u.idx, gdp:L.gdp_t },
+           tw:{ months:t.months, vals:t.vals, idx:t.idx, as_of:T.as_of, mom:T.mom_pct } };
 }
 async function loadMargin(){
   const box=document.getElementById("marginBlock"); if(!box) return;
@@ -1911,6 +1912,7 @@ async function loadMargin(){
       '<div class="legend">⚠️ 保證金借款資料尚未產生（'+esc(e.message)+'）。</div></section>';
   }
 }
+function _marginMomOf(s){ return (s.vals&&s.vals.length>=2&&s.vals[s.vals.length-2])?(s.vals[s.vals.length-1]/s.vals[s.vals.length-2]-1)*100:null; }
 function renderMargin(d){
   const box=document.getElementById("marginBlock"); if(!box) return;
   const {us,tw}=_marginSeries(d);
@@ -1920,59 +1922,69 @@ function renderMargin(d){
   if(!wins.find(w=>w[0]===MARGIN_WIN)) MARGIN_WIN=wins[wins.length-1][0];
   const momHtml=v=> v==null?'<span class="dim">—</span>'
     :'<span class="'+(v>0?'pos':(v<0?'neg':'dim'))+'">'+(v>0?'+':'')+Number(v).toFixed(1)+'%</span>';
-  // 月環比(取各自月序最後兩點)
-  const momOf=s=> (s.vals&&s.vals.length>=2&&s.vals[s.vals.length-2])?(s.vals[s.vals.length-1]/s.vals[s.vals.length-2]-1)*100:null;
-  const usBal=us.vals.length?us.vals[us.vals.length-1]:null, usMom=momOf(us);
-  const twBal=tw.vals.length?tw.vals[tw.vals.length-1]:null, twMom=tw.mom!=null?tw.mom:momOf(tw);
-  const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:150px;margin-right:12px';
+  const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:150px;margin-right:12px';
   const btns=wins.map(w=>'<button class="btn'+(MARGIN_WIN===w[0]?' active':'')+'" data-mgw="'+w[0]+'">'+w[2]+'</button>').join("");
+  // 每個市場一個 panel:標題 + 數字卡 + 圖(融資左軸 + 指數右軸)
+  function panel(s, flagTitle, color, valHtml, mom, sub, chartId){
+    if(!s.vals.length) return '';
+    return '<div style="margin-top:14px">'+
+      '<div class="sec-head" style="margin-bottom:6px"><h2 style="font-size:14.5px">'+flagTitle+'</h2></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
+        '<div style="'+card+';border-left:3px solid '+color+'"><div class="cap-lab">最新餘額</div>'+
+          '<div class="cap-big" style="color:'+color+'">'+valHtml+'</div>'+
+          '<div class="cap-chg">月環比 '+momHtml(mom)+'</div></div>'+
+        (sub?'<div class="dim" style="font-size:12px">'+sub+'</div>':'')+
+      '</div>'+
+      '<div id="'+chartId+'" class="cap-chart" style="height:250px"></div>'+
+    '</div>';
+  }
+  const usPanel = panel(us, '🇺🇸 美股保證金借款 · 月環比（＋ S&P 500）', MARGIN_US,
+      '$'+Number(us.vals[us.vals.length-1]).toFixed(2)+'<span class="cap-u">兆</span>',
+      _marginMomOf(us), 'FINRA margin debt', 'marginChartUs');
+  const twPanel = panel(tw, '🇹🇼 台股融資餘額 · 月環比（＋ 加權指數）', MARGIN_TW,
+      Number(tw.vals[tw.vals.length-1]).toLocaleString()+'<span class="cap-u">億</span>',
+      (tw.mom!=null?tw.mom:_marginMomOf(tw)),
+      (tw.as_of?'至 '+esc(tw.as_of)+'（本月至今）':''), 'marginChartTw');
   box.innerHTML=
     '<section>'+
       '<div class="sec-head"><h2>保證金借款 · 月環比</h2>'+
         '<span class="tag">FINRA margin debt · 台股融資餘額</span>'+
         '<span class="hint">投資人向券商融資買股的餘額。上升＝槓桿加溫/追價、風險偏好升；下降＝去槓桿/轉保守。月頻慢訊號。</span></div>'+
-      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
-        (usBal!=null?'<div style="'+card+';border-left:3px solid '+MARGIN_US+'"><div class="cap-lab">🇺🇸 美股 margin debt</div><div class="cap-big" style="color:'+MARGIN_US+'">$'+Number(usBal).toFixed(2)+'<span class="cap-u">兆</span></div><div class="cap-chg">月環比 '+momHtml(usMom)+'</div></div>':'')+
-        (twBal!=null?'<div style="'+card+';border-left:3px solid '+MARGIN_TW+'"><div class="cap-lab">🇹🇼 台股融資餘額</div><div class="cap-big" style="color:'+MARGIN_TW+'">'+Number(twBal).toLocaleString()+'<span class="cap-u">億</span></div><div class="cap-chg">月環比 '+momHtml(twMom)+'</div></div>':'')+
-        (tw.as_of?'<div class="dim" style="font-size:12px">台股至 '+esc(tw.as_of)+'（本月至今）</div>':'')+
-      '</div>'+
-      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
-      '<div id="marginChart" class="cap-chart" style="height:280px"></div>'+
-      '<div class="legend" style="margin-top:10px">🇺🇸 美股保證金借款＝FINRA margin debt（客戶信用交易借款餘額，兆美元，左軸，月頻官方）；🇹🇼 台股融資餘額（億台幣，右軸，取各月月底／當月至今）。<b>月環比</b>看散戶/機構槓桿加溫或退潮。歷史隨每次更新累積成長。時段 '+esc(MARGIN_LABEL[MARGIN_WIN]||MARGIN_WIN)+'。</div>'+
+      '<div style="margin-bottom:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      usPanel + twPanel +
+      '<div class="legend" style="margin-top:10px">兩張圖:融資餘額(粗線,左軸)＋ 該市場指數(藍虛線,右軸)疊圖 —— 看保證金借款與大盤是否同向、槓桿是否領先/背離。🇺🇸 FINRA margin debt(兆美元,月頻官方,1997→今)＋ S&P 500;🇹🇼 台股融資餘額(億,各月月底/當月至今)＋ 加權指數。時段 '+esc(MARGIN_LABEL[MARGIN_WIN]||MARGIN_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-mgw]").forEach(b=>b.onclick=()=>{ MARGIN_WIN=b.dataset.mgw||"1y"; renderMargin(MARGIN_DATA); });
-  drawMarginChart(d);
+  drawMarketChart("marginChartUs", us, "🇺🇸 美股 margin debt", MARGIN_US, "兆USD", "S&P 500");
+  drawMarketChart("marginChartTw", tw, "🇹🇼 台股融資餘額", MARGIN_TW, "億TWD", "加權指數");
 }
-function drawMarginChart(d){
-  const el=document.getElementById("marginChart"); if(!el||!window.echarts) return;
-  const {us,tw}=_marginSeries(d);
+function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxName){
+  const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals.length) return;
   const nWin=(MARGIN_WINS.find(w=>w[0]===MARGIN_WIN)||MARGIN_WINS[2])[1];
-  const pts=(s,scale)=>{ const n=Math.min(nWin,s.months.length);
-    return s.months.slice(-n).map((m,i)=>{ const t=_monthMs(m); const v=s.vals.slice(-n)[i];
-      return (t==null||v==null)?null:[t, scale?+(v).toFixed(4):v]; }).filter(Boolean); };
-  const usPts=pts(us), twPts=pts(tw);
+  const n=Math.min(nWin, s.months.length);
+  const mo=s.months.slice(-n), mv=s.vals.slice(-n), iv=(s.idx||[]).slice(-n);
+  const mData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||mv[i]==null)?null:[t,mv[i]];}).filter(Boolean);
+  const iData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||iv[i]==null)?null:[t,iv[i]];}).filter(Boolean);
+  const hasIdx=iData.length>1;
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
-    grid:{left:60,right:62,top:34,bottom:30},
-    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},
-      data:["🇺🇸 美股 margin debt","🇹🇼 台股融資餘額"]},
+    grid:{left:60,right:hasIdx?62:18,top:30,bottom:28},
+    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:hasIdx?[marginName,idxName]:[marginName]},
     tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:2})},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:[
-      {type:"value",name:"兆USD",position:"left",scale:true,nameTextStyle:{fontSize:10,color:MARGIN_US},
+      {type:"value",name:marginAxisName,position:"left",scale:true,nameTextStyle:{fontSize:10,color:marginColor},
         axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
-      {type:"value",name:"億TWD",position:"right",scale:true,nameTextStyle:{fontSize:10,color:MARGIN_TW},
+      {type:"value",name:idxName,position:"right",scale:true,nameTextStyle:{fontSize:10,color:MARGIN_IDX_COL},
         axisLabel:{fontSize:10},splitLine:{show:false}}
     ],
     series:[
-      {name:"🇺🇸 美股 margin debt",type:"line",smooth:true,showSymbol:usPts.length<=24,symbolSize:4,
-       yAxisIndex:0,data:usPts,connectNulls:true,
-       lineStyle:{color:MARGIN_US,width:2.4},itemStyle:{color:MARGIN_US},areaStyle:{color:MARGIN_US,opacity:.06}},
-      {name:"🇹🇼 台股融資餘額",type:"line",smooth:true,showSymbol:twPts.length<=24,symbolSize:4,
-       yAxisIndex:1,data:twPts,connectNulls:true,
-       lineStyle:{color:MARGIN_TW,width:2.4},itemStyle:{color:MARGIN_TW}}
+      {name:marginName,type:"line",smooth:true,showSymbol:mData.length<=24,symbolSize:4,yAxisIndex:0,data:mData,connectNulls:true,
+       lineStyle:{color:marginColor,width:2.4},itemStyle:{color:marginColor},areaStyle:{color:marginColor,opacity:.06}},
+      {name:idxName,type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:iData,connectNulls:true,
+       lineStyle:{color:MARGIN_IDX_COL,width:1.6,type:"dashed"},itemStyle:{color:MARGIN_IDX_COL}}
     ]
   },true);
   if(el._ro) window.removeEventListener("resize",el._ro);

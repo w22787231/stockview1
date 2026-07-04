@@ -388,6 +388,22 @@ def _merge_months(pm, pv, nm, nv):
     return ks, [d[k] for k in ks]
 
 
+def _monthly_index_map(sym, start):
+    """yfinance 月線收盤 → {'May-26': close}(對齊 margin 月標籤)。失敗回 {}。"""
+    try:
+        df = yf.download(sym, start=start, interval="1mo", progress=False, auto_adjust=False)
+        c = df["Close"]
+        if hasattr(c, "columns"):          # MultiIndex → 取首欄
+            c = c.iloc[:, 0]
+        out = {}
+        for ts, v in c.items():
+            if v is not None and v == v:   # 非 NaN
+                out[f"{_MON_NAMES[ts.month - 1]}-{ts.year % 100:02d}"] = round(float(v), 2)
+        return out
+    except Exception:
+        return {}
+
+
 def _fetch_live_sentiment():
     """讀已部署線上 sentiment.json(供跨次累積月序);失敗回 None。"""
     try:
@@ -949,6 +965,13 @@ def build():
         if len(ms) >= 2 and ms[-2]:
             tw_margin["bal"], tw_margin["prev_bal"] = ms[-1], ms[-2]
             tw_margin["mom_pct"] = round((ms[-1] / ms[-2] - 1) * 100, 2)
+    # 疊圖用:各市場指數對齊 margin 月序(美股 S&P500、台股 加權指數)
+    if leverage and leverage.get("margin_months"):
+        gm = _monthly_index_map("^GSPC", "1996-12-01")
+        leverage["sp500_series"] = [gm.get(l) for l in leverage["margin_months"]]
+    if tw_margin and tw_margin.get("months"):
+        tm = _monthly_index_map("^TWII", "2016-01-01")
+        tw_margin["twii_series"] = [tm.get(l) for l in tw_margin["months"]]
     cot_spx = fetch_cot_spx()
     if not cot_spx:
         failed.append("COT_SPX")

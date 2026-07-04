@@ -564,12 +564,13 @@ def fetch_ai_capex(keep=28):
         return None
 
 
-def _fred_monthly_map(sid):
-    """FRED 月頻序列 CSV → {'May-26': value}(依日期月份)。失敗回 {}。"""
+def _fred_monthly_map(sid, extra=""):
+    """FRED 序列 CSV → {'May-26': value}(依日期月份)。extra 可帶 &fq=Monthly&fam=eop 讓 FRED
+    直接做月頻末值聚合(日頻大檔如 NASDAQ100 縮成 ~10KB,避免 CI 逾時/限流)。失敗回 {}。"""
     try:
         d = urllib.request.urlopen(urllib.request.Request(
-            f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}",
-            headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}), timeout=25
+            f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}{extra}",
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}), timeout=30
         ).read().decode("utf-8", "ignore")
         out = {}
         for r in csv.reader(io.StringIO(d)):
@@ -590,7 +591,7 @@ def fetch_ndx_m2():
     """Nasdaq-100 ÷ 美國 M2 貨幣供給 比值(月頻)。資產價格相對印鈔速度的估值/流動性指標。
     兩者皆用 FRED(NASDAQ100 日頻取月底 / M2SL $B),免 Yahoo 避免 CI 限流。失敗回 None。"""
     try:
-        ndx = _fred_monthly_map("NASDAQ100")               # 日頻→各月最後一筆(月底);{Mon-YY: close}
+        ndx = _fred_monthly_map("NASDAQ100", "&fq=Monthly&fam=eop&cosd=1985-01-01")  # 月頻末值(小檔)
         m2 = _fred_monthly_map("M2SL")                     # {Mon-YY: $B}
         common = sorted(set(ndx) & set(m2), key=_month_key)
         if len(common) < 24:

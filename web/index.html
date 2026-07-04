@@ -1882,13 +1882,20 @@ const MARGIN_US="#e8923a", MARGIN_TW="#0d9488";
 function _monthMs(lbl){ // 'May-26' -> Date(2026,4,1)
   const MON={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
   const p=String(lbl).split("-"); if(p.length<2||!(p[0] in MON)) return null;
-  return new Date(2000+(+p[1]), MON[p[0]], 1).getTime();
+  let y=+p[1]; y = y<=50 ? 2000+y : 1900+y;   // 世紀 pivot:26→2026、97→1997
+  return new Date(y, MON[p[0]], 1).getTime();
+}
+function _marginSortPairs(months, vals){   // 依月份時序排序(防資料端次序異常),回 {months,vals}
+  const pairs=months.map((m,i)=>[m, vals[i]]).filter(p=>_monthMs(p[0])!=null)
+    .sort((a,b)=>_monthMs(a[0])-_monthMs(b[0]));
+  return { months:pairs.map(p=>p[0]), vals:pairs.map(p=>p[1]) };
 }
 function _marginSeries(d){
   const L=d.leverage||{}, T=d.tw_margin||{};
-  const us={ months:L.margin_months||L.months||[], vals:L.margin_series||[], gdp:L.gdp_t };
-  const tw={ months:T.months||[], vals:T.series||[], as_of:T.as_of, mom:T.mom_pct };
-  return {us, tw};
+  const u=_marginSortPairs(L.margin_months||L.months||[], L.margin_series||[]);
+  const t=_marginSortPairs(T.months||[], T.series||[]);
+  return { us:{ months:u.months, vals:u.vals, gdp:L.gdp_t },
+           tw:{ months:t.months, vals:t.vals, as_of:T.as_of, mom:T.mom_pct } };
 }
 async function loadMargin(){
   const box=document.getElementById("marginBlock"); if(!box) return;

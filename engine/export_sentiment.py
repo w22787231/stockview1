@@ -564,27 +564,42 @@ def fetch_ai_capex(keep=28):
         return None
 
 
-def _fred_monthly_map(sid, extra=""):
-    """FRED 序列 CSV → {'May-26': value}(依日期月份)。extra 可帶 &fq=Monthly&fam=eop 讓 FRED
-    直接做月頻末值聚合。FRED 從 CI 偶爾逾時 → 重試 4 次(比照 _fetch_gdp_trillions)。失敗回 {}。"""
-    for attempt in range(4):
+def _fred_monthly_map(sid, api_extra=""):
+    """FRED 序列 → {'May-26': value}(依日期月份)。優先用官方 API(需 env FRED_API_KEY,雲端 CI 不被擋;
+    api_extra 例 '&frequency=m&aggregation_method=eop&observation_start=1985-01-01'),無 key 退回
+    公開 fredgraph.csv。皆重試 4 次。失敗回 {}。"""
+    def _put(out, dt, v):
         try:
-            d = urllib.request.urlopen(urllib.request.Request(
-                f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}{extra}",
-                headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}), timeout=30
-            ).read().decode("utf-8", "ignore")
-            out = {}
-            for r in csv.reader(io.StringIO(d)):
-                if not r or len(r) < 2 or r[-1] in ("", ".", r[0]):
-                    continue
-                dt, v = r[0], r[-1]
-                try:
-                    y, m = int(dt[:4]), int(dt[5:7])
-                    out[f"{_MON_NAMES[m - 1]}-{y % 100:02d}"] = float(v)
-                except Exception:
-                    continue
-            if out:
-                return out
+            y, m = int(dt[:4]), int(dt[5:7])
+            out[f"{_MON_NAMES[m - 1]}-{y % 100:02d}"] = float(v)
+        except Exception:
+            pass
+    key = os.environ.get("FRED_API_KEY", "").strip()
+    for _ in range(4):
+        try:
+            if key:
+                j = json.loads(urllib.request.urlopen(urllib.request.Request(
+                    f"https://api.stlouisfed.org/fred/series/observations?series_id={sid}"
+                    f"&api_key={key}&file_type=json{api_extra}",
+                    headers={"User-Agent": "Mozilla/5.0"}), timeout=30
+                ).read().decode("utf-8", "ignore"))
+                out = {}
+                for o in j.get("observations", []):
+                    if o.get("value") not in (None, "", "."):
+                        _put(out, o.get("date", ""), o["value"])
+                if out:
+                    return out
+            else:
+                d = urllib.request.urlopen(urllib.request.Request(
+                    f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}",
+                    headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}), timeout=30
+                ).read().decode("utf-8", "ignore")
+                out = {}
+                for r in csv.reader(io.StringIO(d)):
+                    if r and len(r) >= 2 and r[-1] not in ("", ".", r[0]):
+                        _put(out, r[0], r[-1])
+                if out:
+                    return out
         except Exception:
             pass
         time.sleep(1.5)
@@ -595,7 +610,7 @@ def fetch_ndx_m2():
     """Nasdaq-100 ÷ 美國 M2 貨幣供給 比值(月頻)。資產價格相對印鈔速度的估值/流動性指標。
     兩者皆用 FRED(NASDAQ100 日頻取月底 / M2SL $B),免 Yahoo 避免 CI 限流。失敗回 None。"""
     try:
-        ndx = _fred_monthly_map("NASDAQ100", "&fq=Monthly&fam=eop&cosd=1985-01-01")  # 月頻末值(小檔)
+        ndx = _fred_monthly_map("NASDAQ100", "&frequency=m&aggregation_method=eop&observation_start=1985-01-01")
         m2 = _fred_monthly_map("M2SL")                     # {Mon-YY: $B}
         common = sorted(set(ndx) & set(m2), key=_month_key)
         print(f"[ndx_m2] ndx={len(ndx)} m2={len(m2)} common={len(common)}")   # CI 診斷

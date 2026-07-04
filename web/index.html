@@ -2024,27 +2024,27 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
   el._ro=()=>ch.resize();
   window.addEventListener("resize",el._ro);
 }
-// ── 內部人買賣比(筆數,全市場,月頻)+ S&P500 疊圖,放 PI 下方 ──
+// ── 內部人賣買比(筆數,全市場,月頻)+ S&P500 疊圖,放 PI 下方 ──
 let INSIDER_DATA=null, INSIDER_WIN="1y";
 const INSIDER_COL="#9333ea";
 function _insiderSeries(d){
   const I=d.insider_ratio||{};
-  const s=_marginSortBy(I.months||[], I.ratio||[], I.sp500_series||[]);
-  // 買/賣筆數也依同順序帶出(供旁註)
-  const bs=_marginSortBy(I.months||[], I.buys||[], I.sells||[]);
-  return { months:s.months, vals:s.vals, idx:s.idx, buys:bs.vals, sells:bs.idx, as_of:I.as_of };
+  const bs=_marginSortBy(I.months||[], I.buys||[], I.sells||[]);   // vals=買, idx=賣
+  const sp=_marginSortBy(I.months||[], I.sp500_series||[], []);
+  const vals=bs.vals.map((b,i)=>{const s=bs.idx[i]; return (b&&s!=null)?+(s/b).toFixed(3):null;}); // 賣/買
+  return { months:bs.months, vals, idx:sp.vals, buys:bs.vals, sells:bs.idx, as_of:I.as_of };
 }
 async function loadInsider(){
   const box=document.getElementById("insiderBlock"); if(!box) return;
   if(INSIDER_DATA){ renderInsider(INSIDER_DATA); return; }
-  box.innerHTML='<section><div class="sec-head"><h2>內部人買賣比</h2></div><div class="loading-screen">載入內部人交易 …</div></section>';
+  box.innerHTML='<section><div class="sec-head"><h2>內部人賣買比</h2></div><div class="loading-screen">載入內部人交易 …</div></section>';
   try{
     const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error("HTTP "+res.status);
     INSIDER_DATA=await res.json();
     renderInsider(INSIDER_DATA);
   }catch(e){
-    box.innerHTML='<section><div class="sec-head"><h2>內部人買賣比</h2></div>'+
+    box.innerHTML='<section><div class="sec-head"><h2>內部人賣買比</h2></div>'+
       '<div class="legend">⚠️ 內部人交易資料尚未產生（'+esc(e.message)+'）。</div></section>';
   }
 }
@@ -2060,25 +2060,25 @@ function renderInsider(d){
   const btns=wins.map(w=>'<button class="btn'+(INSIDER_WIN===w[0]?' active':'')+'" data-inw="'+w[0]+'">'+w[2]+'</button>').join("");
   box.innerHTML=
     '<section>'+
-      '<div class="sec-head"><h2>內部人買賣比（筆數）</h2>'+
+      '<div class="sec-head"><h2>內部人賣買比（筆數）</h2>'+
         '<span class="tag">OpenInsider · 全市場 · 月頻</span>'+
-        '<span class="hint">全市場內部人申報「買進筆數 ÷ 賣出筆數」。內部人本就賣多於買(選擇權/薪酬),故常態遠小於 1;看相對變化——比值衝高常見於市場底部(內部人逆勢承接)。</span></div>'+
+        '<span class="hint">全市場內部人申報「賣出筆數 ÷ 買進筆數」。內部人本就賣多於買(選擇權/薪酬),故常態 &gt;1(約 2–4);比值飆高＝賣壓重(常見於高檔),比值走低＝相對積極買進(常見於底部,內部人逆勢承接)。</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
-        '<div style="'+card+';border-left:3px solid '+INSIDER_COL+'"><div class="cap-lab">最新買賣比</div>'+
+        '<div style="'+card+';border-left:3px solid '+INSIDER_COL+'"><div class="cap-lab">最新賣買比</div>'+
           '<div class="cap-big" style="color:'+INSIDER_COL+'">'+(cur==null?'—':Number(cur).toFixed(2))+'</div>'+
-          '<div class="cap-chg">買 '+(cb!=null?cb.toLocaleString():'—')+' / 賣 '+(cs!=null?cs.toLocaleString():'—')+' 筆</div></div>'+
+          '<div class="cap-chg">賣 '+(cs!=null?cs.toLocaleString():'—')+' / 買 '+(cb!=null?cb.toLocaleString():'—')+' 筆</div></div>'+
         (s.as_of?'<div class="dim" style="font-size:12px">至 '+esc(s.as_of)+'（本月至今）</div>':'')+
       '</div>'+
       '<div style="margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       '<div id="insiderChart" class="cap-chart" style="height:280px"></div>'+
-      '<div class="legend" style="margin-top:10px">買賣比(紫,左軸)＋ S&P 500(藍虛線,右軸)。灰虛線=近窗中位數(常態基準),站上=內部人相對偏買。逐月分開查買/賣避免截斷;歷史種子一次性回抓、之後每次更新當月。時段 '+esc(MARGIN_LABEL[INSIDER_WIN]||INSIDER_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">賣買比(紫,左軸)＋ S&P 500(藍虛線,右軸)。灰虛線=近窗中位數(常態基準),飆高=賣壓重、走低=相對偏買。逐月分開查買/賣避免截斷;歷史種子一次性回抓、之後每次更新當月。時段 '+esc(MARGIN_LABEL[INSIDER_WIN]||INSIDER_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-inw]").forEach(b=>b.onclick=()=>{ INSIDER_WIN=b.dataset.inw||"1y"; renderInsider(INSIDER_DATA); });
   // 參考線=近窗中位數(相對基準,比固定 1 更貼近實際尺度)
   const nWin=(MARGIN_WINS.find(w=>w[0]===INSIDER_WIN)||MARGIN_WINS[2])[1];
   const seg=s.vals.slice(-Math.min(nWin,s.vals.length)).filter(v=>v!=null).sort((a,b)=>a-b);
   const med=seg.length?seg[Math.floor(seg.length/2)]:null;
-  drawMarketChart("insiderChart", s, "內部人買賣比", INSIDER_COL, "買/賣", "S&P 500",
+  drawMarketChart("insiderChart", s, "內部人賣買比", INSIDER_COL, "賣/買", "S&P 500",
     INSIDER_WIN, med!=null?{refLine:+med.toFixed(3),refLabel:"中位 "+med.toFixed(2)}:{});
 }
 function renderSentiment(d){

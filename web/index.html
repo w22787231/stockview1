@@ -1264,7 +1264,8 @@ function renderMacro(d){
   loadOdte();
 }
 // ── 資金面區塊(市場廣度下方):美國聯準會準備金 + 台灣 M1B/M2 ──
-let MACRO_M1M2=null, MACRO_RESERVES=null;
+let MACRO_M1M2=null, MACRO_RESERVES=null, RESERVES_RANGE="1y";
+const RESERVES_RANGES=[["3m",13,"3M"],["6m",26,"6M"],["1y",52,"1Y"],["3y",156,"3Y"],["5y",260,"5Y"],["10y",520,"10Y"],["all",Infinity,"ALL"]];
 function m1m2Box(v){
   if(!v || !v.dates || !v.dates.length) return '';
   return '<div style="margin-top:18px">'+
@@ -1278,17 +1279,26 @@ function reservesBox(v){
   if(!v || !v.dates || !v.dates.length) return '';
   const cur=v.cur, prev=v.values.length>=2?v.values[v.values.length-2]:cur;
   const tri=cur>=prev?'▲':'▼';
+  const rb=RESERVES_RANGES.map(r=>'<button class="ntab'+(RESERVES_RANGE===r[0]?' on':'')+'" data-reserve-range="'+r[0]+'">'+r[2]+'</button>').join('');
   return '<div style="margin-top:18px">'+
     '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">美國-聯準會存款機構準備金(週)</h2>'+
       '<span class="tag">銀行體系流動性 · FRED WRESBAL</span></div>'+
     '<div style="font-size:13px;color:var(--ink2);margin:2px 0 4px">最新 <b style="color:#0d9488">$'+(cur/1000).toFixed(2)+' 兆</b>('+esc(v.as_of||'')+') <span class="'+(tri==='▲'?'pos':'neg')+'">'+tri+'</span></div>'+
+    '<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">'+rb+'</div>'+
     '<div id="reservesChart" class="m1m2-chart"></div>'+
-    '<div class="ex">聯準會存款機構準備金＝銀行體系的美元流動性。<b class="neg">下降</b>=縮表(QT)抽走流動性,對風險資產偏空;<b class="pos">上升</b>=擴表(QE)放水,偏多。週資料,來源 FRED WRESBAL。</div>'+
+    '<div class="ex">聯準會存款機構準備金＝銀行體系的美元流動性。<b class="neg">下降</b>=縮表(QT)抽走流動性,對風險資產偏空;<b class="pos">上升</b>=擴表(QE)放水,偏多。灰色虛線為 <b>$2.5 兆</b> 參考線。週資料,來源 FRED WRESBAL。</div>'+
   '</div>';
 }
 function drawReserves(v){
   const el=document.getElementById("reservesChart");
   if(!el||!window.echarts) return;
+  document.querySelectorAll("[data-reserve-range]").forEach(b=>b.onclick=()=>{
+    RESERVES_RANGE=b.dataset.reserveRange||"1y";
+    renderSentiment(SENT_LAST||{});
+  });
+  const range=RESERVES_RANGES.find(r=>r[0]===RESERVES_RANGE) || RESERVES_RANGES[2];
+  const n=range[1]===Infinity?(v.dates||[]).length:Math.min(range[1],(v.dates||[]).length);
+  const dates=(v.dates||[]).slice(-n), vals=(v.values||[]).slice(-n);
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   const toMs=s=>new Date(s+"T00:00:00").getTime();
@@ -1297,10 +1307,14 @@ function drawReserves(v){
     tooltip:{trigger:"axis",valueFormatter:x=>x==null?"-":"$"+(x/1000).toFixed(2)+"兆"},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:val=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
-    yAxis:{type:"value",scale:true,axisLabel:{fontSize:10,formatter:x=>"$"+(x/1000).toFixed(1)+"兆"},splitLine:{lineStyle:{opacity:.3}}},
+    yAxis:{type:"value",scale:true,min:x=>Math.min(x.min,2500),axisLabel:{fontSize:10,formatter:x=>"$"+(x/1000).toFixed(1)+"兆"},splitLine:{lineStyle:{opacity:.3}}},
     series:[{name:"準備金",type:"line",smooth:true,showSymbol:false,
-      data:v.dates.map((d,i)=>[toMs(d),v.values[i]]),
-      lineStyle:{color:"#0d9488",width:2},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d9488",opacity:.08}}]
+      data:dates.map((d,i)=>[toMs(d),vals[i]]),
+      lineStyle:{color:"#0d9488",width:2},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d9488",opacity:.08},
+      markLine:{symbol:"none",silent:true,
+        label:{formatter:"$2.5兆",color:"#64748b",fontSize:10,position:"insideEndTop"},
+        lineStyle:{color:"#64748b",type:"dashed",width:1.2,opacity:.85},
+        data:[{yAxis:2500}]}}]
   },true);
   if(!el._ro){el._ro=()=>ch.resize();window.addEventListener("resize",el._ro);}
 }
@@ -1866,7 +1880,9 @@ function leverageBox(L){
     (L.ratio_series?'<div class="ex" style="margin-top:2px"><span style="color:var(--ink3)">近 '+L.ratio_series.length+' 個月 融資/GDP 走勢（紅區 &gt;4%=頂部區）：</span><div style="max-width:320px">'+sparkline(L.ratio_series,"#e8923a",{v:4,dir:"hi",lab:"4%"})+'</div></div>':'')+
     '</div>';
 }
+let SENT_LAST=null;
 function renderSentiment(d){
+  SENT_LAST=d;
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+

@@ -1229,6 +1229,7 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="macroScoreBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
     '<div id="m1m2Block"></div>'+
@@ -1250,6 +1251,7 @@ function renderMacro(d){
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
   loadSentiment();
+  loadMacroScore();
   loadOnRp();
   loadOnRpLiquidity();
   if(MACRO_M1M2){                                   // 台灣 M1B/M2 年增率:放在 ON RP 下方
@@ -1405,6 +1407,61 @@ function drawM1M2(m){
     ],
   });
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+
+// ── 宏觀評分總攬:總體市場各圖各自打 0–100 分(對股市多空) ──
+let MACRO_SCORE_DATA=null;
+function _scoreColor(s){ return s>=60?'#16a34a':(s>=40?'#94a3b8':(s>=20?'#f59e0b':'#e11d48')); }
+async function loadMacroScore(){
+  const box=$("#macroScoreBlock"); if(!box) return;
+  if(MACRO_SCORE_DATA){ renderMacroScore(MACRO_SCORE_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入宏觀評分 …</div>';
+  try{
+    const res=await fetch("data/macro_score.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    MACRO_SCORE_DATA=await res.json();
+    renderMacroScore(MACRO_SCORE_DATA);
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>宏觀評分總攬</h2></div>'+
+      '<div class="legend">⚠️ macro_score.json 尚未產生('+esc(e.message)+')。請先在 GitHub Actions 執行 export。</div></section>';
+  }
+}
+function renderMacroScore(d){
+  const box=$("#macroScoreBlock"); if(!box||!d) return;
+  const items=(d.items||[]).slice().sort((a,b)=>b.score-a.score);
+  const legend=[['80–100','偏多','🟢','#16a34a'],['60–80','溫和偏多','🟢','#16a34a'],['40–60','中性','⚪','#94a3b8'],['20–40','溫和偏空','🟠','#f59e0b'],['0–20','偏空(示警)','🔴','#e11d48']];
+  const legHtml=legend.map(l=>'<span style="display:inline-flex;align-items:center;gap:4px;margin:0 12px 4px 0;white-space:nowrap">'+
+    '<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:'+l[3]+'"></span>'+
+    '<b style="font-size:12px">'+l[0]+'</b><span class="dim" style="font-size:12px">'+l[1]+' '+l[2]+'</span></span>').join('');
+  const rows=items.map(it=>{
+    const c=_scoreColor(it.score);
+    return '<tr>'+
+      '<td style="padding:6px 8px;white-space:nowrap">'+it.light+' '+esc(it.name)+'</td>'+
+      '<td style="padding:6px 8px;width:130px"><div style="display:flex;align-items:center;gap:6px">'+
+        '<div style="flex:1;height:7px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:'+it.score+'%;background:'+c+'"></div></div>'+
+        '<b style="color:'+c+';min-width:22px;text-align:right">'+it.score+'</b></div></td>'+
+      '<td style="padding:6px 8px;font-size:12px">'+esc(it.status)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;color:var(--ink2)">'+esc(it.detail||'')+'</td>'+
+    '</tr>';
+  }).join('');
+  const avgC=_scoreColor(d.avg);
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>宏觀評分總攬</h2><span class="tag">每張圖各自打分 · 0–100 對股市多空</span>'+
+        '<span class="hint">100=偏多、50=中性、0=偏空(示警);情緒/估值類為反向計分</span></div>'+
+      '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px">'+
+        '<div style="border:1px solid var(--line);border-radius:12px;padding:10px 16px;background:var(--panel);text-align:center">'+
+          '<div class="cap-lab">綜合平均('+d.n+'項)</div>'+
+          '<div style="font-size:26px;font-weight:800;color:'+avgC+';line-height:1.1">'+d.avg+'</div>'+
+          '<div style="font-size:12px;color:'+avgC+'">'+d.avg_light+' '+esc(d.avg_band||'')+'</div></div>'+
+        '<div style="flex:1;min-width:220px"><div class="dim" style="font-size:12px;margin-bottom:4px">分數等級</div>'+legHtml+'</div>'+
+      '</div>'+
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
+        '<thead><tr style="border-bottom:1px solid var(--line);text-align:left;color:var(--ink2);font-size:12px">'+
+          '<th style="padding:6px 8px">指標</th><th style="padding:6px 8px">分數</th><th style="padding:6px 8px">現況</th><th style="padding:6px 8px">說明</th></tr></thead>'+
+        '<tbody>'+rows+'</tbody></table></div>'+
+      '<div class="legend" style="margin-top:8px">分數由各圖資料自動換算(歷史百分位 / 警戒門檻 / 去趨勢殘差)。<b>綜合平均僅供參考</b>——各指標領先期不同,重點看上方分項誰在加分、誰在示警。資料 '+esc((d.generated_at||'').slice(0,10))+'。</div>'+
+    '</section>';
 }
 
 // ── Chicago Fed NFCI + S&P 500 ──

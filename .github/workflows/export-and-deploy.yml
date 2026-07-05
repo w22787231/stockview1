@@ -391,6 +391,19 @@ jobs:
         if: ${{ github.event.inputs.web_only != 'true' }}
         working-directory: engine
         run: python preserve_lite_stock.py || true
+      - name: Export macro indicator scorecard (總體市場各圖打分)
+        # 讀前面各步驟已產生的 data/*.json → data/macro_score.json,故排在所有 export 之後。
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          cd engine
+          python export_macro_score.py || echo "[score] 失敗,沿用線上"
+          if [ ! -s ../data/macro_score.json ]; then
+            curl -fsS "https://stockview1.pages.dev/data/macro_score.json" -o ../data/macro_score.json && echo "[score] 已沿用線上" || echo "[score] 線上沿用也失敗"
+          fi
+
       - name: Stage web output
         run: |
           mkdir -p public

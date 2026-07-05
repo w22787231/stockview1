@@ -182,6 +182,25 @@ def _sma(vals, w):
     return out
 
 
+def _spx_daily_map(start):
+    """^GSPC 日收盤 → {YYYY-MM-DD: close}(yfinance),用於疊圖對照。抓不到回空 dict。"""
+    try:
+        df = yf.download("^GSPC", start=start, interval="1d",
+                         progress=False, auto_adjust=False)
+        if df is None or df.empty:
+            return {}
+        cl = df["Close"]
+        if getattr(cl, "ndim", 1) > 1:            # MultiIndex 欄位時取第一欄
+            cl = cl.iloc[:, 0]
+        out = {}
+        for ts, v in cl.dropna().items():
+            out[ts.strftime("%Y-%m-%d")] = round(float(v), 2)
+        return out
+    except Exception as e:
+        print("[macro] spx daily 失敗:", e)
+        return {}
+
+
 def fetch_sofr_iorb(start="2018-04-01"):
     """美國-SOFR 減 IORB 利差(bps,日資料)← FRED API(需 FRED_API_KEY)。
     SOFR=擔保隔夜融資利率、IORB=準備金利率(2021-07 前為 IOER)。
@@ -204,10 +223,17 @@ def fetch_sofr_iorb(start="2018-04-01"):
         if len(dates) < 2:
             return None
         ma5, ma20 = _sma(vals, 5), _sma(vals, 20)
+        # S&P 500 疊圖:對齊 SOFR 日期,遇假日差異以前向填補
+        spx_map = _spx_daily_map(start)
+        spx, last_px = [], None
+        for dt in dates:
+            if dt in spx_map:
+                last_px = spx_map[dt]
+            spx.append(last_px)
         return {"label": "美國-SOFR 減 IORB 利差", "unit": "bps",
-                "dates": dates, "values": vals, "ma5": ma5, "ma20": ma20,
+                "dates": dates, "values": vals, "ma5": ma5, "ma20": ma20, "spx": spx,
                 "cur": vals[-1], "ma5_last": ma5[-1], "ma20_last": ma20[-1],
-                "as_of": dates[-1], "src": "FRED SOFR − IORB(2021-07 前 IOER)"}
+                "as_of": dates[-1], "src": "FRED SOFR − IORB(2021-07 前 IOER)+ Yahoo ^GSPC"}
     except Exception as e:
         print("[macro] sofr_iorb 失敗:", e)
         return None

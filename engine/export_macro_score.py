@@ -130,6 +130,22 @@ def score_reserves(items):
                        "近13週 %+.1f%%,最新 $%.2f兆" % (chg, v[-1] / 1000)))
 
 
+def score_fedliq(items):
+    d = (_load("capital.json") or {}).get("us") or {}
+    fl = d.get("fed_liq") or []
+    v = [x.get("val") for x in fl if x.get("val") is not None]
+    if len(v) < 14:
+        return
+    prev = v[-14]
+    if not prev:
+        return
+    chg = (v[-1] / prev - 1) * 100            # 近 ~13 週變動%
+    sc = 50 + _clamp(chg * 7, -32, 32)        # 淨流動性回升=放水=偏多
+    st = "回升(放水)" if chg > 0.3 else ("持平" if chg > -0.3 else "下降(抽水)")
+    items.append(_item("fedliq", "Fed 淨流動性", "流動性", sc, st,
+                       "近13週 %+.1f%%,最新 $%.2f兆" % (chg, v[-1])))
+
+
 def score_insider(items):
     d = (_load("sentiment.json") or {}).get("insider_ratio")
     if not d: return
@@ -260,7 +276,7 @@ def score_aicapex(items):
 def build():
     items = []
     for fn in (score_fsi, score_nfci, score_pi, score_sofr, score_reserves,
-               score_insider, score_breadth, score_spec, score_fwdpe,
+               score_fedliq, score_insider, score_breadth, score_spec, score_fwdpe,
                score_ndxm2, score_twm1m2, score_fng, score_vix, score_aicapex):
         try:
             fn(items)

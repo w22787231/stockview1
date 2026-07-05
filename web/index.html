@@ -2061,20 +2061,22 @@ function drawAiCapexChart(A){
 }
 // ── Nasdaq-100 ÷ 美國 M2 貨幣供給 比值(月頻)──
 let NDXM2_DATA=null, NDXM2_WIN="10y";
-// 去趨勢百分位:對 log(比值) 做時間線性回歸(捕捉長期指數上漂),回「每點殘差在全史殘差分布的百分位」。
-// 殘差已去趨勢→在趨勢之上=偏貴(高百分位)、之下=偏便宜(低百分位),會上下擺盪,不會卡100%。
-function _ndxDetrendPctAll(ratio){
+// 對 log(比值) 做時間線性回歸:回 {trend:每點長期趨勢值, pct:每點殘差在全史的去趨勢百分位}。
+// 趨勢之上=偏貴(高百分位)、之下=偏便宜(低百分位),會上下擺盪,不會因長期上漂卡100%。
+function _ndxFit(ratio){
   ratio=ratio||[];
   const xs=[], ys=[];
   ratio.forEach((v,i)=>{ if(v!=null&&v>0){ xs.push(i); ys.push(Math.log(v)); } });
-  const n=xs.length; if(n<24) return ratio.map(()=>null);
+  const n=xs.length;
+  if(n<24) return {trend:ratio.map(()=>null), pct:ratio.map(()=>null)};
   const sx=xs.reduce((a,b)=>a+b,0), sy=ys.reduce((a,b)=>a+b,0);
   const sxx=xs.reduce((a,b)=>a+b*b,0), sxy=xs.reduce((a,b,k)=>a+b*ys[k],0);
   const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx), intc=(sy-slope*sx)/n;
+  const trend=ratio.map((v,i)=> +(Math.exp(intc+slope*i)).toFixed(1));
   const resid=ratio.map((v,i)=> (v!=null&&v>0)? Math.log(v)-(intc+slope*i) : null);
   const dist=resid.filter(v=>v!=null).sort((p,q)=>p-q);
-  if(!dist.length) return ratio.map(()=>null);
-  return resid.map(r=> r==null?null : +(dist.filter(x=>x<=r).length/dist.length*100).toFixed(1));
+  const pct=resid.map(r=> r==null?null : +(dist.filter(x=>x<=r).length/dist.length*100).toFixed(1));
+  return {trend, pct};
 }
 const NDXM2_WINS=[["3y",36,"3Y"],["5y",60,"5Y"],["10y",120,"10Y"],["all",9999,"ALL"]];
 const NDXM2_COL="#6366f1";
@@ -2097,8 +2099,10 @@ function renderNdxM2(d){
   const N=d.ndx_m2;
   if(!N||!N.months||N.months.length<6){ box.innerHTML=''; return; }
   if(!NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)) NDXM2_WIN="10y";
-  const _dpAll=_ndxDetrendPctAll(N.ratio), _dpLast=[..._dpAll].reverse().find(v=>v!=null);
+  const _fit=_ndxFit(N.ratio), _dpLast=[..._fit.pct].reverse().find(v=>v!=null);
+  const _trLast=[..._fit.trend].reverse().find(v=>v!=null);
   const pc=Math.round(_dpLast==null?50:_dpLast), pcCls=pc>=85?'neg':(pc<=15?'pos':'dim');
+  const _devPct=(_trLast&&N.current)?Math.round((N.current/_trLast-1)*100):null;
   const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
   const btns=NDXM2_WINS.map(w=>'<button class="btn'+(NDXM2_WIN===w[0]?' active':'')+'" data-nmw="'+w[0]+'">'+w[2]+'</button>').join("");
   box.innerHTML=
@@ -2107,25 +2111,25 @@ function renderNdxM2(d){
         '<span class="tag">^NDX ÷ M2($兆) · 月頻 · FRED+Yahoo</span>'+
         '<span class="hint">科技股價相對貨幣供給的估值/擁擠度。比值走高＝股價漲幅超越印鈔速度(偏貴/泡沫化),回落＝回到貨幣基本盤。看相對位置(百分位)勝於絕對值。</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
-        '<div style="'+card+';border-left:3px solid '+NDXM2_COL+'"><div class="cap-lab">最新比值('+esc(N.as_of)+')</div><div class="cap-big" style="color:'+NDXM2_COL+'">'+Number(N.current).toLocaleString()+'</div></div>'+
+        '<div style="'+card+';border-left:3px solid '+NDXM2_COL+'"><div class="cap-lab">最新比值('+esc(N.as_of)+')</div><div class="cap-big" style="color:'+NDXM2_COL+'">'+Number(N.current).toLocaleString()+'</div>'+(_devPct!=null?'<div class="cap-chg">'+(_devPct>0?'高於':'低於')+'趨勢 <b class="'+(_devPct>0?'neg':'pos')+'">'+(_devPct>0?'+':'')+_devPct+'%</b></div>':'')+'</div>'+
         '<div style="'+card+'"><div class="cap-lab">相對趨勢百分位</div><div class="cap-big '+pcCls+'">'+pc+'<span class="cap-u">%</span></div><div class="cap-chg">'+(pc>=85?'遠高於趨勢/貴':(pc<=15?'低於趨勢/便宜':'接近趨勢'))+'</div></div>'+
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       '<div id="ndxM2Chart" class="cap-chart" style="height:280px"></div>'+
       '<div class="dim" style="font-size:11px;margin:6px 0 0">去趨勢百分位（%）· 相對「長期對數趨勢」的位置</div>'+
       '<div id="ndxM2PctChart" class="cap-chart" style="height:130px"></div>'+
-      '<div class="legend" style="margin-top:10px">紫線=NDX/M2 比值(左軸)＋ Nasdaq-100(橘虛線,右軸)。下方=**去趨勢百分位線**(對比值做長期對數趨勢回歸後,殘差在全史的位置,0-100%;紅80=遠高於趨勢/貴、綠20=低於趨勢/便宜——去趨勢後才不會因長期上漂卡在100%)。當 NDX 創高但比值未同步創高＝漲幅多來自貨幣擴張;比值獨自飆高＝相對貨幣的真實估值擴張(擁擠)。資料 FRED M2SL(月,季調)+ NASDAQ100 月末。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">上圖:紫線=NDX/M2 比值,<b style="color:#94a3b8">灰虛線=長期趨勢</b>(對 log(比值) 時間回歸,約 6%/年)。比值在趨勢<b class="neg">之上=偏貴</b>、<b class="pos">之下=偏便宜</b>。下圖=**去趨勢百分位**(殘差在全史位置,0-100%;紅80=貴、綠20=便宜——去趨勢後才不會因長期上漂卡100%)。實測 2000 頂 +434%、2009 底 −55%、現在約 +'+(_devPct!=null?_devPct:'—')+'%。資料 FRED M2SL + NASDAQ100 月末。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-nmw]").forEach(b=>b.onclick=()=>{ NDXM2_WIN=b.dataset.nmw||"10y"; renderNdxM2(NDXM2_DATA); });
-  const s={ months:N.months, vals:N.ratio, idx:N.ndx };
-  drawMarketChart("ndxM2Chart", s, "NDX/M2 比值", NDXM2_COL, "比值", "Nasdaq-100", NDXM2_WIN, {wins:NDXM2_WINS, noArea:false, idxColor:"#e8923a"});
+  const s={ months:N.months, vals:N.ratio, idx:[] };   // 不疊 NDX(與比值形狀重複)→ 改疊長期趨勢線
+  drawMarketChart("ndxM2Chart", s, "NDX/M2 比值", NDXM2_COL, "比值", "", NDXM2_WIN, {wins:NDXM2_WINS, noArea:false, trendLine:_fit.trend});
   drawNdxM2Pct(s);
 }
 // NDX/M2 歷史百分位線:每月比值在「全史」分布的百分位(0-100),80/20 參考帶;與主圖同視窗/時間尺
 function drawNdxM2Pct(s){
   const el=document.getElementById("ndxM2PctChart"); if(!el||!window.echarts) return;
   const rr=s.vals||[]; if(rr.filter(v=>v!=null).length<24){ el.innerHTML=''; return; }
-  const rollAll=_ndxDetrendPctAll(rr);   // 每月「相對長期趨勢」的去趨勢百分位(0-100)
+  const rollAll=_ndxFit(rr).pct;   // 每月「相對長期趨勢」的去趨勢百分位(0-100)
   const nWin=(NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||NDXM2_WINS[2])[1];
   const n=Math.min(nWin,s.months.length), start=s.months.length-n, mo=s.months.slice(-n), pts=[];
   for(let i=0;i<n;i++){ const t=_monthMs(mo[i]), p=rollAll[start+i]; pts.push([t,(t==null||p==null)?null:+p.toFixed(1)]); }
@@ -2159,19 +2163,23 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
   const iData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||iv[i]==null)?null:[t,iv[i]];}).filter(Boolean);
   const hasIdx=iData.length>1;
   const idxCol=opts.idxColor||MARGIN_IDX_COL;           // 指數線顏色可覆寫(預設藍)
+  const tv=(opts.trendLine||[]).slice(-n);              // 長期趨勢線(左軸,同 vals 單位),可選
+  const tData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||tv[i]==null)?null:[t,tv[i]];}).filter(Boolean);
+  const hasTrend=tData.length>1;
+  const legendData=[marginName].concat(hasIdx?[idxName]:[]).concat(hasTrend?["長期趨勢"]:[]);
   const xMin=_monthMs(mo[0]), xMax=_monthMs(mo[n-1]);   // 明確鎖定,與月環比圖同時間尺
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
     grid:{left:60,right:62,top:30,bottom:28},
-    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:hasIdx?[marginName,idxName]:[marginName]},
+    legend:{top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10},data:legendData},
     tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:2})},
     xAxis:{type:"time",min:xMin,max:xMax,axisLabel:{fontSize:9,hideOverlap:true,
       formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
     yAxis:[
       {type:"value",name:marginAxisName,position:"left",scale:true,nameTextStyle:{fontSize:10,color:marginColor},
         axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
-      {type:"value",name:idxName,position:"right",scale:true,nameTextStyle:{fontSize:10,color:idxCol},
+      {type:"value",name:idxName,position:"right",scale:true,show:hasIdx,nameTextStyle:{fontSize:10,color:idxCol},
         axisLabel:{fontSize:10},splitLine:{show:false}}
     ],
     series:[
@@ -2184,7 +2192,9 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
            label:{formatter:opts.refLabel||"",fontSize:9,color:"#94a3b8",position:"insideEndTop"},
            data:[{yAxis:opts.refLine}]}:undefined)},
       {name:idxName,type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:iData,connectNulls:true,
-       lineStyle:{color:idxCol,width:1.6,type:"dashed"},itemStyle:{color:idxCol}}
+       lineStyle:{color:idxCol,width:1.6,type:"dashed"},itemStyle:{color:idxCol}},
+      {name:"長期趨勢",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:tData,connectNulls:true,
+       lineStyle:{color:"#94a3b8",width:1.4,type:"dashed"},itemStyle:{color:"#94a3b8"}}
     ]
   },true);
   if(el._ro) window.removeEventListener("resize",el._ro);

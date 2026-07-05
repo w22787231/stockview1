@@ -2096,11 +2096,11 @@ function renderNdxM2(d){
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       '<div id="ndxM2Chart" class="cap-chart" style="height:280px"></div>'+
-      '<div class="legend" style="margin-top:10px">紫線=NDX/M2 比值(左軸)＋ Nasdaq-100(藍虛線,右軸)。當 NDX 創高但比值未同步創高＝漲幅多來自貨幣擴張;比值獨自飆高＝相對貨幣的真實估值擴張(擁擠)。資料 FRED M2SL(月,季調)+ yfinance ^NDX 月線。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">紫線=NDX/M2 比值(左軸)＋ Nasdaq-100(橘虛線,右軸)。當 NDX 創高但比值未同步創高＝漲幅多來自貨幣擴張;比值獨自飆高＝相對貨幣的真實估值擴張(擁擠)。資料 FRED M2SL(月,季調)+ NASDAQ100 月末。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-nmw]").forEach(b=>b.onclick=()=>{ NDXM2_WIN=b.dataset.nmw||"10y"; renderNdxM2(NDXM2_DATA); });
   const s={ months:N.months, vals:N.ratio, idx:N.ndx };
-  drawMarketChart("ndxM2Chart", s, "NDX/M2 比值", NDXM2_COL, "比值", "Nasdaq-100", NDXM2_WIN, {wins:NDXM2_WINS, noArea:false});
+  drawMarketChart("ndxM2Chart", s, "NDX/M2 比值", NDXM2_COL, "比值", "Nasdaq-100", NDXM2_WIN, {wins:NDXM2_WINS, noArea:false, idxColor:"#e8923a"});
 }
 function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxName, win, opts){
   const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals.length) return;
@@ -2112,6 +2112,7 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
   const mData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||mv[i]==null)?null:[t,mv[i]];}).filter(Boolean);
   const iData=mo.map((m,i)=>{const t=_monthMs(m);return (t==null||iv[i]==null)?null:[t,iv[i]];}).filter(Boolean);
   const hasIdx=iData.length>1;
+  const idxCol=opts.idxColor||MARGIN_IDX_COL;           // 指數線顏色可覆寫(預設藍)
   const xMin=_monthMs(mo[0]), xMax=_monthMs(mo[n-1]);   // 明確鎖定,與月環比圖同時間尺
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
@@ -2124,7 +2125,7 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
     yAxis:[
       {type:"value",name:marginAxisName,position:"left",scale:true,nameTextStyle:{fontSize:10,color:marginColor},
         axisLabel:{fontSize:10},splitLine:{lineStyle:{opacity:.3}}},
-      {type:"value",name:idxName,position:"right",scale:true,nameTextStyle:{fontSize:10,color:MARGIN_IDX_COL},
+      {type:"value",name:idxName,position:"right",scale:true,nameTextStyle:{fontSize:10,color:idxCol},
         axisLabel:{fontSize:10},splitLine:{show:false}}
     ],
     series:[
@@ -2137,7 +2138,7 @@ function drawMarketChart(elId, s, marginName, marginColor, marginAxisName, idxNa
            label:{formatter:opts.refLabel||"",fontSize:9,color:"#94a3b8",position:"insideEndTop"},
            data:[{yAxis:opts.refLine}]}:undefined)},
       {name:idxName,type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:iData,connectNulls:true,
-       lineStyle:{color:MARGIN_IDX_COL,width:1.6,type:"dashed"},itemStyle:{color:MARGIN_IDX_COL}}
+       lineStyle:{color:idxCol,width:1.6,type:"dashed"},itemStyle:{color:idxCol}}
     ]
   },true);
   if(el._ro) window.removeEventListener("resize",el._ro);

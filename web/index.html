@@ -1229,14 +1229,9 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
-    '<div id="macroScoreBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
     '<div id="m1m2Block"></div>'+
-    '<section id="breadthSec"><div class="sec-head"><h2>騰落指標</h2><span class="tag">Advance / Decline</span>'+
-      '<span class="hint">台股與美股分開看，檢查指數是否由多數股票同步支撐</span></div>'+
-      '<div id="breadthBox"><div class="loading-screen">載入騰落指標 …</div></div>'+
-    '</section>'+
     '<div id="usThemeFlowBlock"></div>'+
     '<div id="odteBlock"></div>'+
     '<section>'+
@@ -1251,14 +1246,12 @@ function renderMacro(d){
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
   loadSentiment();
-  loadMacroScore();
   loadOnRp();
   loadOnRpLiquidity();
   if(MACRO_M1M2){                                   // 台灣 M1B/M2 年增率:放在 ON RP 下方
     const mb=document.getElementById("m1m2Block");
     if(mb){ mb.innerHTML='<section style="padding-top:6px">'+m1m2Box(MACRO_M1M2)+'</section>'; drawM1M2(MACRO_M1M2); }
   }
-  loadBreadth();
   loadThemes();
   loadUsThemeFlow();
   loadOdte();
@@ -2389,6 +2382,7 @@ function renderSentiment(d){
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
   $("#sentBox").innerHTML =
     '<div class="idx-grid">'+cards+'</div>'+
+    '<div id="macroScoreBlock"></div>'+
     breadthBox(d.breadth)+leverageBox(d.leverage)+
     '<div id="chicagoFciBlock"></div>'+
     '<div id="fsiBlock"></div>'+
@@ -2406,6 +2400,7 @@ function renderSentiment(d){
   if(MACRO_SOFR) drawSofrIorb(MACRO_SOFR);
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
+  loadMacroScore();                                  // 評分卡:市場廣度上方(sentBox 內)
 }
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
 function sp500FwdPeBox(v){

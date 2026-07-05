@@ -2061,6 +2061,13 @@ function drawAiCapexChart(A){
 }
 // ── Nasdaq-100 ÷ 美國 M2 貨幣供給 比值(月頻)──
 let NDXM2_DATA=null, NDXM2_WIN="10y";
+const NDXM2_LOOK=120;   // 滾動百分位回看窗(月):近10年,避免全史長期上漂讓近年永遠~100%
+function _ndxRollPct(ratio,i){   // ratio[i] 在「近 NDXM2_LOOK 月」分布的百分位(0-100);資料不足回 null
+  ratio=ratio||[]; if(i==null||i<0||ratio[i]==null) return null;
+  const w=ratio.slice(Math.max(0,i-NDXM2_LOOK+1),i+1).filter(v=>v!=null);
+  if(w.length<12) return null;
+  const v=ratio[i]; return w.filter(x=>x<=v).length/w.length*100;
+}
 const NDXM2_WINS=[["3y",36,"3Y"],["5y",60,"5Y"],["10y",120,"10Y"],["all",9999,"ALL"]];
 const NDXM2_COL="#6366f1";
 async function loadNdxM2(){
@@ -2082,7 +2089,7 @@ function renderNdxM2(d){
   const N=d.ndx_m2;
   if(!N||!N.months||N.months.length<6){ box.innerHTML=''; return; }
   if(!NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)) NDXM2_WIN="10y";
-  const pc=N.pctile, pcCls=pc>=85?'neg':(pc<=15?'pos':'dim');
+  const pc=Math.round(_ndxRollPct(N.ratio,(N.ratio||[]).length-1)??50), pcCls=pc>=85?'neg':(pc<=15?'pos':'dim');
   const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
   const btns=NDXM2_WINS.map(w=>'<button class="btn'+(NDXM2_WIN===w[0]?' active':'')+'" data-nmw="'+w[0]+'">'+w[2]+'</button>').join("");
   box.innerHTML=
@@ -2092,13 +2099,13 @@ function renderNdxM2(d){
         '<span class="hint">科技股價相對貨幣供給的估值/擁擠度。比值走高＝股價漲幅超越印鈔速度(偏貴/泡沫化),回落＝回到貨幣基本盤。看相對位置(百分位)勝於絕對值。</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+';border-left:3px solid '+NDXM2_COL+'"><div class="cap-lab">最新比值('+esc(N.as_of)+')</div><div class="cap-big" style="color:'+NDXM2_COL+'">'+Number(N.current).toLocaleString()+'</div></div>'+
-        '<div style="'+card+'"><div class="cap-lab">歷史百分位</div><div class="cap-big '+pcCls+'">'+pc+'<span class="cap-u">%</span></div><div class="cap-chg">'+(pc>=85?'偏貴/擁擠':(pc<=15?'相對便宜':'中性'))+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">近10年百分位</div><div class="cap-big '+pcCls+'">'+pc+'<span class="cap-u">%</span></div><div class="cap-chg">'+(pc>=85?'偏貴/擁擠':(pc<=15?'相對便宜':'中性'))+'</div></div>'+
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       '<div id="ndxM2Chart" class="cap-chart" style="height:280px"></div>'+
-      '<div class="dim" style="font-size:11px;margin:6px 0 0">歷史百分位（%）· 現值在近 40 年分布的位置</div>'+
+      '<div class="dim" style="font-size:11px;margin:6px 0 0">滾動百分位（%）· 現值在「近10年」分布的位置</div>'+
       '<div id="ndxM2PctChart" class="cap-chart" style="height:130px"></div>'+
-      '<div class="legend" style="margin-top:10px">紫線=NDX/M2 比值(左軸)＋ Nasdaq-100(橘虛線,右軸)。下方=**歷史百分位線**(比值在全史分布的位置,0-100%;紅80=偏貴、綠20=偏便宜)。當 NDX 創高但比值未同步創高＝漲幅多來自貨幣擴張;比值獨自飆高＝相對貨幣的真實估值擴張(擁擠)。資料 FRED M2SL(月,季調)+ NASDAQ100 月末。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">紫線=NDX/M2 比值(左軸)＋ Nasdaq-100(橘虛線,右軸)。下方=**滾動百分位線**(比值在「近10年」分布的位置,0-100%;紅80=偏貴、綠20=偏便宜——用滾動窗避免長期上漂讓近年永遠~100%)。當 NDX 創高但比值未同步創高＝漲幅多來自貨幣擴張;比值獨自飆高＝相對貨幣的真實估值擴張(擁擠)。資料 FRED M2SL(月,季調)+ NASDAQ100 月末。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-nmw]").forEach(b=>b.onclick=()=>{ NDXM2_WIN=b.dataset.nmw||"10y"; renderNdxM2(NDXM2_DATA); });
   const s={ months:N.months, vals:N.ratio, idx:N.ndx };
@@ -2108,12 +2115,11 @@ function renderNdxM2(d){
 // NDX/M2 歷史百分位線:每月比值在「全史」分布的百分位(0-100),80/20 參考帶;與主圖同視窗/時間尺
 function drawNdxM2Pct(s){
   const el=document.getElementById("ndxM2PctChart"); if(!el||!window.echarts) return;
-  const full=(s.vals||[]).filter(v=>v!=null).sort((a,b)=>a-b);
-  if(full.length<10){ el.innerHTML=''; return; }
-  const pct=v=>{ let lo=0,hi=full.length; while(lo<hi){const m=(lo+hi)>>1; if(full[m]<=v)lo=m+1;else hi=m;} return lo/full.length*100; };
+  const rr=s.vals||[]; if(rr.filter(v=>v!=null).length<24){ el.innerHTML=''; return; }
+  const rollAll=rr.map((_,i)=>_ndxRollPct(rr,i));   // 每月「近10年」滾動百分位
   const nWin=(NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||NDXM2_WINS[2])[1];
-  const n=Math.min(nWin,s.months.length), mo=s.months.slice(-n), vv=s.vals.slice(-n), pts=[];
-  for(let i=0;i<n;i++){ const t=_monthMs(mo[i]); pts.push([t,(t==null||vv[i]==null)?null:+pct(vv[i]).toFixed(1)]); }
+  const n=Math.min(nWin,s.months.length), start=s.months.length-n, mo=s.months.slice(-n), pts=[];
+  for(let i=0;i<n;i++){ const t=_monthMs(mo[i]), p=rollAll[start+i]; pts.push([t,(t==null||p==null)?null:+p.toFixed(1)]); }
   const xMin=_monthMs(mo[0]), xMax=_monthMs(mo[n-1]);
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});

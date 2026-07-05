@@ -203,23 +203,34 @@ def fetch_fear_greed():
 
 
 def _fetch_gdp_trillions():
-    """當期名目 GDP(兆美元)。優先 FRED 季度年化(GDP 系列,十億);失敗退 World Bank 年度。
-    回傳 (gdp_兆, 來源標籤)。FRED 對齊 GuruFocus 等標準口徑(~4.1%);World Bank 年度偏舊會墊高比率。"""
+    """當期名目 GDP(兆美元)。優先 FRED 官方 API(env FRED_API_KEY,雲端 CI 不被擋),失敗退公開
+    fredgraph.csv,再失敗退近期估值。回 (gdp_兆, 來源標籤)。FRED 季度年化,對齊 GuruFocus 口徑(~4.1%)。"""
+    key = os.environ.get("FRED_API_KEY", "").strip()
     for _ in range(3):                          # FRED 從 CI 偶爾連不到 → 重試
         try:
-            d = urllib.request.urlopen(
-                urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDP",
-                    headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}),
-                timeout=30).read().decode("utf-8", "ignore")
-            rows = [r for r in csv.reader(io.StringIO(d)) if r]
-            vals = [r for r in rows[1:] if r and r[-1] not in ("", ".")]
-            if vals:
-                last = vals[-1]
-                return float(last[-1]) / 1000.0, "FRED " + last[0][:7]   # 十億→兆,季度年化
+            if key:
+                j = json.loads(urllib.request.urlopen(urllib.request.Request(
+                    "https://api.stlouisfed.org/fred/series/observations?series_id=GDP"
+                    f"&api_key={key}&file_type=json&sort_order=desc&limit=1",
+                    headers={"User-Agent": "Mozilla/5.0"}), timeout=30
+                ).read().decode("utf-8", "ignore"))
+                obs = [o for o in j.get("observations", []) if o.get("value") not in (None, "", ".")]
+                if obs:
+                    o = obs[0]                  # sort_order=desc → 最新一筆
+                    return float(o["value"]) / 1000.0, "FRED " + o.get("date", "")[:7]
+            else:
+                d = urllib.request.urlopen(
+                    urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDP",
+                        headers={"User-Agent": "Mozilla/5.0", "Accept": "text/csv,*/*"}),
+                    timeout=30).read().decode("utf-8", "ignore")
+                vals = [r for r in list(csv.reader(io.StringIO(d)))[1:] if r and r[-1] not in ("", ".")]
+                if vals:
+                    last = vals[-1]
+                    return float(last[-1]) / 1000.0, "FRED " + last[0][:7]   # 十億→兆
         except Exception:
-            continue
-    # 後備:近期名目GDP估值(FRED 2026Q1 ~31.8兆;每季手動更新一次)。
-    # 不用 World Bank 年度(只到2024、$28.75兆,會把比率墊高到~4.5%)。
+            pass
+        time.sleep(1.5)
+    # 後備:近期名目GDP估值(FRED 2026Q1 ~31.8兆;每季手動更新一次)。不用 World Bank 年度(偏舊墊高比率)。
     return 31.8, "估值~2026Q1"
 
 

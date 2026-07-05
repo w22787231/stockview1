@@ -1229,6 +1229,7 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="netLiqBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
     '<div id="m1m2Block"></div>'+
@@ -1246,6 +1247,7 @@ function renderMacro(d){
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
   loadSentiment();
+  loadNetLiq();
   loadOnRp();
   loadOnRpLiquidity();
   if(MACRO_M1M2){                                   // 台灣 M1B/M2 年增率:放在 ON RP 下方
@@ -1559,6 +1561,79 @@ async function loadChicagoFci(){
     box.innerHTML='<section><div class="sec-head"><h2>芝加哥聯儲金融狀況指數</h2></div>'+
       '<div class="legend">⚠️ chicago_fci.json 尚未產生('+esc(e.message)+')。請先在 GitHub Actions 執行 export。</div></section>';
   }
+}
+
+// ── Fed 淨流動性(WALCL−TGA−RRP)+ S&P500 疊圖 ──
+let NETLIQ_DATA=null, NETLIQ_WIN="3y";
+const NETLIQ_RANGES=[["1y",52,"1Y"],["2y",104,"2Y"],["3y",156,"3Y"],["5y",260,"5Y"],["all",Infinity,"ALL"]];
+async function loadNetLiq(){
+  const box=$("#netLiqBlock"); if(!box) return;
+  if(NETLIQ_DATA){ renderNetLiq(NETLIQ_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 Fed 淨流動性 …</div>';
+  try{
+    const res=await fetch("data/capital.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const cap=await res.json();
+    NETLIQ_DATA=(cap.us&&cap.us.fed_liq)||[];
+    if(!NETLIQ_DATA.length) throw new Error("無 fed_liq");
+    renderNetLiq(NETLIQ_DATA);
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>美國-Fed 淨流動性</h2></div>'+
+      '<div class="legend">⚠️ 淨流動性資料暫缺('+esc(e.message)+')。</div></section>';
+  }
+}
+function renderNetLiq(fl){
+  const box=$("#netLiqBlock"); if(!box||!fl||!fl.length) return;
+  const cur=fl[fl.length-1], prev=fl.length>=2?fl[fl.length-2]:cur;
+  const tri=cur.val>=prev.val?'▲':'▼';
+  const rb=NETLIQ_RANGES.map(r=>'<button class="ntab'+(NETLIQ_WIN===r[0]?' on':'')+'" data-netliq-range="'+r[0]+'">'+r[2]+'</button>').join('');
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>美國-Fed 淨流動性(週)</h2>'+
+        '<span class="tag">WALCL − TGA − RRP · FRED</span>'+
+        '<span class="hint">流到市場的美元;與 S&amp;P 500 長線高度同向,上升=放水偏多、下降=抽水偏空</span></div>'+
+      '<div style="font-size:13px;color:var(--ink2);margin:2px 0 4px">最新 <b style="color:#1f6feb">$'+Number(cur.val).toFixed(2)+' 兆</b>('+esc(cur.date||'')+') <span class="'+(tri==='▲'?'pos':'neg')+'">'+tri+'</span></div>'+
+      '<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">'+rb+'</div>'+
+      '<div id="netLiqChart" class="cap-chart" style="height:280px"></div>'+
+      '<div class="ex">淨流動性 = 聯準會總資產 WALCL − 財政部帳戶 TGA − 隔夜逆回購 RRP。<b class="pos">上升</b>=市場資金變多(QE/TGA 釋出/RRP 見底),風險資產偏多;<b class="neg">下降</b>=抽水(QT/TGA 重建),偏空。<b style="color:#94a3b8">灰虛線=S&amp;P 500(右軸)</b>。週資料,來源 FRED WALCL/WTREGEN/RRPONTSYD。</div>'+
+    '</section>';
+  box.querySelectorAll("[data-netliq-range]").forEach(b=>b.onclick=()=>{
+    NETLIQ_WIN=b.dataset.netliqRange||"3y";
+    box.querySelectorAll("[data-netliq-range]").forEach(x=>x.classList.toggle("on",x.dataset.netliqRange===NETLIQ_WIN));
+    drawNetLiq(NETLIQ_DATA);
+  });
+  drawNetLiq(fl);
+}
+function drawNetLiq(fl){
+  const el=document.getElementById("netLiqChart");
+  if(!el||!window.echarts) return;
+  const range=NETLIQ_RANGES.find(r=>r[0]===NETLIQ_WIN) || NETLIQ_RANGES[2];
+  const n=range[1]===Infinity?fl.length:Math.min(range[1],fl.length);
+  const rows=fl.slice(-n);
+  const hasSpx=rows.some(x=>x.spx!=null && isFinite(Number(x.spx)));
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  const toMs=s=>new Date(s+"T00:00:00").getTime();
+  ch.setOption({
+    grid:{left:56,right:hasSpx?58:16,top:30,bottom:28},
+    legend:{data:["淨流動性"].concat(hasSpx?["S&P 500"]:[]),top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10}},
+    tooltip:{trigger:"axis",axisPointer:{type:"cross"}},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:val=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:[
+      {type:"value",name:"兆$",scale:true,nameTextStyle:{fontSize:9},axisLabel:{fontSize:10,formatter:x=>"$"+Number(x).toFixed(1)+"兆"},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",name:hasSpx?"S&P500":"",scale:true,position:"right",nameTextStyle:{fontSize:9},axisLabel:{fontSize:10},splitLine:{show:false}}
+    ],
+    series:[
+      {name:"淨流動性",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:rows.map(x=>[toMs(x.date),x.val]),
+        lineStyle:{color:"#1f6feb",width:2.2},itemStyle:{color:"#1f6feb"},areaStyle:{color:"#1f6feb",opacity:.07}}
+    ].concat(hasSpx?[{
+      name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:rows.map(x=>[toMs(x.date),x.spx??null]),
+      lineStyle:{color:"#94a3b8",width:1.5,type:"dashed"},itemStyle:{color:"#94a3b8"}
+    }]:[])
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro);
 }
 
 // ── Fed ON RRP + ON RP ──

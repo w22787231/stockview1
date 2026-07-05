@@ -418,11 +418,35 @@ def fetch_fed_liquidity():
                 best = k
         return dct.get(best, 0.0) if best else 0.0
 
+    spx = _gspc_weekly_map()              # ^GSPC 週收盤,疊圖用(對齊淨流動性日期)
     out = []
     for date, w in walcl[-260:]:          # 近 ~5 年(週)
         liq = w / 1000.0 - nearest(tga, date) / 1000.0 - nearest(rrp, date)  # → 十億美元
-        out.append({"date": date, "val": round(liq / 1000.0, 2)})           # → 兆美元
+        row = {"date": date, "val": round(liq / 1000.0, 2)}                 # → 兆美元
+        if spx:
+            p = nearest(spx, date)
+            if p:
+                row["spx"] = round(p, 2)
+        out.append(row)
     return out
+
+
+def _gspc_weekly_map():
+    """^GSPC 週收盤 → {YYYY-MM-DD: close}(Yahoo chart)。抓不到回 {}。"""
+    try:
+        d = json.loads(_get("https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1wk&range=6y"))
+        r = d["chart"]["result"][0]
+        ts = r["timestamp"]; cl = r["indicators"]["quote"][0]["close"]
+        out = {}
+        for i in range(len(ts)):
+            if cl[i] is None:
+                continue
+            dt = datetime.datetime.utcfromtimestamp(ts[i]).strftime("%Y-%m-%d")
+            out[dt] = cl[i]
+        return out
+    except Exception as e:
+        print("[capital] ^GSPC 週線抓取失敗:", e)
+        return {}
 
 
 # ── 11 類股 ETF 輪動(Yahoo)──

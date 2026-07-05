@@ -1339,7 +1339,7 @@ function sofrIorbBox(v){
     '</div>'+
     '<div style="margin:6px 0 8px;display:flex;gap:6px;flex-wrap:wrap">'+rb+'</div>'+
     '<div id="sofrIorbChart" class="m1m2-chart"></div>'+
-    '<div class="ex">SOFR＝擔保隔夜融資利率、IORB＝準備金利率(聯準會付給銀行,是利率走廊上緣)。<b class="neg">利差走高/轉正</b>=附買回市場搶錢、銀行準備金稀缺,流動性收緊(如 2019/9、2023/3 錢荒);<b class="pos">利差為負且穩定</b>=資金寬鬆。灰色虛線為 <b>0 bps</b>。日資料,來源 FRED SOFR−IORB。</div>'+
+    '<div class="ex">SOFR＝擔保隔夜融資利率、IORB＝準備金利率(聯準會付給銀行,是利率走廊上緣)。<b class="neg">利差走高/轉正</b>=附買回市場搶錢、銀行準備金稀缺,流動性收緊(如 2019/9、2023/3 錢荒);<b class="pos">利差為負且穩定</b>=資金寬鬆。灰色虛線為 <b>0 bps</b>,<b style="color:#94a3b8">灰虛線=S&amp;P 500(右軸)</b>對照資金壓力 vs 股市。日資料,來源 FRED SOFR−IORB + Yahoo ^GSPC。</div>'+
   '</div>';
 }
 function drawSofrIorb(v){
@@ -1352,28 +1352,35 @@ function drawSofrIorb(v){
   });
   const range=SOFR_RANGES.find(r=>r[0]===SOFR_RANGE) || SOFR_RANGES[2];
   const n=range[1]===Infinity?(v.dates||[]).length:Math.min(range[1],(v.dates||[]).length);
-  const dates=(v.dates||[]).slice(-n), vals=(v.values||[]).slice(-n), ma5=(v.ma5||[]).slice(-n), ma20=(v.ma20||[]).slice(-n);
+  const dates=(v.dates||[]).slice(-n), vals=(v.values||[]).slice(-n), ma5=(v.ma5||[]).slice(-n), ma20=(v.ma20||[]).slice(-n), spx=(v.spx||[]).slice(-n);
+  const hasSpx=spx.some(x=>x!=null && isFinite(Number(x)));
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   const toMs=s=>new Date(s+"T00:00:00").getTime();
   ch.setOption({
-    grid:{left:48,right:16,top:30,bottom:26},
-    legend:{data:["利差","5MA","20MA"],top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10}},
-    tooltip:{trigger:"axis",valueFormatter:x=>x==null?"-":(x>0?"+":"")+Number(x).toFixed(1)+" bps"},
+    grid:{left:48,right:hasSpx?58:16,top:30,bottom:26},
+    legend:{data:["利差","5MA","20MA"].concat(hasSpx?["S&P 500"]:[]),top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10}},
+    tooltip:{trigger:"axis",axisPointer:{type:"cross"},valueFormatter:x=>x==null?"-":(x>0?"+":"")+Number(x).toFixed(1)},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:val=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
-    yAxis:{type:"value",scale:true,axisLabel:{fontSize:10,formatter:"{value}"},splitLine:{lineStyle:{opacity:.3}}},
+    yAxis:[
+      {type:"value",name:"bps",scale:true,nameTextStyle:{fontSize:9},axisLabel:{fontSize:10,formatter:"{value}"},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",name:hasSpx?"S&P500":"",scale:true,position:"right",nameTextStyle:{fontSize:9},axisLabel:{fontSize:10},splitLine:{show:false}}
+    ],
     series:[
-      {name:"利差",type:"line",smooth:true,showSymbol:false,data:dates.map((d,i)=>[toMs(d),vals[i]??null]),
+      {name:"利差",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:dates.map((d,i)=>[toMs(d),vals[i]??null]),
         lineStyle:{color:"#0ea5e9",width:2},itemStyle:{color:"#0ea5e9"},areaStyle:{color:"#0ea5e9",opacity:.06},
         markLine:{symbol:"none",silent:true,
           label:{formatter:"0",color:"#64748b",fontSize:10,position:"insideEndTop"},
           lineStyle:{color:"#64748b",type:"dashed",width:1.2,opacity:.85},data:[{yAxis:0}]}},
-      {name:"5MA",type:"line",smooth:true,showSymbol:false,data:dates.map((d,i)=>[toMs(d),ma5[i]??null]),
+      {name:"5MA",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:dates.map((d,i)=>[toMs(d),ma5[i]??null]),
         lineStyle:{color:"#f59e0b",width:1.5},itemStyle:{color:"#f59e0b"}},
-      {name:"20MA",type:"line",smooth:true,showSymbol:false,data:dates.map((d,i)=>[toMs(d),ma20[i]??null]),
+      {name:"20MA",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:dates.map((d,i)=>[toMs(d),ma20[i]??null]),
         lineStyle:{color:"#9333ea",width:1.5},itemStyle:{color:"#9333ea"}}
-    ]
+    ].concat(hasSpx?[{
+      name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:dates.map((d,i)=>[toMs(d),spx[i]??null]),
+      lineStyle:{color:"#94a3b8",width:1.4,type:"dashed"},itemStyle:{color:"#94a3b8"}
+    }]:[])
   },true);
   if(!el._ro){el._ro=()=>ch.resize();window.addEventListener("resize",el._ro);}
 }

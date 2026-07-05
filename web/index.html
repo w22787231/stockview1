@@ -1324,7 +1324,7 @@ const SOFR_RANGES=[["3m",66,"3M"],["6m",132,"6M"],["1y",264,"1Y"],["3y",792,"3Y"
 function _sofrNum(x){ return x==null?"—":(x>0?"+":"")+Number(x).toFixed(1); }
 function sofrIorbBox(v){
   if(!v || !v.dates || !v.dates.length) return '';
-  const cur=v.cur, ma5=v.ma5_last, ma20=v.ma20_last;
+  const cur=v.cur, ma20=v.ma20_last;
   const curCls=cur>0?"neg":(cur<0?"pos":"dim");
   const card='border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel);display:inline-block;min-width:96px;margin-right:10px';
   const rb=SOFR_RANGES.map(r=>'<button class="ntab'+(SOFR_RANGE===r[0]?' on':'')+'" data-sofr-range="'+r[0]+'">'+r[2]+'</button>').join('');
@@ -1333,7 +1333,6 @@ function sofrIorbBox(v){
       '<span class="tag">附買回市場資金壓力 · FRED SOFR−IORB</span></div>'+
     '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:2px 0 6px">'+
       '<div style="'+card+'"><div class="cap-lab">最新</div><div class="cap-big '+curCls+'">'+_sofrNum(cur)+'</div><div class="dim" style="font-size:11px">bps</div></div>'+
-      '<div style="'+card+'"><div class="cap-lab">5MA</div><div class="cap-big" style="color:#f59e0b">'+_sofrNum(ma5)+'</div></div>'+
       '<div style="'+card+'"><div class="cap-lab">20MA</div><div class="cap-big" style="color:#9333ea">'+_sofrNum(ma20)+'</div></div>'+
       '<div class="dim" style="font-size:12px">資料日 '+esc(v.as_of||'')+'</div>'+
     '</div>'+
@@ -1352,14 +1351,14 @@ function drawSofrIorb(v){
   });
   const range=SOFR_RANGES.find(r=>r[0]===SOFR_RANGE) || SOFR_RANGES[2];
   const n=range[1]===Infinity?(v.dates||[]).length:Math.min(range[1],(v.dates||[]).length);
-  const dates=(v.dates||[]).slice(-n), vals=(v.values||[]).slice(-n), ma5=(v.ma5||[]).slice(-n), ma20=(v.ma20||[]).slice(-n), spx=(v.spx||[]).slice(-n);
+  const dates=(v.dates||[]).slice(-n), vals=(v.values||[]).slice(-n), ma20=(v.ma20||[]).slice(-n), spx=(v.spx||[]).slice(-n);
   const hasSpx=spx.some(x=>x!=null && isFinite(Number(x)));
   const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
   const ch=echarts.init(el,null,{renderer:"canvas"});
   const toMs=s=>new Date(s+"T00:00:00").getTime();
   ch.setOption({
     grid:{left:48,right:hasSpx?58:16,top:30,bottom:26},
-    legend:{data:["利差","5MA","20MA"].concat(hasSpx?["S&P 500"]:[]),top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10}},
+    legend:{data:["利差","20MA"].concat(hasSpx?["S&P 500"]:[]),top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10}},
     tooltip:{trigger:"axis",axisPointer:{type:"cross"},valueFormatter:x=>x==null?"-":(x>0?"+":"")+Number(x).toFixed(1)},
     xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
       formatter:val=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
@@ -1373,8 +1372,6 @@ function drawSofrIorb(v){
         markLine:{symbol:"none",silent:true,
           label:{formatter:"0",color:"#64748b",fontSize:10,position:"insideEndTop"},
           lineStyle:{color:"#64748b",type:"dashed",width:1.2,opacity:.85},data:[{yAxis:0}]}},
-      {name:"5MA",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:dates.map((d,i)=>[toMs(d),ma5[i]??null]),
-        lineStyle:{color:"#f59e0b",width:1.5},itemStyle:{color:"#f59e0b"}},
       {name:"20MA",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:dates.map((d,i)=>[toMs(d),ma20[i]??null]),
         lineStyle:{color:"#9333ea",width:1.5},itemStyle:{color:"#9333ea"}}
     ].concat(hasSpx?[{

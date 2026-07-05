@@ -2061,12 +2061,20 @@ function drawAiCapexChart(A){
 }
 // ── Nasdaq-100 ÷ 美國 M2 貨幣供給 比值(月頻)──
 let NDXM2_DATA=null, NDXM2_WIN="10y";
-const NDXM2_LOOK=120;   // 滾動百分位回看窗(月):近10年,避免全史長期上漂讓近年永遠~100%
-function _ndxRollPct(ratio,i){   // ratio[i] 在「近 NDXM2_LOOK 月」分布的百分位(0-100);資料不足回 null
-  ratio=ratio||[]; if(i==null||i<0||ratio[i]==null) return null;
-  const w=ratio.slice(Math.max(0,i-NDXM2_LOOK+1),i+1).filter(v=>v!=null);
-  if(w.length<12) return null;
-  const v=ratio[i]; return w.filter(x=>x<=v).length/w.length*100;
+// 去趨勢百分位:對 log(比值) 做時間線性回歸(捕捉長期指數上漂),回「每點殘差在全史殘差分布的百分位」。
+// 殘差已去趨勢→在趨勢之上=偏貴(高百分位)、之下=偏便宜(低百分位),會上下擺盪,不會卡100%。
+function _ndxDetrendPctAll(ratio){
+  ratio=ratio||[];
+  const xs=[], ys=[];
+  ratio.forEach((v,i)=>{ if(v!=null&&v>0){ xs.push(i); ys.push(Math.log(v)); } });
+  const n=xs.length; if(n<24) return ratio.map(()=>null);
+  const sx=xs.reduce((a,b)=>a+b,0), sy=ys.reduce((a,b)=>a+b,0);
+  const sxx=xs.reduce((a,b)=>a+b*b,0), sxy=xs.reduce((a,b,k)=>a+b*ys[k],0);
+  const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx), intc=(sy-slope*sx)/n;
+  const resid=ratio.map((v,i)=> (v!=null&&v>0)? Math.log(v)-(intc+slope*i) : null);
+  const dist=resid.filter(v=>v!=null).sort((p,q)=>p-q);
+  if(!dist.length) return ratio.map(()=>null);
+  return resid.map(r=> r==null?null : +(dist.filter(x=>x<=r).length/dist.length*100).toFixed(1));
 }
 const NDXM2_WINS=[["3y",36,"3Y"],["5y",60,"5Y"],["10y",120,"10Y"],["all",9999,"ALL"]];
 const NDXM2_COL="#6366f1";
@@ -2089,7 +2097,8 @@ function renderNdxM2(d){
   const N=d.ndx_m2;
   if(!N||!N.months||N.months.length<6){ box.innerHTML=''; return; }
   if(!NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)) NDXM2_WIN="10y";
-  const pc=Math.round(_ndxRollPct(N.ratio,(N.ratio||[]).length-1)??50), pcCls=pc>=85?'neg':(pc<=15?'pos':'dim');
+  const _dpAll=_ndxDetrendPctAll(N.ratio), _dpLast=[..._dpAll].reverse().find(v=>v!=null);
+  const pc=Math.round(_dpLast==null?50:_dpLast), pcCls=pc>=85?'neg':(pc<=15?'pos':'dim');
   const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
   const btns=NDXM2_WINS.map(w=>'<button class="btn'+(NDXM2_WIN===w[0]?' active':'')+'" data-nmw="'+w[0]+'">'+w[2]+'</button>').join("");
   box.innerHTML=
@@ -2099,13 +2108,13 @@ function renderNdxM2(d){
         '<span class="hint">科技股價相對貨幣供給的估值/擁擠度。比值走高＝股價漲幅超越印鈔速度(偏貴/泡沫化),回落＝回到貨幣基本盤。看相對位置(百分位)勝於絕對值。</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+';border-left:3px solid '+NDXM2_COL+'"><div class="cap-lab">最新比值('+esc(N.as_of)+')</div><div class="cap-big" style="color:'+NDXM2_COL+'">'+Number(N.current).toLocaleString()+'</div></div>'+
-        '<div style="'+card+'"><div class="cap-lab">近10年百分位</div><div class="cap-big '+pcCls+'">'+pc+'<span class="cap-u">%</span></div><div class="cap-chg">'+(pc>=85?'偏貴/擁擠':(pc<=15?'相對便宜':'中性'))+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">相對趨勢百分位</div><div class="cap-big '+pcCls+'">'+pc+'<span class="cap-u">%</span></div><div class="cap-chg">'+(pc>=85?'遠高於趨勢/貴':(pc<=15?'低於趨勢/便宜':'接近趨勢'))+'</div></div>'+
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       '<div id="ndxM2Chart" class="cap-chart" style="height:280px"></div>'+
-      '<div class="dim" style="font-size:11px;margin:6px 0 0">滾動百分位（%）· 現值在「近10年」分布的位置</div>'+
+      '<div class="dim" style="font-size:11px;margin:6px 0 0">去趨勢百分位（%）· 相對「長期對數趨勢」的位置</div>'+
       '<div id="ndxM2PctChart" class="cap-chart" style="height:130px"></div>'+
-      '<div class="legend" style="margin-top:10px">紫線=NDX/M2 比值(左軸)＋ Nasdaq-100(橘虛線,右軸)。下方=**滾動百分位線**(比值在「近10年」分布的位置,0-100%;紅80=偏貴、綠20=偏便宜——用滾動窗避免長期上漂讓近年永遠~100%)。當 NDX 創高但比值未同步創高＝漲幅多來自貨幣擴張;比值獨自飆高＝相對貨幣的真實估值擴張(擁擠)。資料 FRED M2SL(月,季調)+ NASDAQ100 月末。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">紫線=NDX/M2 比值(左軸)＋ Nasdaq-100(橘虛線,右軸)。下方=**去趨勢百分位線**(對比值做長期對數趨勢回歸後,殘差在全史的位置,0-100%;紅80=遠高於趨勢/貴、綠20=低於趨勢/便宜——去趨勢後才不會因長期上漂卡在100%)。當 NDX 創高但比值未同步創高＝漲幅多來自貨幣擴張;比值獨自飆高＝相對貨幣的真實估值擴張(擁擠)。資料 FRED M2SL(月,季調)+ NASDAQ100 月末。時段 '+esc((NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||{})[2]||NDXM2_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-nmw]").forEach(b=>b.onclick=()=>{ NDXM2_WIN=b.dataset.nmw||"10y"; renderNdxM2(NDXM2_DATA); });
   const s={ months:N.months, vals:N.ratio, idx:N.ndx };
@@ -2116,7 +2125,7 @@ function renderNdxM2(d){
 function drawNdxM2Pct(s){
   const el=document.getElementById("ndxM2PctChart"); if(!el||!window.echarts) return;
   const rr=s.vals||[]; if(rr.filter(v=>v!=null).length<24){ el.innerHTML=''; return; }
-  const rollAll=rr.map((_,i)=>_ndxRollPct(rr,i));   // 每月「近10年」滾動百分位
+  const rollAll=_ndxDetrendPctAll(rr);   // 每月「相對長期趨勢」的去趨勢百分位(0-100)
   const nWin=(NDXM2_WINS.find(w=>w[0]===NDXM2_WIN)||NDXM2_WINS[2])[1];
   const n=Math.min(nWin,s.months.length), start=s.months.length-n, mo=s.months.slice(-n), pts=[];
   for(let i=0;i<n;i++){ const t=_monthMs(mo[i]), p=rollAll[start+i]; pts.push([t,(t==null||p==null)?null:+p.toFixed(1)]); }

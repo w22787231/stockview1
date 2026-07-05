@@ -1216,8 +1216,9 @@ function etfTable(rows){
 }
 
 function renderMacro(d){
-  MACRO_M1M2 = d.m1b_m2 || null;          // 移到「市場廣度」下方(於 renderSentiment 繪出)
-  MACRO_RESERVES = d.us_reserves || null; // 美國聯準會準備金,放 M1B/M2 上方
+  MACRO_M1M2 = d.m1b_m2 || null;          // 台灣 M1B/M2 年增率,繪於 ON RP 下方的 #m1m2Block
+  MACRO_RESERVES = d.us_reserves || null; // 美國聯準會準備金(於 renderSentiment 繪出)
+  MACRO_SOFR = d.sofr_iorb || null;       // SOFR−IORB 利差,繪於準備金下方(renderSentiment)
   $("#content").innerHTML =
     '<section>'+
       '<div class="sec-head"><h2>指數總覽</h2><span class="tag">今日漲跌</span>'+
@@ -1230,6 +1231,7 @@ function renderMacro(d){
     '</section>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
+    '<div id="m1m2Block"></div>'+
     '<section id="breadthSec"><div class="sec-head"><h2>騰落指標</h2><span class="tag">Advance / Decline</span>'+
       '<span class="hint">台股與美股分開看，檢查指數是否由多數股票同步支撐</span></div>'+
       '<div id="breadthBox"><div class="loading-screen">載入騰落指標 …</div></div>'+
@@ -1250,6 +1252,10 @@ function renderMacro(d){
   loadSentiment();
   loadOnRp();
   loadOnRpLiquidity();
+  if(MACRO_M1M2){                                   // 台灣 M1B/M2 年增率:放在 ON RP 下方
+    const mb=document.getElementById("m1m2Block");
+    if(mb){ mb.innerHTML='<section style="padding-top:6px">'+m1m2Box(MACRO_M1M2)+'</section>'; drawM1M2(MACRO_M1M2); }
+  }
   loadBreadth();
   loadThemes();
   loadUsThemeFlow();
@@ -1308,6 +1314,66 @@ function drawReserves(v){
         label:{formatter:"$2.5兆",color:"#64748b",fontSize:10,position:"insideEndTop"},
         lineStyle:{color:"#64748b",type:"dashed",width:1.2,opacity:.85},
         data:[{yAxis:2500}]}}]
+  },true);
+  if(!el._ro){el._ro=()=>ch.resize();window.addEventListener("resize",el._ro);}
+}
+
+// ── 美國 SOFR − IORB 利差(bps,日資料)+ 5MA/20MA ──
+let MACRO_SOFR=null, SOFR_RANGE="1y";
+const SOFR_RANGES=[["3m",66,"3M"],["6m",132,"6M"],["1y",264,"1Y"],["3y",792,"3Y"],["5y",1320,"5Y"],["all",Infinity,"ALL"]];
+function _sofrNum(x){ return x==null?"—":(x>0?"+":"")+Number(x).toFixed(1); }
+function sofrIorbBox(v){
+  if(!v || !v.dates || !v.dates.length) return '';
+  const cur=v.cur, ma5=v.ma5_last, ma20=v.ma20_last;
+  const curCls=cur>0?"neg":(cur<0?"pos":"dim");
+  const card='border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel);display:inline-block;min-width:96px;margin-right:10px';
+  const rb=SOFR_RANGES.map(r=>'<button class="ntab'+(SOFR_RANGE===r[0]?' on':'')+'" data-sofr-range="'+r[0]+'">'+r[2]+'</button>').join('');
+  return '<div style="margin-top:18px">'+
+    '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">美國-SOFR 減 IORB 利差</h2>'+
+      '<span class="tag">附買回市場資金壓力 · FRED SOFR−IORB</span></div>'+
+    '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:2px 0 6px">'+
+      '<div style="'+card+'"><div class="cap-lab">最新</div><div class="cap-big '+curCls+'">'+_sofrNum(cur)+'</div><div class="dim" style="font-size:11px">bps</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">5MA</div><div class="cap-big" style="color:#f59e0b">'+_sofrNum(ma5)+'</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">20MA</div><div class="cap-big" style="color:#9333ea">'+_sofrNum(ma20)+'</div></div>'+
+      '<div class="dim" style="font-size:12px">資料日 '+esc(v.as_of||'')+'</div>'+
+    '</div>'+
+    '<div style="margin:6px 0 8px;display:flex;gap:6px;flex-wrap:wrap">'+rb+'</div>'+
+    '<div id="sofrIorbChart" class="m1m2-chart"></div>'+
+    '<div class="ex">SOFR＝擔保隔夜融資利率、IORB＝準備金利率(聯準會付給銀行,是利率走廊上緣)。<b class="neg">利差走高/轉正</b>=附買回市場搶錢、銀行準備金稀缺,流動性收緊(如 2019/9、2023/3 錢荒);<b class="pos">利差為負且穩定</b>=資金寬鬆。灰色虛線為 <b>0 bps</b>。日資料,來源 FRED SOFR−IORB。</div>'+
+  '</div>';
+}
+function drawSofrIorb(v){
+  const el=document.getElementById("sofrIorbChart");
+  if(!el||!window.echarts) return;
+  document.querySelectorAll("[data-sofr-range]").forEach(b=>b.onclick=()=>{
+    SOFR_RANGE=b.dataset.sofrRange||"1y";                              // 只重繪此圖,不重跑整個情緒指標區
+    document.querySelectorAll("[data-sofr-range]").forEach(x=>x.classList.toggle("on",x.dataset.sofrRange===SOFR_RANGE));
+    drawSofrIorb(MACRO_SOFR);
+  });
+  const range=SOFR_RANGES.find(r=>r[0]===SOFR_RANGE) || SOFR_RANGES[2];
+  const n=range[1]===Infinity?(v.dates||[]).length:Math.min(range[1],(v.dates||[]).length);
+  const dates=(v.dates||[]).slice(-n), vals=(v.values||[]).slice(-n), ma5=(v.ma5||[]).slice(-n), ma20=(v.ma20||[]).slice(-n);
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  const toMs=s=>new Date(s+"T00:00:00").getTime();
+  ch.setOption({
+    grid:{left:48,right:16,top:30,bottom:26},
+    legend:{data:["利差","5MA","20MA"],top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10}},
+    tooltip:{trigger:"axis",valueFormatter:x=>x==null?"-":(x>0?"+":"")+Number(x).toFixed(1)+" bps"},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:val=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:{type:"value",scale:true,axisLabel:{fontSize:10,formatter:"{value}"},splitLine:{lineStyle:{opacity:.3}}},
+    series:[
+      {name:"利差",type:"line",smooth:true,showSymbol:false,data:dates.map((d,i)=>[toMs(d),vals[i]??null]),
+        lineStyle:{color:"#0ea5e9",width:2},itemStyle:{color:"#0ea5e9"},areaStyle:{color:"#0ea5e9",opacity:.06},
+        markLine:{symbol:"none",silent:true,
+          label:{formatter:"0",color:"#64748b",fontSize:10,position:"insideEndTop"},
+          lineStyle:{color:"#64748b",type:"dashed",width:1.2,opacity:.85},data:[{yAxis:0}]}},
+      {name:"5MA",type:"line",smooth:true,showSymbol:false,data:dates.map((d,i)=>[toMs(d),ma5[i]??null]),
+        lineStyle:{color:"#f59e0b",width:1.5},itemStyle:{color:"#f59e0b"}},
+      {name:"20MA",type:"line",smooth:true,showSymbol:false,data:dates.map((d,i)=>[toMs(d),ma20[i]??null]),
+        lineStyle:{color:"#9333ea",width:1.5},itemStyle:{color:"#9333ea"}}
+    ]
   },true);
   if(!el._ro){el._ro=()=>ch.resize();window.addEventListener("resize",el._ro);}
 }
@@ -2272,11 +2338,11 @@ function renderSentiment(d){
     '<div id="aiCapexBlock"></div>'+
     '<div id="ndxM2Block"></div>'+
     sp500FwdPeBox(d.sp500_fwd_pe)+
-    reservesBox(MACRO_RESERVES)+m1m2Box(MACRO_M1M2)+cotSpxBox(d.cot_spx)+
+    reservesBox(MACRO_RESERVES)+sofrIorbBox(MACRO_SOFR)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(MACRO_RESERVES) drawReserves(MACRO_RESERVES);
-  if(MACRO_M1M2) drawM1M2(MACRO_M1M2);
+  if(MACRO_SOFR) drawSofrIorb(MACRO_SOFR);
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
 }

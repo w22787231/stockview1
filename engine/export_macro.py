@@ -153,6 +153,66 @@ def fetch_us_reserves(series="WRESBAL", start="2010-01-01"):
         return None
 
 
+def _fred_daily_map(series, start, key):
+    """FRED 日資料 → {date: float}(官方 API,CI 擋 fredgraph 故一律走 API)。"""
+    url = ("https://api.stlouisfed.org/fred/series/observations"
+           "?series_id=%s&api_key=%s&file_type=json&observation_start=%s" % (series, key, start))
+    j = json.loads(urllib.request.urlopen(urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0"}), timeout=30).read().decode("utf-8"))
+    out = {}
+    for o in j.get("observations") or []:
+        v = o.get("value")
+        if v in (None, "", "."):
+            continue
+        try:
+            out[o["date"]] = float(v)
+        except ValueError:
+            continue
+    return out
+
+
+def _sma(vals, w):
+    """尾端簡單移動平均;不足 w 筆給 None。"""
+    out = []
+    for i in range(len(vals)):
+        if i + 1 < w:
+            out.append(None)
+        else:
+            out.append(round(sum(vals[i - w + 1:i + 1]) / w, 2))
+    return out
+
+
+def fetch_sofr_iorb(start="2018-04-01"):
+    """美國-SOFR 減 IORB 利差(bps,日資料)← FRED API(需 FRED_API_KEY)。
+    SOFR=擔保隔夜融資利率、IORB=準備金利率(2021-07 前為 IOER)。
+    SOFR−IORB 為正/走高=附買回市場資金緊、準備金稀缺(如 2019-09 錢荒);為負=資金寬鬆。無 key 回 None。"""
+    key = os.environ.get("FRED_API_KEY")
+    if not key:
+        print("[macro] FRED_API_KEY 未設,跳過 sofr_iorb")
+        return None
+    try:
+        sofr = _fred_daily_map("SOFR", start, key)
+        iorb = _fred_daily_map("IORB", "2021-07-01", key)
+        ioer = _fred_daily_map("IOER", start, key)   # 2021-07-28 前的準備金利率
+        dates, vals = [], []
+        for dt in sorted(sofr):
+            ior = iorb.get(dt, ioer.get(dt))
+            if ior is None:
+                continue
+            dates.append(dt)
+            vals.append(round((sofr[dt] - ior) * 100.0, 1))   # 百分點 → bps
+        if len(dates) < 2:
+            return None
+        ma5, ma20 = _sma(vals, 5), _sma(vals, 20)
+        return {"label": "美國-SOFR 減 IORB 利差", "unit": "bps",
+                "dates": dates, "values": vals, "ma5": ma5, "ma20": ma20,
+                "cur": vals[-1], "ma5_last": ma5[-1], "ma20_last": ma20[-1],
+                "as_of": dates[-1], "src": "FRED SOFR − IORB(2021-07 前 IOER)"}
+    except Exception as e:
+        print("[macro] sofr_iorb 失敗:", e)
+        return None
+
+
 def build():
     all_syms = [x["sym"] for x in INDICES] + [x["sym"] for x in ETFS]
     px = fetch_all(all_syms)
@@ -201,6 +261,7 @@ def build():
         "etfs": etfs,
         "m1b_m2": fetch_m1b_m2(),
         "us_reserves": fetch_us_reserves(),
+        "sofr_iorb": fetch_sofr_iorb(),
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

@@ -1429,7 +1429,7 @@ function renderMacroScore(d){
   const rows=items.map(it=>{
     const c=_scoreColor(it.score);
     return '<tr>'+
-      '<td style="padding:6px 8px;white-space:nowrap">'+it.light+' '+esc(it.name)+'</td>'+
+      '<td style="padding:6px 8px;white-space:nowrap;text-align:left"><span style="display:inline-block;width:20px;text-align:center">'+it.light+'</span>'+esc(it.name)+'</td>'+
       '<td style="padding:6px 8px;width:130px"><div style="display:flex;align-items:center;gap:6px">'+
         '<div style="flex:1;height:7px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:'+it.score+'%;background:'+c+'"></div></div>'+
         '<b style="color:'+c+';min-width:22px;text-align:right">'+it.score+'</b></div></td>'+

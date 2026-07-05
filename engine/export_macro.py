@@ -201,6 +201,46 @@ def _spx_daily_map(start):
         return {}
 
 
+def _spx_monthly_map(start="1990-01-01"):
+    """^GSPC 月收盤 → {YYYY-MM: close}(yfinance),月頻疊圖用。抓不到回 {}。"""
+    try:
+        df = yf.download("^GSPC", start=start, interval="1mo",
+                         progress=False, auto_adjust=False)
+        if df is None or df.empty:
+            return {}
+        cl = df["Close"]
+        if getattr(cl, "ndim", 1) > 1:
+            cl = cl.iloc[:, 0]
+        out = {}
+        for ts, v in cl.dropna().items():
+            out[ts.strftime("%Y-%m")] = round(float(v), 2)
+        return out
+    except Exception as e:
+        print("[macro] ^GSPC 月線抓取失敗:", e)
+        return {}
+
+
+def fetch_leading_index(sid, label, unit, src, spx_map, start="1990-01-01"):
+    """通用 FRED 月頻領先指標 + 對齊的 S&P500 月收盤(疊圖)。無 FRED_API_KEY 回 None。"""
+    key = os.environ.get("FRED_API_KEY")
+    if not key:
+        print("[macro] FRED_API_KEY 未設,跳過", sid)
+        return None
+    try:
+        m = _fred_daily_map(sid, start, key)      # 月頻系列 → {date: val}
+        if len(m) < 12:
+            print("[macro] %s 資料不足(%d)" % (sid, len(m)))
+            return None
+        dates = sorted(m)
+        vals = [round(m[d], 2) for d in dates]
+        spx = [spx_map.get(d[:7]) for d in dates]  # 依 YYYY-MM 對齊
+        return {"label": label, "unit": unit, "dates": dates, "values": vals,
+                "spx": spx, "cur": vals[-1], "as_of": dates[-1], "src": src}
+    except Exception as e:
+        print("[macro] %s 失敗: %s" % (sid, e))
+        return None
+
+
 def fetch_sofr_iorb(start="2018-04-01"):
     """美國-SOFR 減 IORB 利差(bps,日資料)← FRED API(需 FRED_API_KEY)。
     SOFR=擔保隔夜融資利率、IORB=準備金利率(2021-07 前為 IOER)。
@@ -279,6 +319,8 @@ def build():
     # ETF 預設依今日漲跌由高到低
     etfs.sort(key=lambda r: (r["chg"] if r["chg"] is not None else -999), reverse=True)
 
+    _spx_m = _spx_monthly_map()          # 領先指標疊圖共用的 ^GSPC 月收盤
+
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -288,6 +330,12 @@ def build():
         "m1b_m2": fetch_m1b_m2(),
         "us_reserves": fetch_us_reserves(),
         "sofr_iorb": fetch_sofr_iorb(),
+        "lei_philly": fetch_leading_index(
+            "USSLIND", "美國-領先指數(費城聯儲)", "%",
+            "FRED USSLIND · Philadelphia Fed Leading Index", _spx_m),
+        "lei_oecd": fetch_leading_index(
+            "USALOLITOAASTSAM", "美國-OECD 綜合領先指標(CLI)", "指數",
+            "FRED USALOLITOAASTSAM · OECD CLI(amplitude adjusted)", _spx_m),
         "failed": failed,
     }
     os.makedirs(DATA_DIR, exist_ok=True)

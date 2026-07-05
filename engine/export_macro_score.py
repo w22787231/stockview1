@@ -152,7 +152,7 @@ def score_breadth(items):
     if a50 is None or a20 is None: return
     sc = 0.6 * a50 + 0.4 * a20               # 個股在均線上比例越高=越健康
     st = "廣度健康" if a50 >= 60 else ("中性" if a50 >= 40 else "廣度轉弱")
-    items.append(_item("breadth", "騰落廣度", "廣度", sc, st,
+    items.append(_item("breadth", "市場廣度(SP500)", "廣度", sc, st,
                        "%.0f%% 站上20MA / %.0f%% 站上50MA" % (a20, a50)))
 
 

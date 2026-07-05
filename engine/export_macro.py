@@ -330,9 +330,9 @@ def build():
         "m1b_m2": fetch_m1b_m2(),
         "us_reserves": fetch_us_reserves(),
         "sofr_iorb": fetch_sofr_iorb(),
-        "lei_philly": fetch_leading_index(
-            "USSLIND", "美國-領先指數(費城聯儲)", "%",
-            "FRED USSLIND · Philadelphia Fed Leading Index", _spx_m),
+        "lei_cfnai": fetch_leading_index(
+            "CFNAIMA3", "美國-芝加哥聯儲全國活動指數(3月均)", "指數",
+            "FRED CFNAIMA3 · Chicago Fed National Activity Index(3-mo MA)", _spx_m),
         "lei_oecd": fetch_leading_index(
             "USALOLITOAASTSAM", "美國-OECD 綜合領先指標(CLI)", "指數",
             "FRED USALOLITOAASTSAM · OECD CLI(amplitude adjusted)", _spx_m),

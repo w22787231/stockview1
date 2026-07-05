@@ -1219,7 +1219,7 @@ function renderMacro(d){
   MACRO_M1M2 = d.m1b_m2 || null;          // 台灣 M1B/M2 年增率,繪於 ON RP 下方的 #m1m2Block
   MACRO_RESERVES = d.us_reserves || null; // 美國聯準會準備金(於 renderSentiment 繪出)
   MACRO_SOFR = d.sofr_iorb || null;       // SOFR−IORB 利差,繪於準備金下方(renderSentiment)
-  MACRO_LEI = {philly:d.lei_philly||null, oecd:d.lei_oecd||null};   // 美國領先指標(費城聯儲 / OECD)
+  MACRO_LEI = {cfnai:d.lei_cfnai||null, oecd:d.lei_oecd||null};   // 美國景氣/領先指標(芝加哥聯儲 CFNAI / OECD CLI)
   $("#content").innerHTML =
     '<section>'+
       '<div class="sec-head"><h2>指數總覽</h2><span class="tag">今日漲跌</span>'+
@@ -1234,7 +1234,7 @@ function renderMacro(d){
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
     '<div id="m1m2Block"></div>'+
-    '<div id="leiPhillyBlock"></div>'+
+    '<div id="leiCfnaiBlock"></div>'+
     '<div id="leiOecdBlock"></div>'+
     '<div id="usThemeFlowBlock"></div>'+
     '<div id="odteBlock"></div>'+
@@ -1257,7 +1257,7 @@ function renderMacro(d){
     const mb=document.getElementById("m1m2Block");
     if(mb){ mb.innerHTML='<section style="padding-top:6px">'+m1m2Box(MACRO_M1M2)+'</section>'; drawM1M2(MACRO_M1M2); }
   }
-  renderLei("philly"); renderLei("oecd");           // 美國領先指標(費城聯儲 / OECD)
+  renderLei("cfnai"); renderLei("oecd");           // 美國景氣/領先指標(芝加哥聯儲 CFNAI / OECD CLI)
   loadThemes();
   loadUsThemeFlow();
   loadOdte();
@@ -1640,16 +1640,18 @@ function drawNetLiq(fl){
   el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro);
 }
 
-// ── 美國領先指標(費城聯儲 USSLIND / OECD CLI)+ S&P500 疊圖 ──
-let MACRO_LEI={philly:null, oecd:null};
-let LEI_WIN={philly:"10y", oecd:"10y"}, LEI_INV={philly:false, oecd:false};
+// ── 美國景氣/領先指標(芝加哥聯儲 CFNAI-MA3 / OECD CLI)+ S&P500 疊圖 ──
+let MACRO_LEI={cfnai:null, oecd:null};
+let LEI_WIN={cfnai:"10y", oecd:"10y"}, LEI_INV={cfnai:false, oecd:false};
 const LEI_RANGES=[["3y",36,"3Y"],["5y",60,"5Y"],["10y",120,"10Y"],["20y",240,"20Y"],["all",Infinity,"ALL"]];
 const LEI_META={
-  philly:{block:"leiPhillyBlock", chart:"leiPhillyChart", color:"#0891b2", title:"美國-領先指數(費城聯儲)",
-    tag:"USSLIND · 月 · 費城聯儲", axis:"%",
-    read:"費城聯儲美國領先指數,估未來約6個月經濟成長動能。<b class=\"neg\">走低/轉負</b>常領先景氣與股市轉弱;<b class=\"pos\">回升</b>=擴張延續。"},
+  cfnai:{block:"leiCfnaiBlock", chart:"leiCfnaiChart", color:"#0891b2", title:"美國-芝加哥聯儲全國活動指數(3月均)",
+    tag:"CFNAI-MA3 · 月 · 芝加哥聯儲", axis:"指數",
+    refs:[{v:0,label:"0 趨勢",color:"#64748b"},{v:-0.7,label:"−0.7 衰退",color:"#e11d48"}],
+    read:"芝加哥聯儲全國活動指數(85項綜合,0=長期趨勢成長)。<b class=\"pos\">&gt;0</b>=優於趨勢;<b class=\"neg\">&lt;−0.7</b>常領先衰退與股市壓力。"},
   oecd:{block:"leiOecdBlock", chart:"leiOecdChart", color:"#7c3aed", title:"美國-OECD 綜合領先指標(CLI)",
     tag:"OECD CLI · 月", axis:"指數",
+    refs:[{v:100,label:"100 基準",color:"#64748b"}],
     read:"OECD 綜合領先指標(基準100)。<b class=\"pos\">&gt;100 且上升</b>=景氣加速;<b class=\"neg\">&lt;100 且下降</b>=放緩;穿越 100 或轉折常領先股市週期。"}
 };
 function renderLei(k){
@@ -1701,7 +1703,10 @@ function drawLei(k){
     ],
     series:[
       {name:nm,type:"line",smooth:true,showSymbol:false,yAxisIndex:0,data:dates.map((x,i)=>[toMs(x),vals[i]??null]),
-        lineStyle:{color:meta.color,width:2.2},itemStyle:{color:meta.color},areaStyle:{color:meta.color,opacity:.06}}
+        lineStyle:{color:meta.color,width:2.2},itemStyle:{color:meta.color},areaStyle:{color:meta.color,opacity:.06},
+        markLine:(meta.refs&&meta.refs.length)?{symbol:"none",silent:true,
+          data:meta.refs.map(r=>({yAxis:r.v,label:{formatter:r.label,color:r.color,fontSize:9,position:"insideEndTop"},
+            lineStyle:{color:r.color,type:"dashed",width:1,opacity:.8}}))}:undefined}
     ].concat(hasSpx?[{
       name:"S&P 500",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,data:dates.map((x,i)=>[toMs(x),spx[i]??null]),
       lineStyle:{color:"#94a3b8",width:1.5,type:"dashed"},itemStyle:{color:"#94a3b8"}

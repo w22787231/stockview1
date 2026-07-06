@@ -52,8 +52,8 @@
   .meta b{color:var(--ink2);font-weight:600}
 
   /* 主分頁(總體市場 | 趨勢動能榜)：底線式分頁，模仿參考站 */
-  .mainnav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0 4px}
-  .mtab{background:none;border:none;cursor:pointer;font-size:14.5px;font-weight:650;
+  .mainnav{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;border-bottom:1px solid var(--line);margin:14px 0 4px;scrollbar-width:thin}
+  .mtab{background:none;border:none;cursor:pointer;font-size:14.5px;font-weight:650;white-space:nowrap;flex:none;
     color:var(--ink2);padding:10px 16px;position:relative;letter-spacing:.3px;transition:.12s}
   .mtab:hover{color:var(--ink)}
   .mtab.active{color:var(--blue)}
@@ -3950,6 +3950,14 @@ function navOrder(){
       ordered=ordered.filter(v=>v!=="capital");
       ordered.splice(Math.min(2,ordered.length),0,"capital");
       saveNavOrder(ordered); localStorage.setItem("navMigCap3","1");
+    }
+  }catch(e){}
+  // 一次性遷移:把「趨勢動能榜」移回第4位(舊使用者若曾拖到後面被擠出畫面,救回來)
+  try{
+    if(ordered.includes("trend") && !localStorage.getItem("navMigTrend4")){
+      ordered=ordered.filter(v=>v!=="trend");
+      ordered.splice(Math.min(3,ordered.length),0,"trend");
+      saveNavOrder(ordered); localStorage.setItem("navMigTrend4","1");
     }
   }catch(e){}
   return ordered;

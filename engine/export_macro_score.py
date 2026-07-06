@@ -273,11 +273,87 @@ def score_aicapex(items):
                        "最新季 YoY %+.0f%%" % yoy))
 
 
+def score_cfnai(items):
+    d = (_load("macro.json") or {}).get("lei_cfnai")
+    if not d or d.get("cur") is None:
+        return
+    v = d["cur"]
+    if v >= 0.2: sc, st = 66, "優於趨勢"
+    elif v >= 0: sc, st = 56, "接近趨勢"
+    elif v >= -0.35: sc, st = 48, "略低於趨勢"
+    elif v >= -0.7: sc, st = 38, "景氣放緩"
+    elif v >= -1.5: sc, st = 22, "衰退訊號(<−0.7)"
+    else: sc, st = 12, "深度衰退"
+    items.append(_item("cfnai", "芝加哥聯儲活動指數(CFNAI)", "景氣", sc, st,
+                       "CFNAI-MA3 = %+.2f(0=趨勢)" % v))
+
+
+def score_oecd(items):
+    d = (_load("macro.json") or {}).get("lei_oecd")
+    if not d or d.get("cur") is None:
+        return
+    vals = d.get("values") or []
+    cur = d["cur"]
+    dev = cur - 100.0
+    slope = (cur - vals[-4]) if len(vals) >= 4 else 0.0   # 近3月變化
+    sc = 50 + _clamp(dev * 8, -24, 24) + _clamp(slope * 40, -16, 16)
+    if cur >= 100 and slope > 0: st = "景氣加速(>100且升)"
+    elif cur >= 100: st = "擴張(>100)"
+    elif slope > 0: st = "落底回升"
+    else: st = "放緩(<100且降)"
+    items.append(_item("oecd", "OECD 綜合領先指標(CLI)", "景氣", sc, st,
+                       "CLI %.2f(基準100),近3月 %+.2f" % (cur, slope)))
+
+
+def score_skew(items):
+    lv = (_load("sentiment.json") or {}).get("levels") or []
+    s = next((l.get("level") for l in lv if l.get("sym") == "^SKEW"), None)
+    if s is None:
+        return
+    if s < 120: sc, st = 60, "尾部風險低"
+    elif s < 135: sc, st = 52, "中性"
+    elif s < 145: sc, st = 44, "尾部風險升高"
+    elif s < 155: sc, st = 35, "尾部風險高"
+    else: sc, st = 28, "尾部風險極高"
+    items.append(_item("skew", "SKEW 尾部風險", "情緒/尾部", sc, st, "SKEW = %.0f" % s))
+
+
+def score_tw_retail(items):
+    lv = (_load("sentiment.json") or {}).get("levels") or []
+    r = next((l.get("level") for l in lv if l.get("sym") == "TWMICRORETAIL"), None)
+    if r is None:
+        return
+    if r >= 50: sc, st = 20, "散戶過熱(反向偏空)"
+    elif r >= 30: sc, st = 36, "散戶偏多"
+    elif r >= 10: sc, st = 48, "中性偏多"
+    elif r >= -10: sc, st = 55, "中性"
+    elif r >= -30: sc, st = 68, "散戶偏空(反向偏多)"
+    else: sc, st = 78, "散戶極空(反向偏多)"
+    items.append(_item("tw_retail", "微台散戶多空比", "台股情緒", sc, st,
+                       "散戶淨多空 %+.0f%%(反向計分)" % r))
+
+
+def score_cot(items):
+    c = (_load("sentiment.json") or {}).get("cot_spx")
+    if not c or c.get("lev_pctile") is None:
+        return
+    p = c["lev_pctile"]
+    sc = 100 - p                              # 槓桿基金(CTA)淨多百分位越高=擁擠多=反向偏空
+    if p >= 80: st = "槓桿基金擁擠偏多(反向偏空)"
+    elif p >= 60: st = "偏多"
+    elif p >= 40: st = "中性"
+    elif p >= 20: st = "槓桿基金偏空(反向偏多)"
+    else: st = "槓桿基金極度淨空(反向偏多)"
+    items.append(_item("cot", "COT S&P500 槓桿基金部位", "籌碼", sc, st,
+                       "槓桿基金(CTA)淨部位第 %d 百分位(反向)" % round(p)))
+
+
 def build():
     items = []
     for fn in (score_fsi, score_nfci, score_pi, score_sofr, score_reserves,
-               score_fedliq, score_insider, score_breadth, score_spec, score_fwdpe,
-               score_ndxm2, score_twm1m2, score_fng, score_vix, score_aicapex):
+               score_fedliq, score_cfnai, score_oecd, score_insider, score_cot,
+               score_breadth, score_spec, score_skew, score_fwdpe, score_ndxm2,
+               score_twm1m2, score_tw_retail, score_fng, score_vix, score_aicapex):
         try:
             fn(items)
         except Exception as e:

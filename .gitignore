@@ -14,3 +14,4 @@ venv/
 .DS_Store
 Thumbs.db
 web/data/spec.json
+engine/._twmr_cache.json

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """台股大盤融資維持率(上市)純計算/合併工具。
 無網路、無重相依,供 export_sentiment.py 與 backfill_tw_margin_ratio.py 共用。
-口徑:維持率% = Σ(融資餘額張 × 1000 × 收盤) / 上市融資金額(元) × 100,分子排除 ETF(00 開頭)。"""
+口徑:維持率% = Σ(融資餘額張 × 1000 × 收盤) / 上市融資金額(元) × 100。
+分子「含 ETF」——因分母(融資金額)本就含 ETF 融資(槓桿型 ETF 占融資約 1/4),
+分子若排除 ETF 會低估維持率(實測 187% vs 官方/財經M平方 ~194.55%)。exclude_etf 選項保留但預設 False。"""
 
 
 def _to_float(x):
@@ -11,8 +13,9 @@ def _to_float(x):
         return None
 
 
-def compute_ratio(loan_yuan, lots_by_code, price_by_code, exclude_etf=True):
-    """loan_yuan: 上市融資金額總額(元)。lots_by_code: {code: 融資餘額張}. price_by_code: {code: 收盤}."""
+def compute_ratio(loan_yuan, lots_by_code, price_by_code, exclude_etf=False):
+    """loan_yuan: 上市融資金額總額(元)。lots_by_code: {code: 融資餘額張}. price_by_code: {code: 收盤}.
+    exclude_etf 預設 False(含 ETF,與分母同口徑);傳 True 才排除 00 開頭 ETF。"""
     loan = _to_float(loan_yuan)
     if not loan or loan <= 0:
         return None

@@ -8,9 +8,16 @@ def test_compute_ratio_basic():
     assert r == 200.0
 
 
-def test_compute_ratio_excludes_etf():
-    # 0050 應被排除,結果與只有 2330 相同
+def test_compute_ratio_includes_etf_by_default():
+    # 預設含 ETF(與分母同口徑):0050 市值 100×1000×50=5,000,000 併入
+    # 分子 = 10,000,000(2330) + 5,000,000(0050) = 15,000,000;/5,000,000 → 300%
     r = M.compute_ratio(5_000_000, {"2330": 10, "0050": 100}, {"2330": 1000.0, "0050": 50.0})
+    assert r == 300.0
+
+
+def test_compute_ratio_exclude_etf_opt_in():
+    # exclude_etf=True 才排除 0050,回到只有 2330 的 200%
+    r = M.compute_ratio(5_000_000, {"2330": 10, "0050": 100}, {"2330": 1000.0, "0050": 50.0}, exclude_etf=True)
     assert r == 200.0
 
 

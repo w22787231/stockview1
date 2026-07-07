@@ -395,9 +395,9 @@ def fetch_tw_margin_ratio(seed_path=None):
     return {
         "as_of": dates[-1], "level": level, "diff": diff,
         "dates": dates, "ratio": ratio_s, "twii": twii_s,
-        "note": "上市·不含ETF·斷頭壓力", "unit": "%",
-        "read": "<130% 斷頭警戒(常見底部);上市口徑,絕對值略高於含上櫃版",
-        "src": "TWSE STOCK_DAY_ALL + MI_MARGN(每日自算)· 歷史回補 FinMind",
+        "note": "上市·含ETF·斷頭壓力", "unit": "%",
+        "read": "<130% 斷頭警戒(常見底部);上市口徑(含ETF,與融資金額同口徑),對齊財經M平方",
+        "src": "TWSE STOCK_DAY_ALL + MI_MARGN(每日自算)· 歷史回補 TWSE MI_INDEX+MI_MARGN",
         "url": "https://www.macromicro.me/charts/53117/taiwan-taiex-maintenance-margin",
     }
 

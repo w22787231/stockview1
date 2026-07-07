@@ -13,6 +13,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import yfinance as yf
 import adr_screen as eng
+import tw_margin_ratio as TWMR
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 BREADTH_POOL = "sp500"   # 用 SP500 當美股大盤廣度代表
@@ -308,14 +309,32 @@ def fetch_leverage():
         return None
 
 
-def fetch_tw_margin_ratio():
+def _twii_close_map(start="2023-01-01"):
+    """^TWII 日線收盤 {YYYYMMDD: close};失敗回 {}。"""
+    try:
+        import yfinance as yf
+        h = yf.Ticker("^TWII").history(start=start, auto_adjust=False)
+        out = {}
+        for idx, row in h.iterrows():
+            c = row.get("Close")
+            if c is not None and c == c:
+                out[idx.strftime("%Y%m%d")] = round(float(c), 2)
+        return out
+    except Exception:
+        return {}
+
+
+def fetch_tw_margin_ratio(seed_path=None):
     """台股大盤融資維持率(上市)= 融資市值 / 融資金額。
-    來源:TWSE STOCK_DAY_ALL(逐檔收盤)+ 舊版 MI_MARGN(融資金額總額 + 逐檔張)。
-    歷史:回讀已發布 sentiment.json 逐日累積(免額外儲存)。"""
+    今日值:TWSE STOCK_DAY_ALL(逐檔收盤)+ MI_MARGN(融資金額總額 + 逐檔張)。
+    歷史:合併 committed 種子檔 + 前版 published sentiment.json 的 tw_margin_ratio。"""
     def _g(u, t=25):
         return urllib.request.urlopen(
             urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=t
         ).read().decode("utf-8", "ignore")
+
+    point = None
+    ymd = None
     try:
         sd = json.loads(_g("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"))
         price, roc = {}, ""
@@ -324,52 +343,63 @@ def fetch_tw_margin_ratio():
             if c:
                 price[r["Code"]] = c
             roc = r.get("Date", roc)
-        if not price or not roc:
-            return None
-        ymd = str(int(roc[:3]) + 1911) + roc[3:]   # 1150605 -> 20260605
-        mj = json.loads(_g(f"https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={ymd}&selectType=ALL&response=json"))
-        tables = mj.get("tables", [])
-        loan = None
-        for row in tables[0]["data"]:
-            if "融資金額" in row[0]:
-                loan = float(row[5].replace(",", "")) * 1000   # 仟元→元(今日餘額)
-        if not loan:
-            return None
-        mv = 0.0
-        for row in tables[1]["data"]:
-            code = row[0].strip()
-            if code.startswith("00"):       # 排除 ETF(對齊標準:分子不含 ETF)
-                continue
-            lots = _safe(row[6].replace(",", "")) if len(row) > 6 else None
-            p = price.get(code)
-            if lots and p:
-                mv += lots * 1000 * p
-        if mv <= 0:
-            return None
-        ratio = round(mv / loan * 100, 2)
-        dates, series = [], []
-        try:
-            prev = json.loads(_g("https://stockview1.pages.dev/data/sentiment.json", 10))
-            for lv in prev.get("levels", []):
-                if lv.get("sym") == "TWMARGIN":
-                    dates = list(lv.get("dates") or [])
-                    series = list(lv.get("spark") or [])
-        except Exception:
-            pass
-        if dates and dates[-1] == ymd:
-            series[-1] = ratio
-        else:
-            dates.append(ymd); series.append(ratio)
-        dates, series = dates[-60:], series[-60:]
-        diff = round(series[-1] - series[-2], 2) if len(series) >= 2 else None
-        return {"sym": "TWMARGIN", "label": "台股融資維持率",
-                "note": "上市·不含ETF·斷頭壓力", "unit": "pt",
-                "read": "<130% 斷頭警戒(常見底部);上市口徑、分子不含ETF,絕對值略高於含上櫃版",
-                "level": ratio, "diff": diff, "spark": series, "dates": dates,
-                "url": "https://www.macromicro.me/charts/53117/taiwan-taiex-maintenance-margin",
-                "src": "財經M平方"}
+        if price and roc:
+            ymd = str(int(roc[:3]) + 1911) + roc[3:]
+            mj = json.loads(_g(f"https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={ymd}&selectType=ALL&response=json"))
+            tables = mj.get("tables", [])
+            loan = None
+            for row in tables[0]["data"]:
+                if "融資金額" in row[0]:
+                    loan = float(row[5].replace(",", "")) * 1000  # 仟元→元
+            lots = {}
+            if loan and len(tables) > 1:
+                for row in tables[1]["data"]:
+                    code = row[0].strip()
+                    if len(row) > 6:
+                        lots[code] = row[6].replace(",", "")
+            ratio = TWMR.compute_ratio(loan, lots, price) if loan else None
+            if ratio is not None:
+                twii_today = _twii_close_map().get(ymd)
+                point = {"date": ymd, "ratio": ratio, "twii": twii_today}
     except Exception:
+        point = None
+
+    # 種子檔
+    seed = None
+    seed_path = seed_path or os.path.join(os.path.dirname(__file__), "tw_margin_ratio_seed.json")
+    try:
+        with open(seed_path, encoding="utf-8") as f:
+            seed = json.load(f)
+    except Exception:
+        seed = None
+
+    # 前版累積
+    prev = None
+    try:
+        pj = json.loads(_g("https://stockview1.pages.dev/data/sentiment.json", 10))
+        prev = pj.get("tw_margin_ratio")
+    except Exception:
+        prev = None
+
+    dates, ratio_s, twii_s = TWMR.merge_history(seed, prev, point, cap=750)
+    if not dates:
         return None
+
+    # 補齊缺的 twii(疊圖恆完整):對既有日期用 ^TWII history 補
+    if any(t is None for t in twii_s):
+        tmap = _twii_close_map()
+        twii_s = [twii_s[i] if twii_s[i] is not None else tmap.get(dates[i]) for i in range(len(dates))]
+
+    level = ratio_s[-1]
+    diff = round(ratio_s[-1] - ratio_s[-2], 2) if len(ratio_s) >= 2 and ratio_s[-2] is not None else None
+    return {
+        "as_of": dates[-1], "level": level, "diff": diff,
+        "dates": dates, "ratio": ratio_s, "twii": twii_s,
+        "note": "上市·不含ETF·斷頭壓力", "unit": "%",
+        "read": "<130% 斷頭警戒(常見底部);上市口徑,絕對值略高於含上櫃版",
+        "src": "TWSE STOCK_DAY_ALL + MI_MARGN(每日自算)· 歷史回補 FinMind",
+        "url": "https://www.macromicro.me/charts/53117/taiwan-taiex-maintenance-margin",
+    }
 
 
 _MON_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -1216,6 +1246,7 @@ def build():
     cot_spx = fetch_cot_spx()
     if not cot_spx:
         failed.append("COT_SPX")
+    tw_margin_ratio = fetch_tw_margin_ratio()
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -1225,6 +1256,7 @@ def build():
         "fear_greed": fng,
         "leverage": leverage,
         "tw_margin": tw_margin,
+        "tw_margin_ratio": tw_margin_ratio,
         "insider_ratio": insider,
         "ai_capex": fetch_ai_capex(),
         "ndx_m2": ndx_m2,

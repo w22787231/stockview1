@@ -101,6 +101,63 @@ THEME_SYMBOLS = {
     "AI雲端/算力/Neocloud": """
         BRUN DOCN PENG
     """,
+    "大型雲端/平台軟體": """
+        MSFT AMZN GOOGL META ORCL CRM NOW ADBE SNOW MDB DDOG NET TEAM WDAY INTU
+    """,
+    "銀行/資本市場/券商": """
+        JPM BAC WFC C GS MS SCHW IBKR BLK BX KKR APO TROW RJF EVR LAZ
+    """,
+    "保險/再保險": """
+        BRK-B CB TRV ALL PGR AIG AFL MET PRU HIG RGA WRB ACGL EG L
+    """,
+    "房屋建商/建材": """
+        DHI LEN PHM TOL KBH NVR MTH TMHC BLD BLDR MAS TREX OC EXP MLM VMC
+    """,
+    "工業自動化/基建": """
+        CAT DE URI TEX PCAR CMI PH ETN EMR ROK HON MMM ITW GWW FAST XYL
+    """,
+    "能源-油氣/LNG": """
+        XOM CVX COP EOG OXY FANG DVN HES LNG WMB KMI ET ENB TRP EQT CTRA
+    """,
+    "油服/鑽探": """
+        SLB HAL BKR NOV FTI HP RIG VAL PTEN LBRT WHD NBR OII
+    """,
+    "金銅礦/貴金屬": """
+        FCX SCCO TECK BHP RIO VALE NEM GOLD AEM WPM PAAS HL CDE AG RGLD
+    """,
+    "鋼鐵/鋁/化工循環": """
+        NUE STLD X CLF CMC AA CENX DOW LYB EMN CE MOS CF FMC
+    """,
+    "GLP-1/肥胖症/大型藥廠": """
+        LLY NVO AMGN VKTX ALT GPCR RHHBY PFE MRK BMY GILD ABBV JNJ AZN SNY
+    """,
+    "醫療設備/生命科學工具": """
+        ISRG SYK BSX MDT ABT EW TMO DHR A ILMN HOLX DXCM PODD ZBH COO
+    """,
+    "醫療保險/照護服務": """
+        UNH HUM CI ELV CNC MOH HCA THC UHS CVS CAH MCK COR
+    """,
+    "消費零售/餐飲": """
+        WMT COST TGT HD LOW TJX ROST AMZN MCD SBUX CMG YUM CAVA TXRH BROS
+    """,
+    "旅遊休閒/郵輪航空": """
+        BKNG EXPE ABNB MAR HLT RCL CCL NCLH DAL UAL AAL LUV LYV DIS SIX
+    """,
+    "媒體串流/遊戲": """
+        NFLX DIS WBD PARA CMCSA SPOT ROKU TTWO EA RBLX U SONY
+    """,
+    "廣告/社群平台": """
+        META GOOGL SNAP PINS RDDT TTD APP UBER DASH MTCH BMBL
+    """,
+    "物流/運輸/鐵路": """
+        UNP CSX NSC CP CNI UPS FDX CHRW EXPD ODFL SAIA XPO JBHT KNX
+    """,
+    "公用事業/防禦股": """
+        NEE SO DUK AEP EXC SRE XEL PEG ED WEC D XLU CEG VST NRG
+    """,
+    "REIT/資料中心地產": """
+        EQIX DLR AMT CCI SBAC PLD O PSA SPG WELL VTR AVB EQR ARE IRM
+    """,
 }
 
 INDUSTRY_TO_THEME = {

@@ -244,6 +244,24 @@
   .tf-flow-toggle:hover{border-color:var(--blue);color:var(--blue)}
   .tf-flow-body{display:block}
   .tf-flow-body.collapsed{display:none}
+  .tf-summary-meta{font-size:13px;color:var(--ink2);font-weight:600;margin:6px 0 8px;line-height:1.55}
+  .tf-summary-card{margin:8px 0 14px;border:1px solid #bfd0e8;border-left:5px solid var(--blue);
+    border-radius:10px;background:#f8fbff;box-shadow:var(--shadow);padding:12px 14px}
+  .tf-summary-title{font-size:16px;font-weight:850;color:var(--ink);margin-bottom:10px}
+  .tf-summary-bias{display:inline-block;margin-left:6px;padding:2px 9px;border-radius:999px;
+    background:#e7f0ff;color:#1f5fbf;font-size:13px;font-weight:850}
+  .tf-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:9px 12px}
+  .tf-flow-line{font-size:14px;line-height:1.65;color:var(--ink);background:#fff;border:1px solid #d9e3f2;
+    border-radius:8px;padding:8px 10px}
+  .tf-flow-line .lab{font-weight:850;margin-right:6px;white-space:nowrap}
+  .tf-flow-line b{font-size:14.5px;color:var(--ink);font-weight:850}
+  .tf-flow-line.short .lab{color:#0f8a4b}
+  .tf-flow-line.long .lab{color:#1f5fbf}
+  .tf-flow-line.cool .lab{color:#b7791f}
+  .tf-flow-line.out .lab{color:#c92a3c}
+  .tf-summary-read{margin-top:10px;font-size:13.5px;line-height:1.7;color:var(--ink2);font-weight:600}
+  .tf-summary-read b{color:var(--ink);font-weight:850}
+  @media (max-width:760px){.tf-summary-grid{grid-template-columns:1fr}.tf-summary-title{font-size:15px}.tf-flow-line{font-size:13.5px}}
 
   .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);
     box-shadow:var(--shadow)}
@@ -5686,10 +5704,15 @@ function _tfFlowSummary(groups){
   const cooling=[...ranked].filter(g=>g._short<0&&g.avg.r60>0).sort((a,b)=>a._short-b._short);
   const outflow=[...ranked].filter(g=>g._short<0&&g.avg.r20<0&&g.avg.r60<0).sort((a,b)=>a._score-b._score);
   const bias = longIn.length && _tfFlowScore(longIn[0])>8 ? '偏多輪動' : (outflow.length>=3 ? '偏防守/退潮' : '分歧輪動');
-  return '<div class="guide" style="margin:8px 0 10px">'+
-    '<div class="gtitle">資金流結論 · '+bias+'</div>'+
-    '<div class="legend" style="margin:0">短線流入：'+_tfFlowNames(shortIn)+'。中長線主線：'+_tfFlowNames(longIn)+'。長線仍強但短線降溫：'+_tfFlowNames(cooling)+'。同步流出：'+_tfFlowNames(outflow)+'。</div>'+
-    '<div class="legend" style="margin:4px 0 0">判讀：1D/5D 看短線資金，20D 看波段，60D 看主線。若短線與 20D/60D 同向，趨勢較乾淨；若短線轉弱但 60D 仍強，代表高位降溫或輪動換手。</div>'+
+  return '<div class="tf-summary-card">'+
+    '<div class="tf-summary-title">資金流結論 <span class="tf-summary-bias">'+bias+'</span></div>'+
+    '<div class="tf-summary-grid">'+
+      '<div class="tf-flow-line short"><span class="lab">短線流入</span>'+_tfFlowNames(shortIn)+'</div>'+
+      '<div class="tf-flow-line long"><span class="lab">中長線主線</span>'+_tfFlowNames(longIn)+'</div>'+
+      '<div class="tf-flow-line cool"><span class="lab">長線強、短線降溫</span>'+_tfFlowNames(cooling)+'</div>'+
+      '<div class="tf-flow-line out"><span class="lab">同步流出</span>'+_tfFlowNames(outflow)+'</div>'+
+    '</div>'+
+    '<div class="tf-summary-read"><b>判讀：</b>1D/5D 看短線資金，20D 看波段，60D 看主線。短線與 20D/60D 同向＝趨勢較乾淨；短線轉弱但 60D 仍強＝高位降溫或輪動換手。</div>'+
   '</div>';
 }
 function renderUsThemeFlowSummary(groups){
@@ -5697,7 +5720,7 @@ function renderUsThemeFlowSummary(groups){
   const d=US_THEME_FLOW;
   host.innerHTML='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流結論</h2><span class="tag">短 / 中 / 長期資金流</span>'+
     '<span class="hint">放在情緒指標下方，單獨看判斷</span></div>'+
-    '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔；結論由 1D/5D/20D/60D 族群平均報酬推算。</div>'+
+    '<div class="tf-summary-meta">資料更新 '+esc(fmtTime(d.generated_at))+' · 已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔 · 依 1D / 5D / 20D / 60D 族群平均報酬判斷</div>'+
     _tfFlowSummary(groups)+
   '</section>';
 }

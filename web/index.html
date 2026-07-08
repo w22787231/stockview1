@@ -1228,9 +1228,9 @@ function renderMacro(d){
     '</section>'+
     '<section id="sentSec"><div class="sec-head"><h2>情緒指標</h2><span class="tag">波動 / 廣度 / 貪婪恐懼</span>'+
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
+      '<div id="usThemeFlowBlock"></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
-    '<div id="usThemeFlowBlock"></div>'+
     '<div id="netLiqBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
@@ -1249,8 +1249,8 @@ function renderMacro(d){
         '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
-  loadSentiment();
   loadUsThemeFlow();
+  loadSentiment();
   loadNetLiq();
   loadOnRp();
   loadOnRpLiquidity();

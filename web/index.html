@@ -239,6 +239,11 @@
   .sec-head .tag{font-family:var(--mono);font-size:11px;color:var(--ink2);
     border:1px solid var(--line);background:var(--panel2);padding:2px 8px;border-radius:6px}
   .sec-head .hint{color:var(--ink3);font-size:12px}
+  .tf-flow-toggle{margin-left:auto;border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+    border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
+  .tf-flow-toggle:hover{border-color:var(--blue);color:var(--blue)}
+  .tf-flow-body{display:block}
+  .tf-flow-body.collapsed{display:none}
 
   .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);
     box-shadow:var(--shadow)}
@@ -5587,10 +5592,12 @@ function renderSpec(){
 // ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
 
 // ── 美股細分產業資金流: 已分類題材股 1D/5D/20D/60D ────────────────────────────────────
-let US_THEME_FLOW=null, US_THEME_SORT={key:"r1",dir:-1}, US_THEME_OPEN="";
+let US_THEME_FLOW=null, US_THEME_SORT={key:"r1",dir:-1}, US_THEME_OPEN="", US_THEME_COLLAPSED=true;
 // 自訂:把任意美股代號加進某群組,納入該群組平均報酬計算(localStorage 持久化;報酬用 /api/quotes 現算)
 let US_THEME_CUSTOM=[];      // [{sym, theme}]
 let US_THEME_CUSTOMQ={};     // {sym: {r1,r5,r20,r60,close,name}}
+function _tfLoadCollapsed(){ try{ US_THEME_COLLAPSED=localStorage.getItem("usThemeFlowCollapsed")!=="0"; }catch(e){ US_THEME_COLLAPSED=true; } }
+function _tfSaveCollapsed(){ try{ localStorage.setItem("usThemeFlowCollapsed",US_THEME_COLLAPSED?"1":"0"); }catch(e){} }
 function _tfLoadCustom(){ try{ US_THEME_CUSTOM=JSON.parse(localStorage.getItem("usThemeCustom")||"[]")||[]; }catch(e){ US_THEME_CUSTOM=[]; } }
 function _tfSaveCustom(){ try{ localStorage.setItem("usThemeCustom",JSON.stringify(US_THEME_CUSTOM)); }catch(e){} }
 async function _tfFetchCustom(){
@@ -5645,6 +5652,7 @@ function _tfRemoveStock(sym,theme){
 }
 async function loadUsThemeFlow(){
   const host=document.getElementById("usThemeFlowBlock"); if(!host) return;
+  _tfLoadCollapsed();
   _tfLoadCustom();
   if(US_THEME_FLOW){ renderUsThemeFlow(); _tfFetchCustom().then(renderUsThemeFlow); return; }
   host.innerHTML='<div class="dim" style="padding:8px">載入美股細分產業資金流 …</div>';
@@ -5708,10 +5716,12 @@ function renderUsThemeFlow(){
   const arrow=key=>US_THEME_SORT.key===key?(US_THEME_SORT.dir<0?" ▼":" ▲"):"";
   const th=(key,lab)=>'<th class="sortable" data-k="'+key+'">'+lab+arrow(key)+'</th>';
   let h='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2><span class="tag">題材股清單 · 投資題材分類</span>'+
-    '<span class="hint">放在 ETF 漲跌上方；用 1D/5D/20D/60D 看資金流到哪個題材</span></div>'+
+    '<span class="hint">放在 ETF 漲跌上方；用 1D/5D/20D/60D 看資金流到哪個題材</span>'+
+    '<button id="tfFlowToggle" class="tf-flow-toggle" type="button" aria-expanded="'+(!US_THEME_COLLAPSED)+'">'+(US_THEME_COLLAPSED?"+ 展開明細":"- 收合明細")+'</button></div>'+
     '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔；只抓已分類題材股，不掃全市場。'+
     '<b>短線流入</b>=1D/5D 強；<b>波段主線</b>=20D/60D 強。點族群可展開成分股。</div>'+
     _tfFlowSummary(groups)+
+    '<div id="tfFlowBody" class="tf-flow-body'+(US_THEME_COLLAPSED?" collapsed":"")+'">'+
     // 自訂:加任意美股代號到某群組,納入該群組平均報酬計算
     '<div class="hold-add" style="margin:2px 0 8px">'+
       '<input id="tfAddSym" class="holdInput" type="text" placeholder="美股代號,例 NVDA / AVGO" autocomplete="off" style="max-width:200px">'+
@@ -5732,8 +5742,9 @@ function renderUsThemeFlow(){
       '<td><span class="badge '+(g.confidence==="高"?"in":(g.confidence==="中"?"add":"out"))+'">'+esc(g.confidence||"")+'</span></td></tr>'+
       (open?_tfMembers(g):"");
   });
-  h+='</tbody></table><div class="legend">分類規則：人工題材 mapping 優先；未命中者若有產業快取則輔助歸類，否則列入「未細分」。第一版偏投資題材，不是官方產業分類。</div></section>';
+  h+='</tbody></table><div class="legend">分類規則：人工題材 mapping 優先；未命中者若有產業快取則輔助歸類，否則列入「未細分」。第一版偏投資題材，不是官方產業分類。</div></div></section>';
   host.innerHTML=h;
+  const _tb=document.getElementById("tfFlowToggle"); if(_tb) _tb.onclick=()=>{ US_THEME_COLLAPSED=!US_THEME_COLLAPSED; _tfSaveCollapsed(); renderUsThemeFlow(); };
   host.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{ const key=th.dataset.k; if(US_THEME_SORT.key===key)US_THEME_SORT.dir*=-1; else US_THEME_SORT={key:key,dir:-1}; renderUsThemeFlow(); });
   host.querySelectorAll(".tf-row").forEach(tr=>tr.onclick=e=>{ if(e.target.closest(".clickable")) return; const t=tr.dataset.theme; US_THEME_OPEN=US_THEME_OPEN===t?"":t; renderUsThemeFlow(); });
   host.querySelectorAll(".clickable[data-stk]").forEach(x=>x.onclick=e=>{ e.stopPropagation(); openHoldStock(x.dataset.stk,x.dataset.stk); });

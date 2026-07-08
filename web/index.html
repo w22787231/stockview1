@@ -1241,13 +1241,13 @@ function renderMacro(d){
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="usThemeFlowBlock"></div>'+
     '<div id="netLiqBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
     '<div id="m1m2Block"></div>'+
     '<div id="leiCfnaiBlock"></div>'+
     '<div id="leiOecdBlock"></div>'+
-    '<div id="usThemeFlowBlock"></div>'+
     '<div id="odteBlock"></div>'+
     '<section>'+
       '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
@@ -1261,6 +1261,7 @@ function renderMacro(d){
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
   loadSentiment();
+  loadUsThemeFlow();
   loadNetLiq();
   loadOnRp();
   loadOnRpLiquidity();
@@ -1270,7 +1271,6 @@ function renderMacro(d){
   }
   renderLei("cfnai"); renderLei("oecd");           // 美國景氣/領先指標(芝加哥聯儲 CFNAI / OECD CLI)
   loadThemes();
-  loadUsThemeFlow();
   loadOdte();
 }
 // ── 資金面區塊(市場廣度下方):美國聯準會準備金 + 台灣 M1B/M2 ──
@@ -5784,7 +5784,7 @@ function renderUsThemeFlow(){
   const arrow=key=>US_THEME_SORT.key===key?(US_THEME_SORT.dir<0?" ▼":" ▲"):"";
   const th=(key,lab)=>'<th class="sortable" data-k="'+key+'">'+lab+arrow(key)+'</th>';
   let h='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2><span class="tag">題材股清單 · 投資題材分類</span>'+
-    '<span class="hint">放在投機交易下方；用 1D/5D/20D/60D 看資金流到哪個題材</span></div>'+
+    '<span class="hint">放在情緒指標下方；用 1D/5D/20D/60D 看資金流到哪個題材</span></div>'+
     '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔；只抓已分類題材股，不掃全市場。'+
     '<b>短線流入</b>=1D/5D 強；<b>波段主線</b>=20D/60D 強。點族群可展開成分股。</div>'+
     // 自訂:加任意美股代號到某群組,納入該群組平均報酬計算

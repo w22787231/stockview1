@@ -106,6 +106,17 @@ jobs:
           cd engine
           python export_pi.py || echo "[pi] 失敗,沿用線上"
 
+      - name: Export TIPS real yield x S&P500 (with 20d correlation)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          pip install yfinance pandas numpy -q || true
+          cd engine
+          python export_tips.py || echo "[tips] 失敗,沿用線上"
+
       - name: Export financial stress index (OFR FSI)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

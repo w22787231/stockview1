@@ -2566,6 +2566,7 @@ function renderSentiment(d){
     '<div id="chicagoFciBlock"></div>'+
     '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
+    '<div id="tipsBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<div id="marginBlock"></div>'+
@@ -2773,6 +2774,7 @@ async function loadSentiment(){
     loadChicagoFci();
     loadFsi();
     loadPI();
+    loadTips();
     loadInsider();
     loadSpec();
     loadMargin();
@@ -5494,6 +5496,139 @@ async function loadOdte(){
   }catch(e){
     box.innerHTML='<section><div class="sec-head"><h2>SPX 0DTE 占比</h2></div>'+
       '<div class="legend">⚠️ 0dte.json 尚未產生('+esc(e.message)+')。請在 GitHub Actions 跑一次 export_0dte(需交易日收盤後有量)。</div></section>';
+  }
+}
+
+// ── TIPS 實質利率 × S&P500(雙線)＋ 20 日滾動相關(子圖)──────────────────────────
+let TIPS_DATA=null;
+let TIPS_WIN="1y";
+const TIPS_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
+const TIPS_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
+
+// 主圖(TIPS 左軸 % + S&P500 右軸)＋下方子圖(20 日相關 -1~+1)。雙 grid 共用時間軸。
+function drawTipsChart(id, dates, tips, sp500, corr, win){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  ch.setOption({
+    animation:false,
+    grid:[
+      {left:52, right:54, top:30, height:170},          // 主圖
+      {left:52, right:54, top:224, height:74}            // 相關子圖
+    ],
+    legend:{top:0, textStyle:{fontSize:11},
+      data:["TIPS 實質利率(10Y)","S&P 500"]},
+    tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]},
+      valueFormatter:null},
+    axisPointer:{link:[{xAxisIndex:"all"}]},
+    xAxis:[
+      {type:"time", gridIndex:0, axisLabel:{show:false}, axisTick:{show:false}},
+      {type:"time", gridIndex:1, axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}}
+    ],
+    yAxis:[
+      {type:"value", gridIndex:0, name:"實質利率%", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value", gridIndex:0, name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"},
+      {type:"value", gridIndex:1, name:"20日相關", nameTextStyle:{fontSize:9}, min:-1, max:1,
+       interval:1, axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.25}}}
+    ],
+    // 子圖線依正負上色:綠=正相關、紅=負相關
+    visualMap:{show:false, seriesIndex:2, dimension:1, pieces:[
+      {gte:0, color:"#16a34a"}, {lt:0, color:"#e11d48"}], outOfRange:{color:"#8b949e"}},
+    series:[
+      {name:"TIPS 實質利率(10Y)", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:0, yAxisIndex:0,
+       data:dates.map((d,i)=>[toMs(d), tips[i]]),
+       lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
+       areaStyle:{color:"#e8923a", opacity:.06}},
+      {name:"S&P 500", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:0, yAxisIndex:1,
+       data:dates.map((d,i)=>[toMs(d), sp500[i]]),
+       lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}},
+      {name:"20日相關", type:"line", smooth:true, showSymbol:false, connectNulls:false,
+       xAxisIndex:1, yAxisIndex:2,
+       data:dates.map((d,i)=>[toMs(d), corr[i]]),
+       lineStyle:{width:1.5}, areaStyle:{opacity:.10},
+       markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},
+         label:{show:false}, data:[{yAxis:0}]}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderTips(d){
+  const box=$("#tipsBlock");
+  if(!box) return;
+  const win=TIPS_WIN;
+  const wins=d.windows||["3m","6m","1y","3y","5y"];
+  const btns=wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-tw="'+w+'">'+
+      (TIPS_WIN_LABEL[w]||w)+'</button>').join("");
+
+  const tl=d.tips_last, db=d.tips_diff_bps, cl=d.corr20_last;
+  const tipsStr=tl!=null?tl.toFixed(2)+"%":"—";
+  const dbStr=db!=null?((db>0?"+":"")+db.toFixed(1)+" bps"):"";
+  const dbCol=db==null?"var(--ink2)":(db>0?"#e11d48":"#16a34a");   // 實質利率升(紅,對股市偏壓)
+  const corrStr=cl!=null?(cl>0?"+":"")+cl.toFixed(2):"—";
+  const corrCol=cl==null?"var(--ink2)":(cl>=0?"#16a34a":"#e11d48");
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:130px;margin-right:12px';
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2>'+
+        '<span class="tag">10Y TIPS · 20日滾動相關</span>'+
+        '<span class="hint">實質利率是股市估值的貼現率;利率升多半壓抑股市。子圖看兩者短期連動強弱</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">10Y TIPS 實質利率</div>'+
+          '<div class="cap-big" style="color:#e8923a">'+esc(tipsStr)+'</div>'+
+          (dbStr?'<div style="font-size:12px;color:'+dbCol+'">日差 '+esc(dbStr)+'</div>':'')+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">20日相關(利率vs股市)</div>'+
+          '<div class="cap-big" style="color:'+corrCol+'">'+esc(corrStr)+'</div>'+
+          '<div style="font-size:12px;color:var(--ink2)">'+(cl==null?'':(cl>=0?'同向':'反向'))+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="tipsChart" class="cap-chart" style="height:310px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED <b>DFII10</b>(10年期 TIPS 實質殖利率)＋ Yahoo Finance <b>^GSPC</b>。子圖為「TIPS 殖利率每日變動」與「S&amp;P500 每日報酬」的 '+(d.corr_win||20)+' 日滾動皮爾森相關(<b class="pos">綠=同向</b>、<b class="neg">紅=反向</b>);多數時間偏負(實質利率上升壓抑股市估值)。視窗 '+esc(TIPS_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  const ser=d.series||{};
+  const allD=ser.dates||[], allT=ser.tips||[], allS=ser.sp500||[], allC=ser.corr20||[];
+  const n=Math.min(TIPS_WIN_N[win]||allD.length, allD.length, allT.length, allS.length, allC.length);
+  const dates=allD.slice(-n), tips=allT.slice(-n), sp500=allS.slice(-n), corr=allC.slice(-n);
+  if(dates.length>=2){
+    drawTipsChart("tipsChart", dates, tips, sp500, corr, win);
+  }else{
+    const c=$("#tipsChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-tw]").forEach(b=>b.onclick=()=>{ TIPS_WIN=b.dataset.tw; renderTips(TIPS_DATA); });
+}
+
+async function loadTips(){
+  const box=$("#tipsBlock");
+  if(!box) return;
+  if(TIPS_DATA){ renderTips(TIPS_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 TIPS 實質利率 …</div>';
+  try{
+    const res=await fetch("data/tips.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    TIPS_DATA=await res.json();
+    if(TIPS_DATA.default_window) TIPS_WIN=TIPS_DATA.default_window;
+    renderTips(TIPS_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2></div>'+
+      '<div class="legend">⚠️ tips.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_tips。</div></section>';
   }
 }
 

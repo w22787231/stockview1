@@ -1,0 +1,43 @@
+name: test
+
+# PR 與 push 到 main 時跑測試,擋住會壞的改動。
+# - Python:engine/ 的單元測試(純計算,不需網路/金鑰)
+# - Node:web/ 自足測試,含
+#     * test_data_pull_sync — 前端 fetch 的 data/*.json 都要在 web_only 拉取範圍內
+#     * test_echarts_smoke  — 用「真 ECharts」渲染圖表,攔截只有真渲染才爆的 option 錯
+#     * test_tips_dom       — TIPS 圖 render 邏輯/按鈕/視窗切片
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -q pytest pandas numpy yfinance
+      - name: Run engine unit tests
+        working-directory: engine   # 部分測試用相對路徑 open("export_json.py"),需 CWD 在 engine/
+        run: python -m pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install web devDeps (echarts for real-render smoke test)
+        working-directory: web
+        run: npm ci
+      - name: Run web tests
+        working-directory: web
+        run: npm test

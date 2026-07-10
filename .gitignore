@@ -14,3 +14,5 @@ venv/
 .DS_Store
 Thumbs.db
 web/data/spec.json
+# Node(僅 CI 測試用 echarts devDependency;lockfile 要提交、node_modules 不提交)
+node_modules/

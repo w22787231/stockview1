@@ -5502,8 +5502,8 @@ async function loadOdte(){
 // ── TIPS 實質利率 × S&P500(雙線)＋ 20 日滾動相關(子圖)──────────────────────────
 let TIPS_DATA=null;
 let TIPS_WIN="1y";
-const TIPS_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
-const TIPS_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
+const TIPS_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
+const TIPS_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};  // max 不列→取全部
 
 // 主圖(TIPS 左軸 % + S&P500 右軸)＋下方子圖(20 日相關 -1~+1)。雙 grid 共用時間軸。
 function drawTipsChart(id, dates, tips, sp500, corr, win){
@@ -5516,8 +5516,8 @@ function drawTipsChart(id, dates, tips, sp500, corr, win){
   ch.setOption({
     animation:false,
     grid:[
-      {left:52, right:54, top:30, height:170},          // 主圖
-      {left:52, right:54, top:224, height:74}            // 相關子圖
+      {left:52, right:54, top:34, height:172},          // 主圖(下方 x 軸標籤隱藏)
+      {left:52, right:54, top:252, height:82}            // 相關子圖(底部留 36px 給年份標籤)
     ],
     legend:{top:0, textStyle:{fontSize:11},
       data:["TIPS 實質利率(10Y)","S&P 500"]},
@@ -5567,7 +5567,7 @@ function renderTips(d){
   const box=$("#tipsBlock");
   if(!box) return;
   const win=TIPS_WIN;
-  const wins=d.windows||["3m","6m","1y","3y","5y"];
+  const wins=d.windows||["3m","6m","1y","3y","5y","10y","max"];
   const btns=wins.map(w=>
     '<button class="btn'+(w===win?" active":"")+'" data-tw="'+w+'">'+
       (TIPS_WIN_LABEL[w]||w)+'</button>').join("");
@@ -5598,7 +5598,7 @@ function renderTips(d){
         '</div>'+
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
-      '<div id="tipsChart" class="cap-chart" style="height:310px"></div>'+
+      '<div id="tipsChart" class="cap-chart" style="height:370px"></div>'+
       '<div class="legend" style="margin-top:10px">資料來源:FRED <b>DFII10</b>(10年期 TIPS 實質殖利率)＋ Yahoo Finance <b>^GSPC</b>。子圖為「TIPS 殖利率每日變動」與「S&amp;P500 每日報酬」的 '+(d.corr_win||20)+' 日滾動皮爾森相關(<b class="pos">綠=同向</b>、<b class="neg">紅=反向</b>);多數時間偏負(實質利率上升壓抑股市估值)。視窗 '+esc(TIPS_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
     '</section>';
 

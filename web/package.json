@@ -1,0 +1,12 @@
+{
+  "name": "stockview-web-tests",
+  "private": true,
+  "version": "0.0.0",
+  "description": "前端本身無框架(index.html 直接載 ECharts CDN);此 package.json 僅供 CI 測試用——把 echarts 收進 devDependency,讓煙霧測試能用『真 ECharts』渲染圖表 option,攔截 piecewise visualMap 之類只有真渲染才會爆的錯。echarts 版本對齊 index.html 的 CDN(5.5.0)。",
+  "scripts": {
+    "test": "node test_data_pull_sync.mjs && node test_tips_dom.mjs && node test_echarts_smoke.mjs"
+  },
+  "devDependencies": {
+    "echarts": "5.5.0"
+  }
+}

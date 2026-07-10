@@ -5642,6 +5642,8 @@ const YC_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年",
 const YC_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};  // max 不列→全部
 // 短→長 冷暖漸層(藍=短端、紅=長端),對映 10 個天期
 const YC_COLORS=["#1d4ed8","#2563eb","#0ea5e9","#06b6d4","#14b8a6","#22c55e","#84cc16","#eab308","#f97316","#dc2626"];
+// 各天期固定對比色(與讀數卡一致);未列的天期退回 YC_COLORS 漸層
+const YC_COLOR_BY_KEY={"3m":"#1d4ed8","6m":"#2563eb","1y":"#0ea5e9","2y":"#06b6d4","3y":"#14b8a6","5y":"#22c55e","7y":"#84cc16","10y":"#eab308","20y":"#f97316","30y":"#dc2626"};
 
 function drawYieldCurveChart(id, dates, yields, mats, spread){
   const el=$("#"+id);
@@ -5650,13 +5652,15 @@ function drawYieldCurveChart(id, dates, yields, mats, spread){
   const ch=echarts.init(el, null, {renderer:"canvas"});
   const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
   const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
-  const lineSeries=mats.map((m,i)=>({
-    name:m.label, type:"line", smooth:false, showSymbol:false, connectNulls:false,
-    xAxisIndex:0, yAxisIndex:0,
-    data:dates.map((d,j)=>[toMs(d), (yields[m.key]||[])[j]]),
-    lineStyle:{color:YC_COLORS[i%YC_COLORS.length], width:1.3},
-    itemStyle:{color:YC_COLORS[i%YC_COLORS.length]}
-  }));
+  const lineSeries=mats.map((m,i)=>{
+    const col=m.color||"#8b949e";
+    return {
+      name:m.label, type:"line", smooth:false, showSymbol:false, connectNulls:false,
+      xAxisIndex:0, yAxisIndex:0,
+      data:dates.map((d,j)=>[toMs(d), (yields[m.key]||[])[j]]),
+      lineStyle:{color:col, width:1.6}, itemStyle:{color:col}
+    };
+  });
   ch.setOption({
     animation:false,
     grid:[
@@ -5701,7 +5705,7 @@ function renderYieldCurve(d){
   const btns=wins.map(w=>
     '<button class="btn'+(w===win?" active":"")+'" data-ycw="'+w+'">'+
       (YC_WIN_LABEL[w]||w)+'</button>').join("");
-  const mats=d.maturities||[];
+  const mats=(d.maturities||[]).map((m,i)=>({...m, color:YC_COLOR_BY_KEY[m.key]||YC_COLORS[i%YC_COLORS.length]}));
   const lat=d.latest||{};
   const sp=d.spread_last;
   const spCol=sp==null?"var(--ink2)":(sp<0?"#e11d48":"#16a34a");

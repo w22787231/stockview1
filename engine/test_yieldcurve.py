@@ -34,7 +34,7 @@ def test_spread_and_structure(monkeypatch):
     assert len(s["dates"]) == n
     assert j["windows"][-1] == "max"
     assert j["default_window"] == "5y"
-    assert len(j["maturities"]) == 10
+    assert len(j["maturities"]) == len(Y.MATS)
     # 2s10s 利差逐點 = 10y − 2y(四捨五入 2 位)
     y2, y10 = s["yields"]["2y"], s["yields"]["10y"]
     for i in range(n):

@@ -117,6 +117,17 @@ jobs:
           cd engine
           python export_tips.py || echo "[tips] 失敗,沿用線上"
 
+      - name: Export US Treasury yield curve (DGS3MO…DGS30 + 2s10s)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          pip install pandas numpy -q || true
+          cd engine
+          python export_yieldcurve.py || echo "[yc] 失敗,沿用線上"
+
       - name: Export financial stress index (OFR FSI)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:
@@ -463,7 +474,7 @@ jobs:
           fi
           echo "驗證部署 $URL 的關鍵資料檔(每檔最多重試 6 次)…"
           fail=0
-          for f in tips pi fsi spec macro sentiment macro_score; do
+          for f in tips yieldcurve pi fsi spec macro sentiment macro_score; do
             ok=0; ct=""
             for attempt in 1 2 3 4 5 6; do
               ct=$(curl -s -m 25 -o /dev/null -w "%{content_type}" "$URL/data/$f.json?cb=$attempt" || echo "curl_err")

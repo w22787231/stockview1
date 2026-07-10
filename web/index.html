@@ -2567,6 +2567,7 @@ function renderSentiment(d){
     '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
     '<div id="tipsBlock"></div>'+
+    '<div id="yieldCurveBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<div id="marginBlock"></div>'+
@@ -2775,6 +2776,7 @@ async function loadSentiment(){
     loadFsi();
     loadPI();
     loadTips();
+    loadYieldCurve();
     loadInsider();
     loadSpec();
     loadMargin();
@@ -5630,6 +5632,130 @@ async function loadTips(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2></div>'+
       '<div class="legend">⚠️ tips.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_tips。</div></section>';
+  }
+}
+
+// ── 美國國債收益率曲線(各天期時間序列)＋ 2s10s 倒掛利差(子圖)──────────────────────────
+let YC_DATA=null;
+let YC_WIN="5y";
+const YC_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
+const YC_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};  // max 不列→全部
+// 短→長 冷暖漸層(藍=短端、紅=長端),對映 10 個天期
+const YC_COLORS=["#1d4ed8","#2563eb","#0ea5e9","#06b6d4","#14b8a6","#22c55e","#84cc16","#eab308","#f97316","#dc2626"];
+
+function drawYieldCurveChart(id, dates, yields, mats, spread){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  const lineSeries=mats.map((m,i)=>({
+    name:m.label, type:"line", smooth:false, showSymbol:false, connectNulls:false,
+    xAxisIndex:0, yAxisIndex:0,
+    data:dates.map((d,j)=>[toMs(d), (yields[m.key]||[])[j]]),
+    lineStyle:{color:YC_COLORS[i%YC_COLORS.length], width:1.3},
+    itemStyle:{color:YC_COLORS[i%YC_COLORS.length]}
+  }));
+  ch.setOption({
+    animation:false,
+    grid:[
+      {left:48, right:20, top:50, height:158},          // 主圖(10 天期線)
+      {left:48, right:20, top:246, height:80}            // 2s10s 利差子圖
+    ],
+    legend:{top:0, type:"scroll", textStyle:{fontSize:10}, data:mats.map(m=>m.label)},
+    tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]}, valueFormatter:v=>v==null?"-":v+"%"},
+    axisPointer:{link:[{xAxisIndex:"all"}]},
+    xAxis:[
+      {type:"time", gridIndex:0, axisLabel:{show:false}, axisTick:{show:false}},
+      {type:"time", gridIndex:1, axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}}
+    ],
+    yAxis:[
+      {type:"value", gridIndex:0, name:"殖利率%", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.25}}},
+      {type:"value", gridIndex:1, name:"10Y−2Y", nameTextStyle:{fontSize:9},
+       axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.2}}}
+    ],
+    // 利差子圖依值上色(紅=倒掛<0、灰≈0、綠>0)。用 continuous(piecewise 在多 grid 子圖會崩)
+    visualMap:{show:false, type:"continuous", seriesIndex:mats.length, dimension:1,
+      min:-1.5, max:1.5, inRange:{color:["#e11d48","#8b949e","#16a34a"]}},
+    series:[...lineSeries,
+      {name:"10Y−2Y 利差", type:"line", smooth:false, showSymbol:false, connectNulls:false,
+       xAxisIndex:1, yAxisIndex:1,
+       data:dates.map((d,j)=>[toMs(d), spread[j]]),
+       lineStyle:{width:1.5}, areaStyle:{opacity:.12},
+       markLine:{symbol:"none", silent:true, lineStyle:{color:"#8b949e", type:"dashed", opacity:.6},
+         label:{show:false}, data:[{yAxis:0}]}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderYieldCurve(d){
+  const box=$("#yieldCurveBlock");
+  if(!box) return;
+  const win=YC_WIN;
+  const wins=d.windows||["3m","6m","1y","3y","5y","10y","max"];
+  const btns=wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-ycw="'+w+'">'+
+      (YC_WIN_LABEL[w]||w)+'</button>').join("");
+  const mats=d.maturities||[];
+  const lat=d.latest||{};
+  const sp=d.spread_last;
+  const spCol=sp==null?"var(--ink2)":(sp<0?"#e11d48":"#16a34a");
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:110px;margin-right:12px';
+  const yv=k=>lat[k]!=null?lat[k].toFixed(2)+"%":"—";
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>美國國債收益率曲線</h2>'+
+        '<span class="tag">10 天期 · 2s10s 倒掛</span>'+
+        '<span class="hint">各天期殖利率隨時間走勢;子圖 10Y−2Y 利差<b class="neg">轉負=倒掛</b>,經典衰退領先訊號</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">2Y</div><div class="cap-big" style="color:#06b6d4">'+esc(yv("2y"))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">10Y</div><div class="cap-big" style="color:#eab308">'+esc(yv("10y"))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">30Y</div><div class="cap-big" style="color:#dc2626">'+esc(yv("30y"))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">2s10s 利差(10Y−2Y)</div>'+
+          '<div class="cap-big" style="color:'+spCol+'">'+(sp==null?"—":(sp>0?"+":"")+sp.toFixed(2)+"%")+'</div>'+
+          '<div style="font-size:12px;color:var(--ink2)">'+(sp==null?"":(sp<0?"倒掛":"正常"))+'</div></div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="yieldCurveChart" class="cap-chart" style="height:380px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED 恆定到期名目公債殖利率(DGS3MO…DGS30)。上圖 10 條線由短(藍)到長(紅)。下圖 <b>10Y−2Y</b> 利差,<b class="neg">紅=倒掛(&lt;0)</b>、<b class="pos">綠=正斜率</b>;利差長期倒掛後轉正常是歷史上衰退前兆之一。視窗 '+esc(YC_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  const ser=d.series||{};
+  const allD=ser.dates||[], allY=ser.yields||{}, allSp=ser.spread_2s10s||[];
+  const n=Math.min(YC_WIN_N[win]||allD.length, allD.length);
+  const dates=allD.slice(-n);
+  const yields={}; mats.forEach(m=>{ yields[m.key]=(allY[m.key]||[]).slice(-n); });
+  const spread=allSp.slice(-n);
+  if(dates.length>=2){
+    drawYieldCurveChart("yieldCurveChart", dates, yields, mats, spread);
+  }else{
+    const c=$("#yieldCurveChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-ycw]").forEach(b=>b.onclick=()=>{ YC_WIN=b.dataset.ycw; renderYieldCurve(YC_DATA); });
+}
+
+async function loadYieldCurve(){
+  const box=$("#yieldCurveBlock");
+  if(!box) return;
+  if(YC_DATA){ renderYieldCurve(YC_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 國債收益率曲線 …</div>';
+  try{
+    const res=await fetch("data/yieldcurve.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    YC_DATA=await res.json();
+    if(YC_DATA.default_window) YC_WIN=YC_DATA.default_window;
+    renderYieldCurve(YC_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>美國國債收益率曲線</h2></div>'+
+      '<div class="legend">⚠️ yieldcurve.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_yieldcurve。</div></section>';
   }
 }
 

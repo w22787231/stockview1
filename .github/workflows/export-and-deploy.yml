@@ -445,11 +445,35 @@ jobs:
           fi
 
       - name: Deploy to Cloudflare Pages
+        id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
+
+      - name: Verify deployed data files (fail run if any missing/404)
+        # 對「本次部署專屬別名」逐一檢查關鍵資料檔是否為 JSON。用別名(非 apex)可避開
+        # 邊緣快取傳播延遲造成的假失敗;別名直接命中本次部署,漏檔會立刻抓到。
+        # 曾發生:web_only 部署漏掉 tips.json → 前端 404。此步就是要提早擋下這種漏檔。
+        run: |
+          URL="${{ steps.deploy.outputs.deployment-url }}"
+          if [ -z "$URL" ]; then
+            echo "::warning::拿不到部署別名,略過部署後驗證(不影響部署)"; exit 0
+          fi
+          echo "驗證部署 $URL 的關鍵資料檔…"
+          fail=0
+          for f in tips pi fsi spec macro sentiment macro_score; do
+            ct=$(curl -s -m 25 -o /dev/null -w "%{content_type}" "$URL/data/$f.json" || echo "curl_err")
+            case "$ct" in
+              application/json*) echo "  ✓ $f.json";;
+              *) echo "  ✗ $f.json 非 JSON:$ct  ← 本次部署缺檔/損壞"; fail=1;;
+            esac
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::部署後驗證失敗:有關鍵資料檔在本次部署中缺失或非 JSON"; exit 1
+          fi
+          echo "✓ 關鍵資料檔皆正常"
 
       - name: Push golden-cross alerts (Web Push, 全市場)
         # 收盤後偵測全市場(各池)當日新金叉 → 發摘要推播給所有訂閱者。

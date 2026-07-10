@@ -13,8 +13,8 @@ import fetch_pi as P   # 重用 fetch_fred / fetch_yf_close
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "data", "tips.json")
 
-START = "2012-01-01"     # 涵蓋 5y 視窗(1260 交易日)有餘
-KEEP = 1400              # json 只留最近 N 點(5y=1260 + 相關暖身)
+START = "2003-01-01"     # DFII10(10Y TIPS 實質殖利率)最早 2003-01-02 → 支援「全部」視窗
+KEEP = 6300              # 留全部(~2003 至今 ~5800 交易日)+ 相關暖身;供 10y/全部 視窗
 CORR_WIN = 20            # 20 日滾動相關
 
 
@@ -89,7 +89,7 @@ def build_live():
         "tips_diff_bps": tips_diff_bps,
         "corr20_last": corr_last,
         "corr_win": CORR_WIN,
-        "windows": ["3m", "6m", "1y", "3y", "5y"],
+        "windows": ["3m", "6m", "1y", "3y", "5y", "10y", "max"],
         "default_window": "1y",
         "series": {"dates": dates, "tips": tips_s, "sp500": sp500_s, "corr20": corr_s},
     }

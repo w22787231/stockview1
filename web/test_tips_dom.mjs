@@ -96,6 +96,10 @@ assert.ok(corrS.markLine, "corr 子圖應有 0 基準線");
 // yAxis[2] 為相關軸,min/max = -1/1
 assert.strictEqual(CAP.yAxis[2].min, -1, "相關軸 min 應 -1");
 assert.strictEqual(CAP.yAxis[2].max, 1, "相關軸 max 應 1");
+// 回歸防護:visualMap 必須是 continuous;piecewise 在多 grid 子圖會觸發 ECharts "coord" 崩潰
+assert.ok(CAP.visualMap, "應有 visualMap(相關子圖上色)");
+assert.strictEqual(CAP.visualMap.type, "continuous", "visualMap 必須是 continuous(piecewise 會崩潰)");
+assert.ok(!CAP.visualMap.pieces, "visualMap 不可用 pieces(piecewise 會崩潰)");
 // 1y 視窗:min(252, 300)=252 點
 assert.strictEqual(CAP.series[0].data.length, 252, "1y 應切 252 點,實得 "+CAP.series[0].data.length);
 

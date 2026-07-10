@@ -76,7 +76,45 @@ smokeTips("1y 視窗(252點)", 252, 20, "1y");
 smokeTips("3m 視窗(63點,含null暖身)", 63, 20, "3m");
 smokeTips("max 視窗(5800點)", 5800, 20, "max");
 smokeTips("極短(僅25點,corr幾乎全null)", 25, 20, "1y");
-assert.ok(RENDER_COUNT >= 4, "應完成至少 4 次真渲染,實得 " + RENDER_COUNT);
+
+// ── drawYieldCurveChart(10 天期多線 + 2s10s 子圖,多 grid + visualMap + markLine)──
+function synthYc(N) {
+  const KEYS = ["3m", "6m", "1y", "2y", "3y", "5y", "7y", "10y", "20y", "30y"];
+  const dates = [], yields = {}, spread = [];
+  let base = Date.UTC(2006, 0, 2);
+  KEYS.forEach(k => yields[k] = []);
+  for (let i = 0; i < N; i++) {
+    dates.push(new Date(base + i * 86400000).toISOString().slice(0, 10));
+    KEYS.forEach((k, ki) => yields[k].push(+(1.0 + ki * 0.25 + 0.8 * Math.sin(i / 120)).toFixed(2)));
+    spread.push(+(yields["10y"][i] - yields["2y"][i]).toFixed(2));   // 含負值(倒掛)
+  }
+  const mats = KEYS.map(k => ({ key: k, label: k.toUpperCase() }));
+  return { dates, yields, mats, spread };
+}
+function smokeYc(label, N) {
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener() {}, removeEventListener() {} };
+  const el = {};
+  const $ = () => el;
+  // drawYieldCurveChart 依賴函式外的 YC_COLORS 常數,一併從 index.html 抽出注入(保持同步)
+  const ycColors = (html.match(/const\s+YC_COLORS\s*=\s*\[[^\]]*\]/) || ["const YC_COLORS=[]"])[0];
+  const draw = new Function(
+    "return (function($, window, echarts){ " + ycColors + "; " + extract("drawYieldCurveChart") + " return drawYieldCurveChart; })"
+  )()($, window, echarts);
+  const d = synthYc(N);
+  try {
+    draw("yieldCurveChart", d.dates, d.yields, d.mats, d.spread);
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawYieldCurveChart):");
+smokeYc("5y 視窗(1260點,10線+利差子圖)", 1260);
+smokeYc("max 視窗(5000點)", 5000);
+
+assert.ok(RENDER_COUNT >= 6, "應完成至少 6 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

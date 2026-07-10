@@ -16,15 +16,12 @@ OUT = os.path.join(HERE, "..", "data", "yieldcurve.json")
 START = "2006-01-01"     # 20Y(2006 復名)/30Y(2006 復發)後,10 天期才同時連續
 KEEP = 5200              # ~2006 至今 ~5000 交易日,供「全部」視窗
 
-# (key, 顯示label, FRED series);key 供前端序列對位,由短到長=冷到暖上色
+# (key, 顯示label, FRED series);常用 benchmark 天期,由短到長上色。
+# 2s10s 利差子圖用 2Y、10Y。如需增減天期在此改即可。
 MATS = [
     ("3m",  "3M",  "DGS3MO"),
-    ("6m",  "6M",  "DGS6MO"),
-    ("1y",  "1Y",  "DGS1"),
     ("2y",  "2Y",  "DGS2"),
-    ("3y",  "3Y",  "DGS3"),
     ("5y",  "5Y",  "DGS5"),
-    ("7y",  "7Y",  "DGS7"),
     ("10y", "10Y", "DGS10"),
     ("20y", "20Y", "DGS20"),
     ("30y", "30Y", "DGS30"),

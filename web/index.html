@@ -115,6 +115,9 @@
   .news-time{color:var(--ink3)}
   .news-title{font-size:14px;line-height:1.5;color:var(--ink)}
   .news-orig{font-size:12px;line-height:1.4;color:var(--ink3);margin-top:2px}
+  .news-summary{font-size:13px;line-height:1.65;color:var(--ink2);margin-top:7px}
+  .news-why{font-size:12.5px;line-height:1.55;color:var(--blue);font-weight:650;margin-top:5px}
+  .news-more{display:inline-block;font-size:11px;line-height:1.4;color:var(--ink3);margin-top:6px}
   /* 財報/數據 行事曆 */
   .cal-datahead{font-weight:800;font-size:13px;color:var(--ink2);margin:4px 0 6px}
   .cal-day{margin:0 0 14px}
@@ -4077,10 +4080,14 @@ async function fetchNews(){
     box.innerHTML=d.items.map(it=>{
       const main = it.title_zh || it.title;                       // 有繁中譯文→當主標,否則原文
       const orig = it.title_zh ? '<div class="news-orig">'+esc(it.title)+'</div>' : "";  // 英文原文小字
+      const summary = it.summary_zh ? '<div class="news-summary">'+esc(it.summary_zh)+'</div>' : "";
+      const why = it.why_zh ? '<div class="news-why">'+esc(it.why_zh)+'</div>' : "";
+      const sourceCount = Array.isArray(it.sources) ? it.sources.length : 0;
+      const more = sourceCount ? '<span class="news-more">另有 '+sourceCount+' 個來源</span>' : "";
       return '<a class="news-row" href="'+esc(it.link)+'" target="_blank" rel="noopener">'+
         '<div class="news-meta"><span class="news-src">'+esc(it.src||"新聞")+'</span>'+
         '<span class="news-time">'+esc(fmtAgo(it.time))+'</span></div>'+
-        '<div class="news-title">'+esc(main)+'</div>'+ orig +
+        '<div class="news-title">'+esc(main)+'</div>'+orig+summary+why+more+
       '</a>';
     }).join("");
     const upd=document.getElementById("newsUpd");

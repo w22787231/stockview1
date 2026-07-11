@@ -461,7 +461,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main --ai AI
+          command: pages deploy public --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
 
       - name: Verify deployed data files (fail run if any missing/404)
         # 對「本次部署專屬別名」逐一檢查關鍵資料檔是否為 JSON。用別名(非 apex)命中本次部署。

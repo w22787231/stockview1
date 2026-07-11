@@ -126,7 +126,8 @@ function show(d){
   $('card').style.display='block';
   $('c_n').textContent=d.company||d.name||'';$('c_t').textContent=d.ticker;$('c_v').textContent=d.verdict;$('c_v').className='v '+d.verdict;
   $('c_p').textContent=d.price+' '+(d.currency||'');$('c_pe').textContent=d.fwd_pe||'';
-  $('c_bbb').textContent=`${d.bear} / ${d.base} / ${d.bull}`;
+  const bbbEps=(px,eps)=>eps?`${px}(EPS ${eps})`:`${px}`;
+  $('c_bbb').textContent=`${bbbEps(d.bear,d.bear_eps)} / ${bbbEps(d.base,d.base_eps)} / ${bbbEps(d.bull,d.bull_eps)}`;
   $('c_w').innerHTML=`<span class="pair"><span class="p">${d.cons_w||''}</span><span class="mut">/</span><span class="p">${d.grow_w||''}</span></span>`;
   $('c_pct').innerHTML=pctc(d.cons_pct)+' / '+pctc(d.grow_pct);
   $('c_ep').textContent=d.expected_px||d.market_expected_px||d.topic_px||'';

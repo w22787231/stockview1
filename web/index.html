@@ -1208,6 +1208,17 @@ function fmtTime(iso){
     return d.toLocaleString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
   }catch(e){return iso}
 }
+// 大圖更新戳記:資料週期 <日期> · 更新時間:<星期X>。有到「日」的日期→算星期幾;只有到月/季→顯示頻率(每月/每季)
+function updStamp(asOf, freq){
+  if(!asOf) return "";
+  const s=String(asOf).trim();
+  let upd = freq || "";                    // 月/季頻直接標頻率(即使資料日是月底整日,也不算星期)
+  if(!upd){                                // 只有日/週頻(未給 freq)才依實際資料日期算星期幾
+    const m=s.match(/^(\d{4})-?(\d{2})-?(\d{2})/);
+    if(m) upd = "星期"+"日一二三四五六".charAt(new Date(Date.UTC(+m[1],+m[2]-1,+m[3])).getUTCDay());
+  }
+  return '<div class="dim" style="font-size:12px;margin:2px 0 6px">資料週期 '+esc(s)+(upd?' · 更新時間:'+upd:'')+'</div>';
+}
 
 // ── 總體市場頁 ──
 function idxCard(r){
@@ -1257,6 +1268,7 @@ function renderMacro(d){
       '<div id="usThemeFlowSummaryBlock"></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="usThemeFlowBlock"></div>'+
     '<div id="netLiqBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
@@ -1297,6 +1309,7 @@ function m1m2Box(v){
   return '<div style="margin-top:18px">'+
     '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">台灣 M1B / M2 年增率</h2>'+
       '<span class="tag">資金黃金交叉 · 央行月資料</span></div>'+
+    updStamp((v.dates||[]).slice(-1)[0],'每月')+
     '<div id="m1m2Chart" class="m1m2-chart"></div>'+
     '<div class="ex">M1B 含活存(資金活水)、M2 含定存。<b class="pos">M1B 年增 &gt; M2(差為正)＝黃金交叉</b>,資金動能轉強、偏多股市;<b class="neg">M1B &lt; M2 ＝死亡交叉</b>。月資料,來源中央銀行貨幣總計數。</div>'+
   '</div>';
@@ -1309,6 +1322,7 @@ function reservesBox(v){
   return '<div style="margin-top:18px">'+
     '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">美國-聯準會存款機構準備金(週)</h2>'+
       '<span class="tag">銀行體系流動性 · FRED WRESBAL</span></div>'+
+    updStamp(v.as_of)+
     '<div style="font-size:13px;color:var(--ink2);margin:2px 0 4px">最新 <b style="color:#0d9488">$'+(cur/1000).toFixed(2)+' 兆</b>('+esc(v.as_of||'')+') <span class="'+(tri==='▲'?'pos':'neg')+'">'+tri+'</span></div>'+
     '<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">'+rb+'</div>'+
     '<div id="reservesChart" class="m1m2-chart"></div>'+
@@ -1359,6 +1373,7 @@ function sofrIorbBox(v){
   return '<div style="margin-top:18px">'+
     '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">美國-SOFR 減 IORB 利差</h2>'+
       '<span class="tag">附買回市場資金壓力 · FRED SOFR−IORB</span></div>'+
+    updStamp(v.as_of)+
     '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:2px 0 6px">'+
       '<div style="'+card+'"><div class="cap-lab">最新</div><div class="cap-big '+curCls+'">'+_sofrNum(cur)+'</div><div class="dim" style="font-size:11px">bps</div></div>'+
       '<div style="'+card+'"><div class="cap-lab">20MA</div><div class="cap-big" style="color:#9333ea">'+_sofrNum(ma20)+'</div></div>'+
@@ -1553,14 +1568,13 @@ function renderChicagoFci(d){
     '<section>'+
       '<div class="sec-head"><h2>芝加哥聯儲金融狀況指數</h2>'+
         '<span class="tag">NFCI · 每週</span>'+
-        '<span class="tag">資料更新時間:星期五</span>'+
         '<span class="hint">'+(CHICAGO_FCI_INV?'反轉視角:顯示 -NFCI，數值越高代表金融狀況越寬鬆、較接近股市同向。':'NFCI&gt;0＝金融狀況偏緊；NFCI&lt;0＝偏寬鬆。與 S&amp;P 500 疊圖看風險資產壓力。')+'</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+'"><div class="cap-lab">'+(CHICAGO_FCI_INV?'-NFCI 最新':'NFCI 最新')+'</div>'+
           '<div class="cap-big '+(tight?'neg':'pos')+'">'+(cur==null?'—':((sgn*cur)>0?'+':'')+Number(sgn*cur).toFixed(3))+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">週變化</div>'+
           '<div class="cap-big '+chgCls+'">'+(chg==null?'—':((sgn*chg)>0?'+':'')+Number(sgn*chg).toFixed(3))+'</div></div>'+
-        '<div class="dim" style="font-size:12px">資料週期 '+esc(d.as_of||"")+' · 更新時間:星期五</div>'+
+        updStamp(d.as_of)+
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+
         '<span style="width:1px;height:18px;background:var(--line);margin:0 4px"></span>'+invBtn+'</div>'+
@@ -1623,6 +1637,7 @@ function renderNetLiq(fl){
       '<div class="sec-head"><h2>美國-Fed 淨流動性(週)</h2>'+
         '<span class="tag">WALCL − TGA − RRP · FRED</span>'+
         '<span class="hint">流到市場的美元;與 S&amp;P 500 長線高度同向,上升=放水偏多、下降=抽水偏空</span></div>'+
+      updStamp(cur.date)+
       '<div style="font-size:13px;color:var(--ink2);margin:2px 0 4px">最新 <b style="color:#1f6feb">$'+Number(cur.val).toFixed(2)+' 兆</b>('+esc(cur.date||'')+') <span class="'+(tri==='▲'?'pos':'neg')+'">'+tri+'</span></div>'+
       '<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">'+rb+'</div>'+
       '<div id="netLiqChart" class="cap-chart" style="height:280px"></div>'+
@@ -1693,6 +1708,7 @@ function renderLei(k){
     '<section>'+
       '<div class="sec-head" style="margin-bottom:4px"><h2 style="font-size:15px">'+esc(meta.title)+'</h2>'+
         '<span class="tag">'+esc(meta.tag)+'</span></div>'+
+      updStamp(d.as_of,'每月')+
       '<div style="font-size:13px;color:var(--ink2);margin:2px 0 4px">最新 <b style="color:'+meta.color+'">'+Number(cur).toFixed(2)+(meta.axis==="%"?"%":"")+'</b>('+esc(d.as_of||'')+') <span class="'+(tri==='▲'?'pos':'neg')+'">'+tri+'</span></div>'+
       '<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+rb+
         '<span style="width:1px;height:16px;background:var(--line);margin:0 2px"></span>'+invBtn+'</div>'+
@@ -1807,6 +1823,7 @@ function renderOnRp(d){
       '<div class="sec-head"><h2>美國-聯準會隔夜逆回購操作(ON RRP)</h2>'+
         '<span class="tag">RRPONTSYD · FRED</span>'+
         '<span class="hint">數值越高代表越多資金停泊在聯準會逆回購工具；下降通常表示資金釋回市場體系。</span></div>'+
+      updStamp(d.as_of)+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+'"><div class="cap-lab">最新</div><div class="cap-big">'+rpVal(cur)+'</div><div class="dim" style="font-size:11px">'+esc(d.unit||"十億美元")+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">日變化</div><div class="cap-big '+chgCls+'">'+(chg==null?'—':(chg>0?'+':'')+rpVal(chg))+'</div></div>'+
@@ -1854,6 +1871,7 @@ function renderOnRpLiquidity(d){
       '<div class="sec-head"><h2>美國-聯準會隔夜回購操作(ON RP)</h2>'+
         '<span class="tag">RPONTSYD · FRED</span>'+
         '<span class="hint">數值越高代表聯準會透過回購提供短期流動性；下降代表該工具使用減少。</span></div>'+
+      updStamp(d.as_of)+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+'"><div class="cap-lab">最新</div><div class="cap-big">'+rpVal(cur)+'</div><div class="dim" style="font-size:11px">'+esc(d.unit||"十億美元")+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">日變化</div><div class="cap-big '+chgCls+'">'+(chg==null?'—':(chg>0?'+':'')+rpVal(chg))+'</div></div>'+
@@ -2258,6 +2276,7 @@ function renderMargin(d){
       '<div class="sec-head"><h2>保證金借款 · 月環比</h2>'+
         '<span class="tag">FINRA margin debt · 台股融資餘額</span>'+
         '<span class="hint">投資人向券商融資買股的餘額。上升＝槓桿加溫/追價、風險偏好升；下降＝去槓桿/轉保守。月頻慢訊號。</span></div>'+
+      updStamp((us.months||[]).slice(-1)[0]||tw.as_of,'每月')+
       '<div style="margin-bottom:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       usPanel + twPanel +
       '<div class="legend" style="margin-top:10px">兩張圖:融資餘額(粗線,左軸)＋ 該市場指數(藍虛線,右軸)疊圖 —— 看保證金借款與大盤是否同向、槓桿是否領先/背離。🇺🇸 FINRA margin debt(兆美元,月頻官方,1997→今)＋ S&P 500;🇹🇼 台股融資餘額(億,各月月底/當月至今)＋ 加權指數。月環比看短期變化、年增(YoY)看較長週期的槓桿趨勢,消去季節性雜訊。時段 '+esc(MARGIN_LABEL[MARGIN_WIN]||MARGIN_WIN)+'。</div>'+
@@ -2354,6 +2373,7 @@ function renderAiCapex(d){
       '<div class="sec-head"><h2>AI 巨頭資本開支 · YoY / 環比</h2>'+
         '<span class="tag">'+esc((A.companies||[]).join(" · "))+' · 季頻 · SEC</span>'+
         '<span class="hint">四大雲端/AI 巨頭季度 capex 加總。YoY 高速成長＝AI 基建投資熱、對上游(晶片/光通訊/電力/資料中心)是需求動能;增速轉弱＝資本支出週期見頂訊號。</span></div>'+
+      updStamp(A.as_of_q,'每季')+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+';border-left:3px solid '+AICX_CAP+'"><div class="cap-lab">最新季合計('+esc(A.as_of_q)+')</div><div class="cap-big" style="color:'+AICX_CAP+'">$'+Number(A.current).toFixed(0)+'<span class="cap-u">B</span></div></div>'+
         '<div style="'+card+'"><div class="cap-lab">YoY 增速</div><div class="cap-big">'+pos(A.current_yoy)+'</div></div>'+
@@ -2443,6 +2463,7 @@ function renderNdxM2(d){
       '<div class="sec-head"><h2>Nasdaq-100 / M2 比值</h2>'+
         '<span class="tag">^NDX ÷ M2($兆) · 月頻 · FRED+Yahoo</span>'+
         '<span class="hint">科技股價相對貨幣供給的估值/擁擠度。比值走高＝股價漲幅超越印鈔速度(偏貴/泡沫化),回落＝回到貨幣基本盤。看相對位置(百分位)勝於絕對值。</span></div>'+
+      updStamp(N.as_of,'每月')+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+';border-left:3px solid '+NDXM2_COL+'"><div class="cap-lab">最新比值('+esc(N.as_of)+')</div><div class="cap-big" style="color:'+NDXM2_COL+'">'+Number(N.current).toLocaleString()+'</div>'+(_devPct!=null?'<div class="cap-chg">'+(_devPct>0?'高於':'低於')+'趨勢 <b class="'+(_devPct>0?'neg':'pos')+'">'+(_devPct>0?'+':'')+_devPct+'%</b></div>':'')+'</div>'+
         '<div style="'+card+'"><div class="cap-lab">相對趨勢百分位</div><div class="cap-big '+pcCls+'">'+pc+'<span class="cap-u">%</span></div><div class="cap-chg">'+(pc>=85?'遠高於趨勢/貴':(pc<=15?'低於趨勢/便宜':'接近趨勢'))+'</div></div>'+
@@ -2573,6 +2594,7 @@ function renderInsider(d){
       '<div class="sec-head"><h2>內部人賣買比（筆數）</h2>'+
         '<span class="tag">OpenInsider · 全市場 · 月頻</span>'+
         '<span class="hint">全市場內部人申報「賣出筆數 ÷ 買進筆數」。內部人本就賣多於買(選擇權/薪酬),故常態 &gt;1(約 2–4);比值飆高＝賣壓重(常見於高檔),比值走低＝相對積極買進(常見於底部,內部人逆勢承接)。</span></div>'+
+      updStamp(s.as_of,'每月')+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
         '<div style="'+card+';border-left:3px solid '+INSIDER_COL+'"><div class="cap-lab">最新賣買比</div>'+
           '<div class="cap-big" style="color:'+INSIDER_COL+'">'+(cur==null?'—':Number(cur).toFixed(2))+'</div>'+
@@ -2590,6 +2612,75 @@ function renderInsider(d){
       {value:3.5, label:"注意 3.5", color:"#c98a00"},
       {value:4.0, label:"警戒 4.0", color:"#e11d48"}]});
 }
+// ── 台股大盤融資維持率(上市·自算)+ 加權指數疊圖 ──
+let TWMR_DATA=null, TWMR_WIN="all";
+const TWMR_WINS=[["1m",21,"1M"],["3m",63,"3M"],["6m",126,"6M"],["1y",252,"1Y"],["all",Infinity,"全部"]];
+async function loadTwMarginRatio(){
+  const box=$("#twMarginRatioBlock"); if(!box) return;
+  if(TWMR_DATA){ renderTwMarginRatio(TWMR_DATA); return; }
+  try{
+    const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const j=await res.json();
+    TWMR_DATA=j.tw_margin_ratio||null;
+    if(TWMR_DATA) renderTwMarginRatio(TWMR_DATA);
+  }catch(e){}
+}
+function renderTwMarginRatio(d){
+  const box=$("#twMarginRatioBlock"); if(!box||!d||!d.dates||!d.dates.length) return;
+  const cur=d.level, chg=d.diff;
+  const chgCls=chg>0?"pos":(chg<0?"neg":"dim");
+  const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:110px;margin-right:12px';
+  const n=d.dates.length;
+  const btns=TWMR_WINS.filter(w=>w[1]===Infinity||w[0]==="1m"||w[1]<=n).map(w=>'<button class="ntab'+(TWMR_WIN===w[0]?' on':'')+'" data-twmrw="'+w[0]+'">'+w[2]+'</button>').join("");
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>台股大盤融資維持率</h2>'+
+        '<span class="tag">上市·含ETF·自算·日頻</span>'+
+        '<span class="hint">融資買進股票現值 ÷ 融資金額。越低代表融資戶帳面虧損越大;跌破 130% 近斷頭警戒(常見底部)。</span></div>'+
+      updStamp(d.as_of)+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
+        '<div style="'+card+'"><div class="cap-lab">最新維持率</div><div class="cap-big" style="color:#0d9488">'+(cur==null?'—':Number(cur).toFixed(2)+'%')+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">日變化</div><div class="cap-big '+chgCls+'">'+(chg==null?'—':(chg>0?'+':'')+Number(chg).toFixed(2))+'</div></div>'+
+      '</div>'+
+      '<div style="margin:6px 0 8px;display:flex;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="twMarginRatioChart" class="cap-chart" style="height:260px"></div>'+
+      '<div class="legend" style="margin-top:10px">維持率(左軸,粗線)＋ <b style="color:#94a3b8">灰虛線=加權指數(右軸)</b>。上市口徑(含ETF,與融資金額同口徑)、每日自 TWSE 收盤+融資餘額換算,對齊財經M平方;看趨勢與相對高低。灰虛線 <b style="color:#e11d48">130%</b> = 斷頭警戒參考。來源:'+esc(d.src||"TWSE")+'。</div>'+
+    '</section>';
+  box.querySelectorAll("[data-twmrw]").forEach(b=>b.onclick=()=>{ TWMR_WIN=b.dataset.twmrw||"all"; renderTwMarginRatio(TWMR_DATA); });
+  drawTwMarginRatioChart(d);
+}
+function drawTwMarginRatioChart(d){
+  const el=document.getElementById("twMarginRatioChart");
+  if(!el||!window.echarts) return;
+  const win=TWMR_WINS.find(w=>w[0]===TWMR_WIN)||TWMR_WINS[TWMR_WINS.length-1];
+  const nn=win[1]===Infinity?d.dates.length:Math.min(win[1],d.dates.length);
+  const dates=d.dates.slice(-nn), ratio=d.ratio.slice(-nn), twii=(d.twii||[]).slice(-nn);
+  const hasIdx=twii.some(v=>v!=null&&isFinite(Number(v)));
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  const toMs=s=>{const t=String(s);return new Date(t.slice(0,4)+"-"+t.slice(4,6)+"-"+t.slice(6,8)+"T00:00:00").getTime();};
+  ch.setOption({
+    grid:{left:52,right:hasIdx?58:16,top:16,bottom:26},
+    tooltip:{trigger:"axis",axisPointer:{type:"cross"}},
+    legend:{data:["融資維持率"].concat(hasIdx?["加權指數"]:[]),top:0,right:0,itemWidth:16,itemHeight:8,textStyle:{fontSize:10}},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:val=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:[
+      {type:"value",name:"%",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:x=>x+"%"},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",scale:true,show:hasIdx,axisLabel:{fontSize:9,formatter:x=>(x/1000).toFixed(0)+"k"},splitLine:{show:false}}
+    ],
+    series:[
+      {name:"融資維持率",type:"line",smooth:true,showSymbol:false,yAxisIndex:0,
+        data:dates.map((s,i)=>[toMs(s),ratio[i]]),
+        lineStyle:{color:"#0d9488",width:2},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d9488",opacity:.07},
+        markLine:{symbol:"none",silent:true,label:{formatter:"130% 斷頭警戒",color:"#e11d48",fontSize:10,position:"insideEndTop"},
+          lineStyle:{color:"#e11d48",type:"dashed",width:1.2,opacity:.85},data:[{yAxis:130}]}}
+    ].concat(hasIdx?[{name:"加權指數",type:"line",smooth:true,showSymbol:false,yAxisIndex:1,
+        data:dates.map((s,i)=>[toMs(s),twii[i]]),lineStyle:{color:"#94a3b8",type:"dashed",width:1.2},itemStyle:{color:"#94a3b8"}}]:[])
+  },true);
+  if(!el._ro){el._ro=()=>ch.resize();window.addEventListener("resize",el._ro);}
+}
 function renderSentiment(d){
   SENT_LAST=d;
   const cards=(d.levels||[]).map(sentCard).join("") + fngCard(d.fear_greed);
@@ -2605,6 +2696,7 @@ function renderSentiment(d){
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<div id="marginBlock"></div>'+
+    '<div id="twMarginRatioBlock"></div>'+
     '<div id="aiCapexBlock"></div>'+
     '<div id="ndxM2Block"></div>'+
     sp500FwdPeBox(d.sp500_fwd_pe)+
@@ -2814,6 +2906,7 @@ async function loadSentiment(){
     loadInsider();
     loadSpec();
     loadMargin();
+    loadTwMarginRatio();
     loadAiCapex();
     loadNdxM2();
   }catch(e){
@@ -5254,6 +5347,7 @@ function renderFsi(d){
         '<span class="hint">'+(inv
           ? '反轉視角:顯示 <b>−FSI</b>(↑＝風險偏好升、與股市<b class="pos">同向</b>);數值已取負'
           : 'FSI&gt;0 壓力高於常態(紅)、FSI&lt;0 低於常態(綠);上穿 20/50MA＝壓力升溫')+'</span></div>'+
+      updStamp(d.as_of)+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+'"><div class="cap-lab">'+curLab+'</div>'+
           '<div class="cap-big" style="color:'+fsiColor+'">'+esc(dv(cur))+'</div></div>'+
@@ -5410,6 +5504,7 @@ function renderPI(d){
         '<span class="hint">'+(inv
           ? '反轉視角:顯示 <b>−PI</b>(↑=流動性寬鬆、與股市<b class="pos">同向</b>);數值已取負'
           : 'PI>0 流動性偏緊、PI<0 流動性寬鬆；歷史分位愈高風險愈大')+'</span></div>'+
+      updStamp((d.series&&d.series.dates||[]).slice(-1)[0])+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
         '<div style="'+piCardStyle+'">'+
           '<div class="cap-lab">'+(inv?"−PI 當前值":"PI 當前值")+'</div>'+
@@ -5510,6 +5605,7 @@ function renderOdte(d){
       '<div class="sec-head"><h2>SPX 0DTE 占比</h2>'+
         '<span class="tag">當日到期選擇權 · 自算 proxy</span>'+
         '<span class="hint">近端到期成交量 ÷ 全部到期量;越高=當日到期投機越熱</span></div>'+
+      updStamp((dates||[]).slice(-1)[0])+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+'"><div class="cap-lab">自算 0DTE 占比</div>'+
           '<div class="cap-big" style="color:'+curColor+'">'+(cur!=null?cur+"%":"—")+'</div></div>'+
@@ -5899,6 +5995,7 @@ function renderSpec(){
   const dates=allDates.slice(-n), z=allZ.slice(-n), sp=(allSp.length?allSp.slice(-n):[]);
   host.innerHTML=
     '<section style="margin-top:18px"><div class="sec-head"><h2>投機交易</h2></div>'+
+    updStamp((s.dates||[]).slice(-1)[0])+
     '<div class="legend">多源投機訊號(ARKK/SPY、高beta/低波、槓桿ETF量、BTC、COT槓桿基金、融資/GDP)標準化合成,'+
     '<b>投機溫度</b>=近5年百分位,越高越過熱。z 橫條:紅=偏投機、綠=偏冷。Reddit 為當下旁註(不進分數)。</div>'+
     '<div class="legend"><span class="dim"><b>投機溫度（0–100）</b>＝投機強度在<b>近 5 年</b>分布的百分位（越高＝相對近 5 年越過熱）。<b>投機強度（z）</b>＝六源標準化後等權平均的原始分數（σ；0＝近 5 年常態、正＝偏投機）。溫度口徑固定 5 年；視窗（'+esc(SPEC_WIN_LABEL[win]||win)+'）影響 z 圖與橫條。<br>等權為透明起點；因風險偏好類來源較多，解讀偏重風險偏好面。</span></div>'+

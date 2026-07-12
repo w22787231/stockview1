@@ -2216,6 +2216,7 @@ async function loadMargin(){
   }
 }
 function _marginMomOf(s){ return (s.vals&&s.vals.length>=2&&s.vals[s.vals.length-2])?(s.vals[s.vals.length-1]/s.vals[s.vals.length-2]-1)*100:null; }
+function _marginYoyOf(s){ const n=s.vals?s.vals.length:0; return (n>=13&&s.vals[n-13])?(s.vals[n-1]/s.vals[n-13]-1)*100:null; }
 function renderMargin(d){
   const box=document.getElementById("marginBlock"); if(!box) return;
   const {us,tw}=_marginSeries(d);
@@ -2228,27 +2229,29 @@ function renderMargin(d){
   const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:150px;margin-right:12px';
   const btns=wins.map(w=>'<button class="btn'+(MARGIN_WIN===w[0]?' active':'')+'" data-mgw="'+w[0]+'">'+w[2]+'</button>').join("");
   // 每個市場一個 panel:標題 + 數字卡 + 圖(融資左軸 + 指數右軸)
-  function panel(s, flagTitle, color, valHtml, mom, sub, chartId){
+  function panel(s, flagTitle, color, valHtml, mom, yoy, sub, chartId){
     if(!s.vals.length) return '';
     return '<div style="margin-top:14px">'+
       '<div class="sec-head" style="margin-bottom:6px"><h2 style="font-size:14.5px">'+flagTitle+'</h2></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
         '<div style="'+card+';border-left:3px solid '+color+'"><div class="cap-lab">最新餘額</div>'+
           '<div class="cap-big" style="color:'+color+'">'+valHtml+'</div>'+
-          '<div class="cap-chg">月環比 '+momHtml(mom)+'</div></div>'+
+          '<div class="cap-chg">月環比 '+momHtml(mom)+' · 年增 YoY '+momHtml(yoy)+'</div></div>'+
         (sub?'<div class="dim" style="font-size:12px">'+sub+'</div>':'')+
       '</div>'+
       '<div id="'+chartId+'" class="cap-chart" style="height:230px"></div>'+
       '<div class="dim" style="font-size:11px;margin:6px 0 0">月環比（%）</div>'+
       '<div id="'+chartId+'Mom" class="cap-chart" style="height:130px"></div>'+
+      '<div class="dim" style="font-size:11px;margin:6px 0 0">年增 YoY（%）</div>'+
+      '<div id="'+chartId+'Yoy" class="cap-chart" style="height:130px"></div>'+
     '</div>';
   }
   const usPanel = panel(us, '🇺🇸 美股保證金借款 · 月環比（＋ S&P 500）', MARGIN_US,
       '$'+Number(us.vals[us.vals.length-1]).toFixed(2)+'<span class="cap-u">兆</span>',
-      _marginMomOf(us), 'FINRA margin debt', 'marginChartUs');
+      _marginMomOf(us), _marginYoyOf(us), 'FINRA margin debt', 'marginChartUs');
   const twPanel = panel(tw, '🇹🇼 台股融資餘額 · 月環比（＋ 加權指數）', MARGIN_TW,
       Number(tw.vals[tw.vals.length-1]).toLocaleString()+'<span class="cap-u">億</span>',
-      (tw.mom!=null?tw.mom:_marginMomOf(tw)),
+      (tw.mom!=null?tw.mom:_marginMomOf(tw)), _marginYoyOf(tw),
       (tw.as_of?'至 '+esc(tw.as_of)+'（本月至今）':''), 'marginChartTw');
   box.innerHTML=
     '<section>'+
@@ -2257,13 +2260,15 @@ function renderMargin(d){
         '<span class="hint">投資人向券商融資買股的餘額。上升＝槓桿加溫/追價、風險偏好升；下降＝去槓桿/轉保守。月頻慢訊號。</span></div>'+
       '<div style="margin-bottom:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       usPanel + twPanel +
-      '<div class="legend" style="margin-top:10px">兩張圖:融資餘額(粗線,左軸)＋ 該市場指數(藍虛線,右軸)疊圖 —— 看保證金借款與大盤是否同向、槓桿是否領先/背離。🇺🇸 FINRA margin debt(兆美元,月頻官方,1997→今)＋ S&P 500;🇹🇼 台股融資餘額(億,各月月底/當月至今)＋ 加權指數。時段 '+esc(MARGIN_LABEL[MARGIN_WIN]||MARGIN_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">兩張圖:融資餘額(粗線,左軸)＋ 該市場指數(藍虛線,右軸)疊圖 —— 看保證金借款與大盤是否同向、槓桿是否領先/背離。🇺🇸 FINRA margin debt(兆美元,月頻官方,1997→今)＋ S&P 500;🇹🇼 台股融資餘額(億,各月月底/當月至今)＋ 加權指數。月環比看短期變化、年增(YoY)看較長週期的槓桿趨勢,消去季節性雜訊。時段 '+esc(MARGIN_LABEL[MARGIN_WIN]||MARGIN_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-mgw]").forEach(b=>b.onclick=()=>{ MARGIN_WIN=b.dataset.mgw||"1y"; renderMargin(MARGIN_DATA); });
   drawMarketChart("marginChartUs", us, "🇺🇸 美股 margin debt", MARGIN_US, "兆USD", "S&P 500");
   drawMarketChart("marginChartTw", tw, "🇹🇼 台股融資餘額", MARGIN_TW, "億TWD", "加權指數");
   drawMomChart("marginChartUsMom", us, MARGIN_US, MARGIN_WIN);
   drawMomChart("marginChartTwMom", tw, MARGIN_TW, MARGIN_WIN);
+  drawYoyChart("marginChartUsYoy", us, MARGIN_US, MARGIN_WIN);
+  drawYoyChart("marginChartTwYoy", tw, MARGIN_TW, MARGIN_WIN);
 }
 // 月環比(%)線圖:由餘額序列逐月算 (本月/上月−1),零軸虛線
 function drawMomChart(elId, s, color, win){
@@ -2285,6 +2290,32 @@ function drawMomChart(elId, s, color, win){
     yAxis:{type:"value",name:"%",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
     series:[{name:"月環比 %",type:"line",smooth:true,showSymbol:pts.length<=24,symbolSize:3,data:pts,connectNulls:true,
       lineStyle:{color:color,width:1.8},itemStyle:{color:color},areaStyle:{color:color,opacity:.05},
+      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize",el._ro);
+}
+// 年增(YoY,%)線圖:由餘額序列逐月算 (本月/去年同月−1),零軸虛線;需 ≥13 個月資料
+function drawYoyChart(elId, s, color, win){
+  const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals||s.vals.length<13){ if(el) el.innerHTML=''; return; }
+  const nWin=(MARGIN_WINS.find(w=>w[0]===(win||MARGIN_WIN))||MARGIN_WINS[2])[1];
+  const n=Math.min(nWin, s.months.length);
+  const start=s.months.length-n, mo=s.months.slice(-n), pts=[];
+  for(let i=0;i<n;i++){ const gi=start+i, t=_monthMs(mo[i]), a=s.vals[gi-12], b=s.vals[gi];
+    pts.push([t, (t==null||gi-12<0||a==null||b==null||!a)?null:+((b/a-1)*100).toFixed(2)]); }
+  if(pts.filter(p=>p[1]!=null).length<1){ el.innerHTML=''; return; }
+  const xMin=_monthMs(mo[0]), xMax=_monthMs(mo[n-1]);
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:60,right:62,top:14,bottom:24},
+    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":(v>0?"+":"")+Number(v).toFixed(2)+"%"},
+    xAxis:{type:"time",min:xMin,max:xMax,axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:{type:"value",name:"%",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
+    series:[{name:"年增 YoY %",type:"line",smooth:true,showSymbol:pts.length<=24,symbolSize:3,data:pts,connectNulls:true,
+      lineStyle:{color:color,width:1.8,type:"dashed"},itemStyle:{color:color},areaStyle:{color:color,opacity:.05},
       markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}]
   },true);
   if(el._ro) window.removeEventListener("resize",el._ro);

@@ -1,0 +1,120 @@
+// 真 ECharts SSR 煙霧測試:把 index.html 裡實際的 draw*Chart 函式,用「真 ECharts」
+// (與線上同版 5.5.0)在 SSR 模式渲染,任何佈局層錯誤(如多 grid piecewise visualMap
+// 觸發的 "reading 'coord'")都會在此當場拋出。stub 版 echarts 抓不到這類錯,故需本測試。
+//
+// 目前涵蓋 drawTipsChart(TIPS 實質利率 × S&P500,含 20 日相關子圖)。跨多個時間視窗
+// 與含 null 暖身的相關序列各渲染一次。要新增其他圖,照 smoke() 模式加即可。
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import assert from "node:assert";
+
+const require = createRequire(import.meta.url);
+const echartsReal = require("echarts");   // devDependency;版本對齊 index.html CDN
+const html = readFileSync(new URL("index.html", import.meta.url), "utf8");
+
+function extract(name) {
+  const s = html.indexOf("function " + name);
+  if (s < 0) throw new Error("index.html 缺函式 " + name);
+  const o = html.indexOf("{", s);
+  let d = 0;
+  for (let i = o; i < html.length; i++) {
+    if (html[i] === "{") d++;
+    else if (html[i] === "}") { d--; if (d === 0) return html.slice(s, i + 1); }
+  }
+  throw new Error("括號不平衡:" + name);
+}
+
+// 用真 ECharts SSR 取代瀏覽器 canvas init:setOption 當下即跑完整佈局(含 markLine/visualMap)
+let RENDER_COUNT = 0;
+function makeEcharts() {
+  return {
+    version: echartsReal.version,
+    getInstanceByDom() { return null; },
+    init() {
+      const r = echartsReal.init(null, null, { renderer: "svg", ssr: true, width: 900, height: 380 });
+      return {
+        setOption(opt) { r.setOption(opt); const svg = r.renderToSVGString(); RENDER_COUNT++; if (!svg || svg.length < 100) throw new Error("SVG 空白"); },
+        resize() {}, dispose() { r.dispose(); },
+      };
+    },
+  };
+}
+
+// 產生 N 點合成資料:前 warm 個相關值為 null(暖身),模擬真實 corr20
+function synth(N, warm) {
+  const dates = [], tips = [], sp500 = [], corr = [];
+  let base = Date.UTC(2003, 0, 2);
+  for (let i = 0; i < N; i++) {
+    dates.push(new Date(base + i * 86400000).toISOString().slice(0, 10));
+    tips.push(+(1.6 + 1.1 * Math.sin(i / 200)).toFixed(3));
+    sp500.push(+(1000 + i * 0.9).toFixed(2));
+    corr.push(i < warm ? null : +(-0.35 + 0.55 * Math.sin(i / 30)).toFixed(3));
+  }
+  return { dates, tips, sp500, corr };
+}
+
+function smokeTips(label, N, warm, win) {
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener() {}, removeEventListener() {} };
+  const el = {};
+  const $ = () => el;
+  const drawTipsChart = new Function(
+    "return (function($, window, echarts){ " + extract("drawTipsChart") + " return drawTipsChart; })"
+  )()($, window, echarts);
+  const d = synth(N, warm);
+  try {
+    drawTipsChart("tipsChart", d.dates, d.tips, d.sp500, d.corr, win);
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+
+console.log("真 ECharts SSR 煙霧測試(drawTipsChart):");
+smokeTips("1y 視窗(252點)", 252, 20, "1y");
+smokeTips("3m 視窗(63點,含null暖身)", 63, 20, "3m");
+smokeTips("max 視窗(5800點)", 5800, 20, "max");
+smokeTips("極短(僅25點,corr幾乎全null)", 25, 20, "1y");
+
+// ── drawYieldCurveChart(10 天期多線 + 2s10s 子圖,多 grid + visualMap + markLine)──
+function synthYc(N) {
+  const KEYS = ["3m", "6m", "1y", "2y", "3y", "5y", "7y", "10y", "20y", "30y"];
+  const dates = [], yields = {}, spread = [];
+  let base = Date.UTC(2006, 0, 2);
+  KEYS.forEach(k => yields[k] = []);
+  for (let i = 0; i < N; i++) {
+    dates.push(new Date(base + i * 86400000).toISOString().slice(0, 10));
+    KEYS.forEach((k, ki) => yields[k].push(+(1.0 + ki * 0.25 + 0.8 * Math.sin(i / 120)).toFixed(2)));
+    spread.push(+(yields["10y"][i] - yields["2y"][i]).toFixed(2));   // 含負值(倒掛)
+  }
+  const mats = KEYS.map(k => ({ key: k, label: k.toUpperCase() }));
+  return { dates, yields, mats, spread };
+}
+function smokeYc(label, N) {
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener() {}, removeEventListener() {} };
+  const el = {};
+  const $ = () => el;
+  // drawYieldCurveChart 依賴函式外的 YC_COLORS 常數,一併從 index.html 抽出注入(保持同步)
+  const ycColors = (html.match(/const\s+YC_COLORS\s*=\s*\[[^\]]*\]/) || ["const YC_COLORS=[]"])[0];
+  const draw = new Function(
+    "return (function($, window, echarts){ " + ycColors + "; " + extract("drawYieldCurveChart") + " return drawYieldCurveChart; })"
+  )()($, window, echarts);
+  const d = synthYc(N);
+  try {
+    draw("yieldCurveChart", d.dates, d.yields, d.mats, d.spread);
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawYieldCurveChart):");
+smokeYc("5y 視窗(1260點,10線+利差子圖)", 1260);
+smokeYc("max 視窗(5000點)", 5000);
+
+assert.ok(RENDER_COUNT >= 6, "應完成至少 6 次真渲染,實得 " + RENDER_COUNT);
+console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
+// ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
+process.exit(0);

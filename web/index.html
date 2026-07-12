@@ -115,6 +115,9 @@
   .news-time{color:var(--ink3)}
   .news-title{font-size:14px;line-height:1.5;color:var(--ink)}
   .news-orig{font-size:12px;line-height:1.4;color:var(--ink3);margin-top:2px}
+  .news-summary{font-size:13px;line-height:1.65;color:var(--ink2);margin-top:7px}
+  .news-why{font-size:12.5px;line-height:1.55;color:var(--blue);font-weight:650;margin-top:5px}
+  .news-more{display:inline-block;font-size:11px;line-height:1.4;color:var(--ink3);margin-top:6px}
   /* 財報/數據 行事曆 */
   .cal-datahead{font-weight:800;font-size:13px;color:var(--ink2);margin:4px 0 6px}
   .cal-day{margin:0 0 14px}
@@ -239,6 +242,29 @@
   .sec-head .tag{font-family:var(--mono);font-size:11px;color:var(--ink2);
     border:1px solid var(--line);background:var(--panel2);padding:2px 8px;border-radius:6px}
   .sec-head .hint{color:var(--ink3);font-size:12px}
+  .tf-flow-toggle{margin-left:auto;border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+    border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
+  .tf-flow-toggle:hover{border-color:var(--blue);color:var(--blue)}
+  .tf-flow-body{display:block}
+  .tf-flow-body.collapsed{display:none}
+  .tf-summary-meta{font-size:13px;color:var(--ink2);font-weight:600;margin:6px 0 8px;line-height:1.55}
+  .tf-summary-card{margin:8px 0 14px;border:1px solid #bfd0e8;border-left:5px solid var(--blue);
+    border-radius:10px;background:#f8fbff;box-shadow:var(--shadow);padding:12px 14px}
+  .tf-summary-title{font-size:16px;font-weight:850;color:var(--ink);margin-bottom:10px}
+  .tf-summary-bias{display:inline-block;margin-left:6px;padding:2px 9px;border-radius:999px;
+    background:#e7f0ff;color:#1f5fbf;font-size:13px;font-weight:850}
+  .tf-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:9px 12px}
+  .tf-flow-line{font-size:14px;line-height:1.65;color:var(--ink);background:#fff;border:1px solid #d9e3f2;
+    border-radius:8px;padding:8px 10px}
+  .tf-flow-line .lab{font-weight:850;margin-right:6px;white-space:nowrap}
+  .tf-flow-line b{font-size:14.5px;color:var(--ink);font-weight:850}
+  .tf-flow-line.short .lab{color:#0f8a4b}
+  .tf-flow-line.long .lab{color:#1f5fbf}
+  .tf-flow-line.cool .lab{color:#b7791f}
+  .tf-flow-line.out .lab{color:#c92a3c}
+  .tf-summary-read{margin-top:10px;font-size:13.5px;line-height:1.7;color:var(--ink2);font-weight:600}
+  .tf-summary-read b{color:var(--ink);font-weight:850}
+  @media (max-width:760px){.tf-summary-grid{grid-template-columns:1fr}.tf-summary-title{font-size:15px}.tf-flow-line{font-size:13.5px}}
 
   .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);
     box-shadow:var(--shadow)}
@@ -1239,6 +1265,7 @@ function renderMacro(d){
     '</section>'+
     '<section id="sentSec"><div class="sec-head"><h2>情緒指標</h2><span class="tag">波動 / 廣度 / 貪婪恐懼</span>'+
       '<span class="hint">看市場整體在貪婪還是恐懼</span></div>'+
+      '<div id="usThemeFlowSummaryBlock"></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
     '<div id="usThemeFlowBlock"></div>'+
@@ -1249,6 +1276,7 @@ function renderMacro(d){
     '<div id="leiCfnaiBlock"></div>'+
     '<div id="leiOecdBlock"></div>'+
     '<div id="odteBlock"></div>'+
+    '<div id="usThemeFlowBlock"></div>'+
     '<section>'+
       '<div class="sec-head"><h2>類股 / 主題 ETF 漲跌</h2><span class="tag">依今日漲跌排序</span>'+
         '<span class="hint">看資金在哪個類股／主題輪動（點欄頭可改排序）</span></div>'+
@@ -2206,6 +2234,7 @@ async function loadMargin(){
   }
 }
 function _marginMomOf(s){ return (s.vals&&s.vals.length>=2&&s.vals[s.vals.length-2])?(s.vals[s.vals.length-1]/s.vals[s.vals.length-2]-1)*100:null; }
+function _marginYoyOf(s){ const n=s.vals?s.vals.length:0; return (n>=13&&s.vals[n-13])?(s.vals[n-1]/s.vals[n-13]-1)*100:null; }
 function renderMargin(d){
   const box=document.getElementById("marginBlock"); if(!box) return;
   const {us,tw}=_marginSeries(d);
@@ -2218,27 +2247,29 @@ function renderMargin(d){
   const card='border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--panel);display:inline-block;min-width:150px;margin-right:12px';
   const btns=wins.map(w=>'<button class="btn'+(MARGIN_WIN===w[0]?' active':'')+'" data-mgw="'+w[0]+'">'+w[2]+'</button>').join("");
   // 每個市場一個 panel:標題 + 數字卡 + 圖(融資左軸 + 指數右軸)
-  function panel(s, flagTitle, color, valHtml, mom, sub, chartId){
+  function panel(s, flagTitle, color, valHtml, mom, yoy, sub, chartId){
     if(!s.vals.length) return '';
     return '<div style="margin-top:14px">'+
       '<div class="sec-head" style="margin-bottom:6px"><h2 style="font-size:14.5px">'+flagTitle+'</h2></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
         '<div style="'+card+';border-left:3px solid '+color+'"><div class="cap-lab">最新餘額</div>'+
           '<div class="cap-big" style="color:'+color+'">'+valHtml+'</div>'+
-          '<div class="cap-chg">月環比 '+momHtml(mom)+'</div></div>'+
+          '<div class="cap-chg">月環比 '+momHtml(mom)+' · 年增 YoY '+momHtml(yoy)+'</div></div>'+
         (sub?'<div class="dim" style="font-size:12px">'+sub+'</div>':'')+
       '</div>'+
       '<div id="'+chartId+'" class="cap-chart" style="height:230px"></div>'+
       '<div class="dim" style="font-size:11px;margin:6px 0 0">月環比（%）</div>'+
       '<div id="'+chartId+'Mom" class="cap-chart" style="height:130px"></div>'+
+      '<div class="dim" style="font-size:11px;margin:6px 0 0">年增 YoY（%）</div>'+
+      '<div id="'+chartId+'Yoy" class="cap-chart" style="height:130px"></div>'+
     '</div>';
   }
   const usPanel = panel(us, '🇺🇸 美股保證金借款 · 月環比（＋ S&P 500）', MARGIN_US,
       '$'+Number(us.vals[us.vals.length-1]).toFixed(2)+'<span class="cap-u">兆</span>',
-      _marginMomOf(us), 'FINRA margin debt', 'marginChartUs');
+      _marginMomOf(us), _marginYoyOf(us), 'FINRA margin debt', 'marginChartUs');
   const twPanel = panel(tw, '🇹🇼 台股融資餘額 · 月環比（＋ 加權指數）', MARGIN_TW,
       Number(tw.vals[tw.vals.length-1]).toLocaleString()+'<span class="cap-u">億</span>',
-      (tw.mom!=null?tw.mom:_marginMomOf(tw)),
+      (tw.mom!=null?tw.mom:_marginMomOf(tw)), _marginYoyOf(tw),
       (tw.as_of?'至 '+esc(tw.as_of)+'（本月至今）':''), 'marginChartTw');
   box.innerHTML=
     '<section>'+
@@ -2248,13 +2279,15 @@ function renderMargin(d){
       updStamp((us.months||[]).slice(-1)[0]||tw.as_of,'每月')+
       '<div style="margin-bottom:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       usPanel + twPanel +
-      '<div class="legend" style="margin-top:10px">兩張圖:融資餘額(粗線,左軸)＋ 該市場指數(藍虛線,右軸)疊圖 —— 看保證金借款與大盤是否同向、槓桿是否領先/背離。🇺🇸 FINRA margin debt(兆美元,月頻官方,1997→今)＋ S&P 500;🇹🇼 台股融資餘額(億,各月月底/當月至今)＋ 加權指數。時段 '+esc(MARGIN_LABEL[MARGIN_WIN]||MARGIN_WIN)+'。</div>'+
+      '<div class="legend" style="margin-top:10px">兩張圖:融資餘額(粗線,左軸)＋ 該市場指數(藍虛線,右軸)疊圖 —— 看保證金借款與大盤是否同向、槓桿是否領先/背離。🇺🇸 FINRA margin debt(兆美元,月頻官方,1997→今)＋ S&P 500;🇹🇼 台股融資餘額(億,各月月底/當月至今)＋ 加權指數。月環比看短期變化、年增(YoY)看較長週期的槓桿趨勢,消去季節性雜訊。時段 '+esc(MARGIN_LABEL[MARGIN_WIN]||MARGIN_WIN)+'。</div>'+
     '</section>';
   box.querySelectorAll("[data-mgw]").forEach(b=>b.onclick=()=>{ MARGIN_WIN=b.dataset.mgw||"1y"; renderMargin(MARGIN_DATA); });
   drawMarketChart("marginChartUs", us, "🇺🇸 美股 margin debt", MARGIN_US, "兆USD", "S&P 500");
   drawMarketChart("marginChartTw", tw, "🇹🇼 台股融資餘額", MARGIN_TW, "億TWD", "加權指數");
   drawMomChart("marginChartUsMom", us, MARGIN_US, MARGIN_WIN);
   drawMomChart("marginChartTwMom", tw, MARGIN_TW, MARGIN_WIN);
+  drawYoyChart("marginChartUsYoy", us, MARGIN_US, MARGIN_WIN);
+  drawYoyChart("marginChartTwYoy", tw, MARGIN_TW, MARGIN_WIN);
 }
 // 月環比(%)線圖:由餘額序列逐月算 (本月/上月−1),零軸虛線
 function drawMomChart(elId, s, color, win){
@@ -2276,6 +2309,32 @@ function drawMomChart(elId, s, color, win){
     yAxis:{type:"value",name:"%",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
     series:[{name:"月環比 %",type:"line",smooth:true,showSymbol:pts.length<=24,symbolSize:3,data:pts,connectNulls:true,
       lineStyle:{color:color,width:1.8},itemStyle:{color:color},areaStyle:{color:color,opacity:.05},
+      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize",el._ro);
+}
+// 年增(YoY,%)線圖:由餘額序列逐月算 (本月/去年同月−1),零軸虛線;需 ≥13 個月資料
+function drawYoyChart(elId, s, color, win){
+  const el=document.getElementById(elId); if(!el||!window.echarts||!s.vals||s.vals.length<13){ if(el) el.innerHTML=''; return; }
+  const nWin=(MARGIN_WINS.find(w=>w[0]===(win||MARGIN_WIN))||MARGIN_WINS[2])[1];
+  const n=Math.min(nWin, s.months.length);
+  const start=s.months.length-n, mo=s.months.slice(-n), pts=[];
+  for(let i=0;i<n;i++){ const gi=start+i, t=_monthMs(mo[i]), a=s.vals[gi-12], b=s.vals[gi];
+    pts.push([t, (t==null||gi-12<0||a==null||b==null||!a)?null:+((b/a-1)*100).toFixed(2)]); }
+  if(pts.filter(p=>p[1]!=null).length<1){ el.innerHTML=''; return; }
+  const xMin=_monthMs(mo[0]), xMax=_monthMs(mo[n-1]);
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:60,right:62,top:14,bottom:24},
+    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":(v>0?"+":"")+Number(v).toFixed(2)+"%"},
+    xAxis:{type:"time",min:xMin,max:xMax,axisLabel:{fontSize:9,hideOverlap:true,
+      formatter:v=>{const dt=new Date(v);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
+    yAxis:{type:"value",name:"%",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:v=>v+"%"},splitLine:{lineStyle:{opacity:.3}}},
+    series:[{name:"年增 YoY %",type:"line",smooth:true,showSymbol:pts.length<=24,symbolSize:3,data:pts,connectNulls:true,
+      lineStyle:{color:color,width:1.8,type:"dashed"},itemStyle:{color:color},areaStyle:{color:color,opacity:.05},
       markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}]
   },true);
   if(el._ro) window.removeEventListener("resize",el._ro);
@@ -2632,6 +2691,8 @@ function renderSentiment(d){
     '<div id="chicagoFciBlock"></div>'+
     '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
+    '<div id="tipsBlock"></div>'+
+    '<div id="yieldCurveBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
     '<div id="marginBlock"></div>'+
@@ -2840,6 +2901,8 @@ async function loadSentiment(){
     loadChicagoFci();
     loadFsi();
     loadPI();
+    loadTips();
+    loadYieldCurve();
     loadInsider();
     loadSpec();
     loadMargin();
@@ -4141,10 +4204,14 @@ async function fetchNews(){
     box.innerHTML=d.items.map(it=>{
       const main = it.title_zh || it.title;                       // 有繁中譯文→當主標,否則原文
       const orig = it.title_zh ? '<div class="news-orig">'+esc(it.title)+'</div>' : "";  // 英文原文小字
+      const summary = it.summary_zh ? '<div class="news-summary">'+esc(it.summary_zh)+'</div>' : "";
+      const why = it.why_zh ? '<div class="news-why">'+esc(it.why_zh)+'</div>' : "";
+      const sourceCount = Array.isArray(it.sources) ? it.sources.length : 0;
+      const more = sourceCount ? '<span class="news-more">另有 '+sourceCount+' 個來源</span>' : "";
       return '<a class="news-row" href="'+esc(it.link)+'" target="_blank" rel="noopener">'+
         '<div class="news-meta"><span class="news-src">'+esc(it.src||"新聞")+'</span>'+
         '<span class="news-time">'+esc(fmtAgo(it.time))+'</span></div>'+
-        '<div class="news-title">'+esc(main)+'</div>'+ orig +
+        '<div class="news-title">'+esc(main)+'</div>'+orig+summary+why+more+
       '</a>';
     }).join("");
     const upd=document.getElementById("newsUpd");
@@ -5568,6 +5635,268 @@ async function loadOdte(){
   }
 }
 
+// ── TIPS 實質利率 × S&P500(雙線)＋ 20 日滾動相關(子圖)──────────────────────────
+let TIPS_DATA=null;
+let TIPS_WIN="1y";
+const TIPS_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
+const TIPS_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};  // max 不列→取全部
+
+// 主圖(TIPS 左軸 % + S&P500 右軸)＋下方子圖(20 日相關 -1~+1)。雙 grid 共用時間軸。
+function drawTipsChart(id, dates, tips, sp500, corr, win){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  ch.setOption({
+    animation:false,
+    grid:[
+      {left:52, right:54, top:34, height:172},          // 主圖(下方 x 軸標籤隱藏)
+      {left:52, right:54, top:252, height:82}            // 相關子圖(底部留 36px 給年份標籤)
+    ],
+    legend:{top:0, textStyle:{fontSize:11},
+      data:["TIPS 實質利率(10Y)","S&P 500"]},
+    tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]},
+      valueFormatter:null},
+    axisPointer:{link:[{xAxisIndex:"all"}]},
+    xAxis:[
+      {type:"time", gridIndex:0, axisLabel:{show:false}, axisTick:{show:false}},
+      {type:"time", gridIndex:1, axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}}
+    ],
+    yAxis:[
+      {type:"value", gridIndex:0, name:"實質利率%", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value", gridIndex:0, name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"},
+      {type:"value", gridIndex:1, name:"20日相關", nameTextStyle:{fontSize:9}, min:-1, max:1,
+       interval:1, axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.25}}}
+    ],
+    // 子圖線依相關值上色(紅負→灰零→綠正 漸層)。
+    // 注意:piecewise visualMap 在多 grid 子圖會觸發 ECharts "coord" 崩潰,必須用 continuous。
+    visualMap:{show:false, type:"continuous", seriesIndex:2, dimension:1, min:-1, max:1,
+      inRange:{color:["#e11d48","#8b949e","#16a34a"]}},
+    series:[
+      {name:"TIPS 實質利率(10Y)", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:0, yAxisIndex:0,
+       data:dates.map((d,i)=>[toMs(d), tips[i]]),
+       lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
+       areaStyle:{color:"#e8923a", opacity:.06}},
+      {name:"S&P 500", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:0, yAxisIndex:1,
+       data:dates.map((d,i)=>[toMs(d), sp500[i]]),
+       lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}},
+      {name:"20日相關", type:"line", smooth:true, showSymbol:false, connectNulls:false,
+       xAxisIndex:1, yAxisIndex:2,
+       data:dates.map((d,i)=>[toMs(d), corr[i]]),
+       lineStyle:{width:1.5}, areaStyle:{opacity:.10},
+       markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},
+         label:{show:false}, data:[{yAxis:0}]}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderTips(d){
+  const box=$("#tipsBlock");
+  if(!box) return;
+  const win=TIPS_WIN;
+  const wins=d.windows||["3m","6m","1y","3y","5y","10y","max"];
+  const btns=wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-tw="'+w+'">'+
+      (TIPS_WIN_LABEL[w]||w)+'</button>').join("");
+
+  const tl=d.tips_last, db=d.tips_diff_bps, cl=d.corr20_last;
+  const tipsStr=tl!=null?tl.toFixed(2)+"%":"—";
+  const dbStr=db!=null?((db>0?"+":"")+db.toFixed(1)+" bps"):"";
+  const dbCol=db==null?"var(--ink2)":(db>0?"#e11d48":"#16a34a");   // 實質利率升(紅,對股市偏壓)
+  const corrStr=cl!=null?(cl>0?"+":"")+cl.toFixed(2):"—";
+  const corrCol=cl==null?"var(--ink2)":(cl>=0?"#16a34a":"#e11d48");
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:130px;margin-right:12px';
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2>'+
+        '<span class="tag">10Y TIPS · 20日滾動相關</span>'+
+        '<span class="hint">實質利率是股市估值的貼現率;利率升多半壓抑股市。子圖看兩者短期連動強弱</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">10Y TIPS 實質利率</div>'+
+          '<div class="cap-big" style="color:#e8923a">'+esc(tipsStr)+'</div>'+
+          (dbStr?'<div style="font-size:12px;color:'+dbCol+'">日差 '+esc(dbStr)+'</div>':'')+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">20日相關(利率vs股市)</div>'+
+          '<div class="cap-big" style="color:'+corrCol+'">'+esc(corrStr)+'</div>'+
+          '<div style="font-size:12px;color:var(--ink2)">'+(cl==null?'':(cl>=0?'同向':'反向'))+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="tipsChart" class="cap-chart" style="height:370px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED <b>DFII10</b>(10年期 TIPS 實質殖利率)＋ Yahoo Finance <b>^GSPC</b>。子圖為「TIPS 殖利率每日變動」與「S&amp;P500 每日報酬」的 '+(d.corr_win||20)+' 日滾動皮爾森相關(<b class="pos">綠=同向</b>、<b class="neg">紅=反向</b>);多數時間偏負(實質利率上升壓抑股市估值)。視窗 '+esc(TIPS_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  const ser=d.series||{};
+  const allD=ser.dates||[], allT=ser.tips||[], allS=ser.sp500||[], allC=ser.corr20||[];
+  const n=Math.min(TIPS_WIN_N[win]||allD.length, allD.length, allT.length, allS.length, allC.length);
+  const dates=allD.slice(-n), tips=allT.slice(-n), sp500=allS.slice(-n), corr=allC.slice(-n);
+  if(dates.length>=2){
+    drawTipsChart("tipsChart", dates, tips, sp500, corr, win);
+  }else{
+    const c=$("#tipsChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-tw]").forEach(b=>b.onclick=()=>{ TIPS_WIN=b.dataset.tw; renderTips(TIPS_DATA); });
+}
+
+async function loadTips(){
+  const box=$("#tipsBlock");
+  if(!box) return;
+  if(TIPS_DATA){ renderTips(TIPS_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 TIPS 實質利率 …</div>';
+  try{
+    const res=await fetch("data/tips.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    TIPS_DATA=await res.json();
+    if(TIPS_DATA.default_window) TIPS_WIN=TIPS_DATA.default_window;
+    renderTips(TIPS_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2></div>'+
+      '<div class="legend">⚠️ tips.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_tips。</div></section>';
+  }
+}
+
+// ── 美國國債收益率曲線(各天期時間序列)＋ 2s10s 倒掛利差(子圖)──────────────────────────
+let YC_DATA=null;
+let YC_WIN="5y";
+const YC_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
+const YC_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};  // max 不列→全部
+// 短→長 冷暖漸層(藍=短端、紅=長端),對映 10 個天期
+const YC_COLORS=["#1d4ed8","#2563eb","#0ea5e9","#06b6d4","#14b8a6","#22c55e","#84cc16","#eab308","#f97316","#dc2626"];
+// 各天期固定對比色(與讀數卡一致);未列的天期退回 YC_COLORS 漸層
+const YC_COLOR_BY_KEY={"3m":"#1d4ed8","6m":"#2563eb","1y":"#0ea5e9","2y":"#06b6d4","3y":"#14b8a6","5y":"#22c55e","7y":"#84cc16","10y":"#eab308","20y":"#f97316","30y":"#dc2626"};
+
+function drawYieldCurveChart(id, dates, yields, mats, spread){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  const lineSeries=mats.map((m,i)=>{
+    const col=m.color||"#8b949e";
+    return {
+      name:m.label, type:"line", smooth:false, showSymbol:false, connectNulls:false,
+      xAxisIndex:0, yAxisIndex:0,
+      data:dates.map((d,j)=>[toMs(d), (yields[m.key]||[])[j]]),
+      lineStyle:{color:col, width:1.6}, itemStyle:{color:col}
+    };
+  });
+  ch.setOption({
+    animation:false,
+    grid:[
+      {left:48, right:20, top:50, height:158},          // 主圖(10 天期線)
+      {left:48, right:20, top:246, height:80}            // 2s10s 利差子圖
+    ],
+    legend:{top:0, type:"scroll", textStyle:{fontSize:10}, data:mats.map(m=>m.label)},
+    tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]}, valueFormatter:v=>v==null?"-":v+"%"},
+    axisPointer:{link:[{xAxisIndex:"all"}]},
+    xAxis:[
+      {type:"time", gridIndex:0, axisLabel:{show:false}, axisTick:{show:false}},
+      {type:"time", gridIndex:1, axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}}
+    ],
+    yAxis:[
+      {type:"value", gridIndex:0, name:"殖利率%", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.25}}},
+      {type:"value", gridIndex:1, name:"10Y−2Y", nameTextStyle:{fontSize:9},
+       axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.2}}}
+    ],
+    // 利差子圖依值上色(紅=倒掛<0、灰≈0、綠>0)。用 continuous(piecewise 在多 grid 子圖會崩)
+    visualMap:{show:false, type:"continuous", seriesIndex:mats.length, dimension:1,
+      min:-1.5, max:1.5, inRange:{color:["#e11d48","#8b949e","#16a34a"]}},
+    series:[...lineSeries,
+      {name:"10Y−2Y 利差", type:"line", smooth:false, showSymbol:false, connectNulls:false,
+       xAxisIndex:1, yAxisIndex:1,
+       data:dates.map((d,j)=>[toMs(d), spread[j]]),
+       lineStyle:{width:1.5}, areaStyle:{opacity:.12},
+       markLine:{symbol:"none", silent:true, lineStyle:{color:"#8b949e", type:"dashed", opacity:.6},
+         label:{show:false}, data:[{yAxis:0}]}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderYieldCurve(d){
+  const box=$("#yieldCurveBlock");
+  if(!box) return;
+  const win=YC_WIN;
+  const wins=d.windows||["3m","6m","1y","3y","5y","10y","max"];
+  const btns=wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-ycw="'+w+'">'+
+      (YC_WIN_LABEL[w]||w)+'</button>').join("");
+  const mats=(d.maturities||[]).map((m,i)=>({...m, color:YC_COLOR_BY_KEY[m.key]||YC_COLORS[i%YC_COLORS.length]}));
+  const lat=d.latest||{};
+  const sp=d.spread_last;
+  const spCol=sp==null?"var(--ink2)":(sp<0?"#e11d48":"#16a34a");
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:110px;margin-right:12px';
+  const yv=k=>lat[k]!=null?lat[k].toFixed(2)+"%":"—";
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>美國國債收益率曲線</h2>'+
+        '<span class="tag">10 天期 · 2s10s 倒掛</span>'+
+        '<span class="hint">各天期殖利率隨時間走勢;子圖 10Y−2Y 利差<b class="neg">轉負=倒掛</b>,經典衰退領先訊號</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">2Y</div><div class="cap-big" style="color:#06b6d4">'+esc(yv("2y"))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">10Y</div><div class="cap-big" style="color:#eab308">'+esc(yv("10y"))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">30Y</div><div class="cap-big" style="color:#dc2626">'+esc(yv("30y"))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">2s10s 利差(10Y−2Y)</div>'+
+          '<div class="cap-big" style="color:'+spCol+'">'+(sp==null?"—":(sp>0?"+":"")+sp.toFixed(2)+"%")+'</div>'+
+          '<div style="font-size:12px;color:var(--ink2)">'+(sp==null?"":(sp<0?"倒掛":"正常"))+'</div></div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="yieldCurveChart" class="cap-chart" style="height:380px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED 恆定到期名目公債殖利率(DGS3MO…DGS30)。上圖 10 條線由短(藍)到長(紅)。下圖 <b>10Y−2Y</b> 利差,<b class="neg">紅=倒掛(&lt;0)</b>、<b class="pos">綠=正斜率</b>;利差長期倒掛後轉正常是歷史上衰退前兆之一。視窗 '+esc(YC_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  const ser=d.series||{};
+  const allD=ser.dates||[], allY=ser.yields||{}, allSp=ser.spread_2s10s||[];
+  const n=Math.min(YC_WIN_N[win]||allD.length, allD.length);
+  const dates=allD.slice(-n);
+  const yields={}; mats.forEach(m=>{ yields[m.key]=(allY[m.key]||[]).slice(-n); });
+  const spread=allSp.slice(-n);
+  if(dates.length>=2){
+    drawYieldCurveChart("yieldCurveChart", dates, yields, mats, spread);
+  }else{
+    const c=$("#yieldCurveChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-ycw]").forEach(b=>b.onclick=()=>{ YC_WIN=b.dataset.ycw; renderYieldCurve(YC_DATA); });
+}
+
+async function loadYieldCurve(){
+  const box=$("#yieldCurveBlock");
+  if(!box) return;
+  if(YC_DATA){ renderYieldCurve(YC_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 國債收益率曲線 …</div>';
+  try{
+    const res=await fetch("data/yieldcurve.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    YC_DATA=await res.json();
+    if(YC_DATA.default_window) YC_WIN=YC_DATA.default_window;
+    renderYieldCurve(YC_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>美國國債收益率曲線</h2></div>'+
+      '<div class="legend">⚠️ yieldcurve.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_yieldcurve。</div></section>';
+  }
+}
+
 // ── 投機交易:溫度 + 六源橫條 + 歷史線 + 4 卡 + Reddit/融資旁註 ──────────────────────────
 let SPEC_DATA=null;
 let SPEC_WIN="5y";
@@ -5683,10 +6012,12 @@ function renderSpec(){
 // ── /投機交易 ──────────────────────────────────────────────────────────────────────────────
 
 // ── 美股細分產業資金流: 已分類題材股 1D/5D/20D/60D ────────────────────────────────────
-let US_THEME_FLOW=null, US_THEME_SORT={key:"r1",dir:-1}, US_THEME_OPEN="";
+let US_THEME_FLOW=null, US_THEME_SORT={key:"r1",dir:-1}, US_THEME_OPEN="", US_THEME_COLLAPSED=true;
 // 自訂:把任意美股代號加進某群組,納入該群組平均報酬計算(localStorage 持久化;報酬用 /api/quotes 現算)
 let US_THEME_CUSTOM=[];      // [{sym, theme}]
 let US_THEME_CUSTOMQ={};     // {sym: {r1,r5,r20,r60,close,name}}
+function _tfLoadCollapsed(){ try{ US_THEME_COLLAPSED=localStorage.getItem("usThemeFlowCollapsed")!=="0"; }catch(e){ US_THEME_COLLAPSED=true; } }
+function _tfSaveCollapsed(){ try{ localStorage.setItem("usThemeFlowCollapsed",US_THEME_COLLAPSED?"1":"0"); }catch(e){} }
 function _tfLoadCustom(){ try{ US_THEME_CUSTOM=JSON.parse(localStorage.getItem("usThemeCustom")||"[]")||[]; }catch(e){ US_THEME_CUSTOM=[]; } }
 function _tfSaveCustom(){ try{ localStorage.setItem("usThemeCustom",JSON.stringify(US_THEME_CUSTOM)); }catch(e){} }
 async function _tfFetchCustom(){
@@ -5741,6 +6072,7 @@ function _tfRemoveStock(sym,theme){
 }
 async function loadUsThemeFlow(){
   const host=document.getElementById("usThemeFlowBlock"); if(!host) return;
+  _tfLoadCollapsed();
   _tfLoadCustom();
   if(US_THEME_FLOW){ renderUsThemeFlow(); _tfFetchCustom().then(renderUsThemeFlow); return; }
   host.innerHTML='<div class="dim" style="padding:8px">載入美股細分產業資金流 …</div>';
@@ -5759,6 +6091,40 @@ function _tfVal(v){ return v==null?'<span class="dim">—</span>':'<span class="
 function _tfSyms(arr,key){
   return (arr||[]).slice(0,3).map(x=>'<span class="sym clickable" data-stk="'+esc(x.sym)+'">'+esc(x.sym)+'</span> '+_tfVal(x[key]||0)).join('<br>');
 }
+function _tfFlowScore(g){
+  const a=g.avg||{}, r1=a.r1||0, r5=a.r5||0, r20=a.r20||0, r60=a.r60||0;
+  return +(r1*0.15 + r5*0.25 + r20*0.3 + r60*0.3).toFixed(2);
+}
+function _tfFlowShort(g){ const a=g.avg||{}; return +(((a.r1||0)*0.35 + (a.r5||0)*0.65).toFixed(2)); }
+function _tfFlowNames(gs, n=3){ return gs.slice(0,n).map(g=>'<b>'+esc(g.theme)+'</b>').join('、') || '<span class="dim">—</span>'; }
+function _tfFlowSummary(groups){
+  const ranked=[...groups].filter(g=>g.avg&&g.avg.r5!=null&&g.avg.r20!=null&&g.avg.r60!=null)
+    .map(g=>({...g,_score:_tfFlowScore(g),_short:_tfFlowShort(g)}));
+  const shortIn=[...ranked].filter(g=>g._short>0&&g.avg.r20>0).sort((a,b)=>b._short-a._short);
+  const longIn=[...ranked].filter(g=>g.avg.r20>0&&g.avg.r60>0).sort((a,b)=>b._score-a._score);
+  const cooling=[...ranked].filter(g=>g._short<0&&g.avg.r60>0).sort((a,b)=>a._short-b._short);
+  const outflow=[...ranked].filter(g=>g._short<0&&g.avg.r20<0&&g.avg.r60<0).sort((a,b)=>a._score-b._score);
+  const bias = longIn.length && _tfFlowScore(longIn[0])>8 ? '偏多輪動' : (outflow.length>=3 ? '偏防守/退潮' : '分歧輪動');
+  return '<div class="tf-summary-card">'+
+    '<div class="tf-summary-title">資金流結論 <span class="tf-summary-bias">'+bias+'</span></div>'+
+    '<div class="tf-summary-grid">'+
+      '<div class="tf-flow-line short"><span class="lab">短線流入</span>'+_tfFlowNames(shortIn)+'</div>'+
+      '<div class="tf-flow-line long"><span class="lab">中長線主線</span>'+_tfFlowNames(longIn)+'</div>'+
+      '<div class="tf-flow-line cool"><span class="lab">長線強、短線降溫</span>'+_tfFlowNames(cooling)+'</div>'+
+      '<div class="tf-flow-line out"><span class="lab">同步流出</span>'+_tfFlowNames(outflow)+'</div>'+
+    '</div>'+
+    '<div class="tf-summary-read"><b>判讀：</b>1D/5D 看短線資金，20D 看波段，60D 看主線。短線與 20D/60D 同向＝趨勢較乾淨；短線轉弱但 60D 仍強＝高位降溫或輪動換手。</div>'+
+  '</div>';
+}
+function renderUsThemeFlowSummary(groups){
+  const host=document.getElementById("usThemeFlowSummaryBlock"); if(!host||!US_THEME_FLOW) return;
+  const d=US_THEME_FLOW;
+  host.innerHTML='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流結論</h2><span class="tag">短 / 中 / 長期資金流</span>'+
+    '<span class="hint">放在情緒指標下方，單獨看判斷</span></div>'+
+    '<div class="tf-summary-meta">資料更新 '+esc(fmtTime(d.generated_at))+' · 已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔 · 依 1D / 5D / 20D / 60D 族群平均報酬判斷</div>'+
+    _tfFlowSummary(groups)+
+  '</section>';
+}
 function _tfMembers(g){
   const rows=(g.members||[]).slice(0,120);
   if(!rows.length) return "";
@@ -5775,6 +6141,7 @@ function _tfMembers(g){
 function renderUsThemeFlow(){
   const host=document.getElementById("usThemeFlowBlock"); if(!host||!US_THEME_FLOW) return;
   const d=US_THEME_FLOW, groups=_tfAugmented().filter(g=>g.count>0);
+  renderUsThemeFlowSummary(groups);
   const k=US_THEME_SORT.key, dir=US_THEME_SORT.dir;
   groups.sort((a,b)=>{
     const av=k==="count"?a.count:(k==="up_ratio"?a.up_ratio:((a.avg||{})[k]));
@@ -5784,9 +6151,11 @@ function renderUsThemeFlow(){
   const arrow=key=>US_THEME_SORT.key===key?(US_THEME_SORT.dir<0?" ▼":" ▲"):"";
   const th=(key,lab)=>'<th class="sortable" data-k="'+key+'">'+lab+arrow(key)+'</th>';
   let h='<section style="margin-top:18px"><div class="sec-head"><h2>美股細分產業資金流</h2><span class="tag">題材股清單 · 投資題材分類</span>'+
-    '<span class="hint">放在情緒指標下方；用 1D/5D/20D/60D 看資金流到哪個題材</span></div>'+
+    '<span class="hint">放在 ETF 漲跌上方；用 1D/5D/20D/60D 看資金流到哪個題材</span>'+
+    '<button id="tfFlowToggle" class="tf-flow-toggle" type="button" aria-expanded="'+(!US_THEME_COLLAPSED)+'">'+(US_THEME_COLLAPSED?"+ 展開明細":"- 收合明細")+'</button></div>'+
     '<div class="legend">資料更新 '+esc(fmtTime(d.generated_at))+'。已定價 '+fmtNum(d.priced_symbols||0,0)+' / '+fmtNum(d.total_symbols||0,0)+' 檔；只抓已分類題材股，不掃全市場。'+
     '<b>短線流入</b>=1D/5D 強；<b>波段主線</b>=20D/60D 強。點族群可展開成分股。</div>'+
+    '<div id="tfFlowBody" class="tf-flow-body'+(US_THEME_COLLAPSED?" collapsed":"")+'">'+
     // 自訂:加任意美股代號到某群組,納入該群組平均報酬計算
     '<div class="hold-add" style="margin:2px 0 8px">'+
       '<input id="tfAddSym" class="holdInput" type="text" placeholder="美股代號,例 NVDA / AVGO" autocomplete="off" style="max-width:200px">'+
@@ -5807,8 +6176,9 @@ function renderUsThemeFlow(){
       '<td><span class="badge '+(g.confidence==="高"?"in":(g.confidence==="中"?"add":"out"))+'">'+esc(g.confidence||"")+'</span></td></tr>'+
       (open?_tfMembers(g):"");
   });
-  h+='</tbody></table><div class="legend">分類規則：人工題材 mapping 優先；未命中者若有產業快取則輔助歸類，否則列入「未細分」。第一版偏投資題材，不是官方產業分類。</div></section>';
+  h+='</tbody></table><div class="legend">分類規則：人工題材 mapping 優先；未命中者若有產業快取則輔助歸類，否則列入「未細分」。第一版偏投資題材，不是官方產業分類。</div></div></section>';
   host.innerHTML=h;
+  const _tb=document.getElementById("tfFlowToggle"); if(_tb) _tb.onclick=()=>{ US_THEME_COLLAPSED=!US_THEME_COLLAPSED; _tfSaveCollapsed(); renderUsThemeFlow(); };
   host.querySelectorAll("th.sortable").forEach(th=>th.onclick=()=>{ const key=th.dataset.k; if(US_THEME_SORT.key===key)US_THEME_SORT.dir*=-1; else US_THEME_SORT={key:key,dir:-1}; renderUsThemeFlow(); });
   host.querySelectorAll(".tf-row").forEach(tr=>tr.onclick=e=>{ if(e.target.closest(".clickable")) return; const t=tr.dataset.theme; US_THEME_OPEN=US_THEME_OPEN===t?"":t; renderUsThemeFlow(); });
   host.querySelectorAll(".clickable[data-stk]").forEach(x=>x.onclick=e=>{ e.stopPropagation(); openHoldStock(x.dataset.stk,x.dataset.stk); });

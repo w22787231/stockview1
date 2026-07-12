@@ -116,6 +116,9 @@ jobs:
           pip install yfinance pandas numpy -q || true
           cd engine
           python export_tips.py || echo "[tips] 失敗,沿用線上"
+          if [ ! -s ../data/tips.json ]; then
+            curl -fsS "https://stockview1.pages.dev/data/tips.json" -o ../data/tips.json && echo "[tips] 已沿用線上" || echo "[tips] 線上沿用也失敗"
+          fi
 
       - name: Export US Treasury yield curve (DGS3MO…DGS30 + 2s10s)
         if: ${{ github.event.inputs.web_only != 'true' }}

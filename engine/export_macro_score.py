@@ -201,6 +201,21 @@ def score_fwdpe(items):
                        "Forward P/E = %.1fx" % pe))
 
 
+def score_erp(items):
+    d = _load("sentiment.json") or {}
+    e = d.get("equity_risk_premium")
+    if not e: return
+    cur = e.get("cur")
+    hist = [v for v in (e.get("erp") or []) if v is not None]
+    if cur is None or not hist: return
+    p = _pctile(hist, cur)
+    if p is None: return
+    sc = p * 100                              # ERP 越高=股票相對債券越便宜=偏多
+    st = "股票相對債券便宜" if p >= .65 else ("中性" if p >= .35 else "股票相對債券昂貴")
+    items.append(_item("erp", "股票風險溢酬 ERP", "估值", sc, st,
+                       "ERP=%+.2f%%(盈餘殖利率−10Y),第 %d 百分位" % (cur, round(p * 100))))
+
+
 def score_ndxm2(items):
     d = (_load("sentiment.json") or {}).get("ndx_m2")
     if not d: return
@@ -352,7 +367,7 @@ def build():
     items = []
     for fn in (score_fsi, score_nfci, score_pi, score_sofr, score_reserves,
                score_fedliq, score_cfnai, score_oecd, score_insider, score_cot,
-               score_breadth, score_spec, score_skew, score_fwdpe, score_ndxm2,
+               score_breadth, score_spec, score_skew, score_fwdpe, score_erp, score_ndxm2,
                score_twm1m2, score_tw_retail, score_fng, score_vix, score_aicapex):
         try:
             fn(items)

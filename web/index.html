@@ -2871,7 +2871,7 @@ function safeHavenBox(s){
       '<span style="width:1px;height:16px;background:var(--line);margin:0 2px"></span>'+invBtn+'</div>'+
     '<div class="ex">CNN Fear &amp; Greed 子指標:股票(S&amp;P500)近 20 日滾動報酬 − 公債近 20 日滾動報酬(百分點)。'+
       '<b class="pos">越高</b>＝股票跑贏公債越多(風險偏好升溫);<b class="neg">越低甚至轉負</b>＝資金轉向公債避險(恐慌升溫)。'+
-      (p!=null?' 現值位居自身歷史(近1年)第 <b>'+p+'</b> 百分位。':'')+'虛線=0(股債打平參考)。'+
+      (p!=null?' 現值位居自身歷史(近1年)第 <b>'+p+'</b> 百分位。':'')+'灰虛線=0(股債打平參考)、<b style="color:#e8923a">橘虛線=3pt參考線</b>。'+
       '<b style="color:#9333ea">紫線=S&amp;P500(右軸)</b>,對照走勢。</div>'+
     '</div>';
 }
@@ -2897,7 +2897,9 @@ function _renderSafeHaven(){
   const spy=(Array.isArray(s.sp500)&&s.sp500.length)?s.sp500.slice(-n):null;
   const series=[{name:SH_INV?"-y":"y",type:"line",data:y,smooth:true,symbol:"none",yAxisIndex:0,connectNulls:true,
       lineStyle:{width:2,color:"#0d9488"},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d948812"},
-      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}];
+      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[
+        {yAxis:0},
+        {yAxis:sgn*3,lineStyle:{color:"#e8923a",type:"dashed",width:1},label:{formatter:(sgn*3>0?"+":"")+(sgn*3)+"pt",color:"#e8923a",fontSize:10,position:"insideEndTop"}}]}}];
   const yAxes=[{type:"value",name:SH_INV?"-pt":"pt",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:"{value}"},splitLine:{lineStyle:{opacity:.3}}}];
   if(spy){
     yAxes.push({type:"value",scale:true,position:"right",name:"S&P500",nameTextStyle:{fontSize:10,color:"#9333ea"},

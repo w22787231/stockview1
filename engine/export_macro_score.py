@@ -216,6 +216,60 @@ def score_erp(items):
                        "ERP=%+.2f%%(盈餘殖利率−10Y),第 %d 百分位" % (cur, round(p * 100))))
 
 
+def score_yieldcurve(items):
+    d = _load("yieldcurve.json")
+    if not d: return
+    cur = d.get("spread_last")
+    vals = (d.get("series") or {}).get("spread_2s10s")
+    if cur is None or not vals: return
+    p = _pctile(vals, cur)
+    if p is None: return
+    sc = p * 100                              # 利差越正(陡峭)越健康,倒掛(負)=衰退警訊
+    st = "倒掛(衰退警訊)" if cur < 0 else ("偏平坦(近期相對低點)" if p < .35 else ("中性" if p < .7 else "陡峭(近期相對高點)"))
+    items.append(_item("yieldcurve", "美債殖利率曲線 2s10s", "景氣", sc, st,
+                       "利差 %+.2f%%,第 %d 百分位" % (cur, round(p * 100))))
+
+
+def score_tips(items):
+    d = _load("tips.json")
+    if not d: return
+    cur = d.get("tips_last")
+    vals = (d.get("series") or {}).get("tips")
+    if cur is None or not vals: return
+    p = _pctile(vals, cur)
+    if p is None: return
+    sc = (1 - p) * 100                        # 實質利率越高=金融條件越緊、估值壓力越大=偏空
+    st = "實質利率低(寬鬆)" if p < .35 else ("中性" if p < .7 else "實質利率高(緊縮)")
+    items.append(_item("tips", "10年 TIPS 實質利率", "估值", sc, st,
+                       "實質利率 %.2f%%,第 %d 百分位" % (cur, round(p * 100))))
+
+
+def score_safehaven(items):
+    d = (_load("sentiment.json") or {}).get("safe_haven_demand")
+    if not d: return
+    cur, p = d.get("cur"), d.get("pctile")
+    if cur is None or p is None: return
+    sc = p                                    # 股票越跑贏公債=風險偏好越高=偏多;p 已是0-100分位
+    st = "風險偏好高" if p >= 65 else ("中性" if p >= 35 else "避險情緒濃")
+    items.append(_item("safehaven", "Safe Haven Demand", "情緒", sc, st,
+                       "股債20日報酬差 %+.2fpt,第 %d 百分位" % (cur, round(p))))
+
+
+def score_hyg(items):
+    lv = (_load("sentiment.json") or {}).get("levels") or []
+    h = next((l for l in lv if l.get("sym") == "HYG"), None)
+    if not h: return
+    cur = h.get("level")
+    vals = h.get("spark")
+    if cur is None or not vals: return
+    p = _pctile(vals, cur)
+    if p is None: return
+    sc = p * 100                              # HYG 價格越高(相對近期區間)=信用市場越穩=偏多
+    st = "信用市場穩健" if p >= .65 else ("中性" if p >= .35 else "信用壓力升溫")
+    items.append(_item("hyg", "HYG 高收益債", "信用/壓力", sc, st,
+                       "HYG $%.2f,近60日第 %d 百分位" % (cur, round(p * 100))))
+
+
 def score_ndxm2(items):
     d = (_load("sentiment.json") or {}).get("ndx_m2")
     if not d: return
@@ -368,7 +422,8 @@ def build():
     for fn in (score_fsi, score_nfci, score_pi, score_sofr, score_reserves,
                score_fedliq, score_cfnai, score_oecd, score_insider, score_cot,
                score_breadth, score_spec, score_skew, score_fwdpe, score_erp, score_ndxm2,
-               score_twm1m2, score_tw_retail, score_fng, score_vix, score_aicapex):
+               score_twm1m2, score_tw_retail, score_fng, score_vix, score_aicapex,
+               score_yieldcurve, score_tips, score_safehaven, score_hyg):
         try:
             fn(items)
         except Exception as e:

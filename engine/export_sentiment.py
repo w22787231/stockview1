@@ -964,13 +964,17 @@ def fetch_sp500_fwd_pe():
                 newest_av, newest_iso = (got[1], got[2]), iso
     if newest_av:
         a5 = newest_av[0] or a5; a10 = newest_av[1] or a10
-    eps_hist = dict(sorted(eps_hist.items())[-96:])    # 保留近 ~96 期(~8 年)
+    # 保留近 ~120 期(~10年,涵蓋 FactSet archive 底線 2016-12)供 ERP 用全長;
+    # Forward P/E 圖本身仍只吐近 96 期(dates/pe/spy,見下),行為不變。
+    eps_hist = dict(sorted(eps_hist.items())[-120:])
     if not eps_hist:
         return None
-    sorted_eps = sorted(eps_hist.items())          # [(報告ISO, eps), ...] 由舊到新
+    sorted_eps = sorted(eps_hist.items())          # [(報告ISO, eps), ...] 由舊到新,全長(供 ERP)
+    sorted_eps_disp = sorted_eps[-96:]              # Forward P/E 圖沿用原本 96 期窗
     latest_eps = sorted_eps[-1][1]
     earliest = sorted_eps[0][0]
-    def eps_at(day):                               # 該日生效 EPS = 不晚於該日的最近一期
+    earliest_disp = sorted_eps_disp[0][0]
+    def eps_at(day):                               # 該日生效 EPS = 不晚於該日的最近一期(用全長)
         e = sorted_eps[0][1]
         for dt, val in sorted_eps:
             if dt <= day:
@@ -989,20 +993,23 @@ def fetch_sp500_fwd_pe():
             if c is None:
                 continue
             ds = datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d")
-            if ds >= earliest:                     # 只取有 forward EPS 的區間
+            if ds >= earliest:                     # 只取有 forward EPS 的區間(全長)
                 rows.append((ds, c))
         live = (res.get("meta") or {}).get("regularMarketPrice") or (rows[-1][1] if rows else None)
     except Exception:
         return None
     if not rows:
         return None
-    samp = rows[::5]                               # 週取樣(每5交易日)讓長區間圖輕量
+    samp = rows[::5]                               # 週取樣(每5交易日)讓長區間圖輕量,全長
     if samp[-1] != rows[-1]:
         samp.append(rows[-1])
-    dates = [d for d, _ in samp]
-    pe = [round(c / eps_at(d), 1) for d, c in samp]
+    dates_full = [d for d, _ in samp]
+    pe_full = [round(c / eps_at(d), 1) for d, c in samp]
+    samp_disp = [x for x in samp if x[0] >= earliest_disp]   # Forward P/E 展示窗(近96期,不變)
+    dates = [d for d, _ in samp_disp]
+    pe = [round(c / eps_at(d), 1) for d, c in samp_disp]
     cur = round(live / latest_eps, 1)
-    spy = None                                     # SPY 收盤價(右軸比較):對齊 forward PE 取樣日期
+    spy_full = None                                # SPY 收盤價(右軸比較):對齊 forward PE 取樣日期,全長
     try:
         ch2 = json.loads(urllib.request.urlopen(urllib.request.Request(
             "https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=10y",
@@ -1023,19 +1030,24 @@ def fetch_sp500_fwd_pe():
                 else:
                     break
             return val
-        spy = [round(spy_at(d), 2) if spy_at(d) is not None else None for d in dates]
+        spy_full = [round(spy_at(d), 2) if spy_at(d) is not None else None for d in dates_full]
     except Exception:
-        spy = None
+        spy_full = None
+    spy = spy_full[-len(dates):] if spy_full else None   # Forward P/E 展示窗同步截尾,不變
     return {"label": "S&P500 Forward P/E", "cur": cur, "fwd_eps": latest_eps,
             "report_date": sorted_eps[-1][0], "avg5": a5, "avg10": a10,
             "eps_hist": eps_hist, "dates": dates, "pe": pe, "spy": spy,
+            "dates_full": dates_full, "pe_full": pe_full, "spy_full": spy_full,   # 全長(供 ERP),Forward P/E 圖不用這三個
             "thr": {"high": 21.5, "low": 20, "oversold": 16}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC + SPY 價"}
 
 
 def fetch_equity_risk_premium(fwd_pe):
     """股票風險溢酬 ERP = S&P500 盈餘殖利率(100/Forward PE) − 10年公債殖利率(DGS10)。
     重用同一 job 內先跑過的 fetch_sp500_fwd_pe() 結果 + 已產出的 data/yieldcurve.json,不重抓。"""
-    if not fwd_pe or not fwd_pe.get("dates") or not fwd_pe.get("pe"):
+    pe_dates = fwd_pe.get("dates_full") or (fwd_pe.get("dates") if fwd_pe else None)
+    pe_vals = fwd_pe.get("pe_full") or (fwd_pe.get("pe") if fwd_pe else None)
+    pe_spy = fwd_pe.get("spy_full") or (fwd_pe.get("spy") if fwd_pe else None)
+    if not fwd_pe or not pe_dates or not pe_vals:
         return None
     try:
         with io.open(os.path.join(DATA_DIR, "yieldcurve.json"), encoding="utf-8-sig") as f:
@@ -1047,13 +1059,13 @@ def fetch_equity_risk_premium(fwd_pe):
         return None
     if not yc_dates or not yc_10y:
         return None
-    dates, erp = ERP.build_series(fwd_pe["dates"], fwd_pe["pe"], yc_dates, yc_10y)
+    dates, erp = ERP.build_series(pe_dates, pe_vals, yc_dates, yc_10y)
     if not dates:
         return None
     cur = ERP.compute_erp(fwd_pe.get("cur"), dgs10_cur) if dgs10_cur is not None else erp[-1]
     hist = [v for v in erp if v is not None]
     pctile = round(sum(1 for v in hist if v <= cur) / len(hist) * 100) if hist and cur is not None else None
-    spy = ERP.pick_by_date(dates, fwd_pe["dates"], fwd_pe.get("spy") or []) if fwd_pe.get("spy") else None
+    spy = ERP.pick_by_date(dates, pe_dates, pe_spy or []) if pe_spy else None
     return {"label": "股票風險溢酬 ERP", "cur": cur, "fwd_pe": fwd_pe.get("cur"), "dgs10": dgs10_cur,
             "pctile": pctile, "dates": dates, "erp": erp, "spy": spy,
             "src": "S&P500 盈餘殖利率(FactSet fwd EPS)− 10年公債殖利率(FRED DGS10)"}

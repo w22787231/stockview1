@@ -2701,6 +2701,7 @@ function renderSentiment(d){
     '<div id="ndxM2Block"></div>'+
     sp500FwdPeBox(d.sp500_fwd_pe)+
     erpBox(d.equity_risk_premium)+
+    safeHavenBox(d.safe_haven_demand)+
     reservesBox(MACRO_RESERVES)+sofrIorbBox(MACRO_SOFR)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
@@ -2708,6 +2709,7 @@ function renderSentiment(d){
   if(MACRO_SOFR) drawSofrIorb(MACRO_SOFR);
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
   if(d.equity_risk_premium) drawErp(d.equity_risk_premium);
+  if(d.safe_haven_demand) drawSafeHaven(d.safe_haven_demand);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
   loadMacroScore();                                  // 評分卡:市場廣度上方(sentBox 內)
 }
@@ -2825,6 +2827,62 @@ function _renderErp(){
     series:[{name:"ERP",type:"line",data:erp,smooth:true,symbol:"none",connectNulls:true,
       lineStyle:{width:2,color:"#0d9488"},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d948812"},
       markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}],
+  }, true);
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+
+let SH_INV=false;   // 反轉視角:顯示 -y,讓線與 S&P500 同向(正相關),較直覺
+function safeHavenBox(s){
+  if(!s || !s.y || !s.y.length) return '';
+  const cur=s.cur, p=s.pctile;
+  const vd = cur==null?{t:"—",c:"dim"}:(cur>0?{t:"股票跑贏公債(風險偏好)",c:"pos"}:{t:"公債跑贏股票(避險)",c:"neg"});
+  const invBtn='<button class="btn'+(SH_INV?' active':'')+'" id="shInvBtn" title="反轉視角:顯示 -y,讓線與 S&amp;P500 同向(正相關),較直覺">🔄 反轉視角'+(SH_INV?'(-y)':'')+'</button>';
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">Safe Haven Demand · <b class="'+vd.c+'">'+(cur==null?'—':(cur>0?'+':'')+cur+'pt')+'（'+vd.t+'）</b></div>'+
+    '<div id="shChart" class="m1m2-chart"></div>'+
+    '<div id="shRange" style="margin:4px 0 2px;display:flex;align-items:center;gap:6px">'+invBtn+'</div>'+
+    '<div class="ex">CNN Fear &amp; Greed 子指標:股票(S&amp;P500)近 20 日滾動報酬 − 公債近 20 日滾動報酬(百分點)。'+
+      '<b class="pos">越高</b>＝股票跑贏公債越多(風險偏好升溫);<b class="neg">越低甚至轉負</b>＝資金轉向公債避險(恐慌升溫)。'+
+      (p!=null?' 現值位居自身歷史(近1年)第 <b>'+p+'</b> 百分位。':'')+'虛線=0(股債打平參考)。'+
+      '<b style="color:#9333ea">紫線=S&amp;P500(右軸)</b>,對照走勢。</div>'+
+    '</div>';
+}
+function drawSafeHaven(s){
+  window._sh=s;
+  const ib=document.getElementById("shInvBtn");
+  if(ib) ib.onclick=()=>{ SH_INV=!SH_INV; renderSentiment(SENT_LAST); };
+  _renderSafeHaven();
+}
+function _renderSafeHaven(){
+  const s=window._sh, el=document.getElementById("shChart");
+  if(!el || !window.echarts || !s || !s.y || !s.y.length) return;
+  const sgn=SH_INV?-1:1;
+  const dates=s.dates, y=s.y.map(v=>v==null?null:+(v*sgn).toFixed(2));
+  const spy=(Array.isArray(s.sp500)&&s.sp500.length)?s.sp500:null;
+  const series=[{name:SH_INV?"-y":"y",type:"line",data:y,smooth:true,symbol:"none",yAxisIndex:0,connectNulls:true,
+      lineStyle:{width:2,color:"#0d9488"},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d948812"},
+      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}];
+  const yAxes=[{type:"value",name:SH_INV?"-pt":"pt",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:"{value}"},splitLine:{lineStyle:{opacity:.3}}}];
+  if(spy){
+    yAxes.push({type:"value",scale:true,position:"right",name:"S&P500",nameTextStyle:{fontSize:10,color:"#9333ea"},
+      axisLabel:{fontSize:10,color:"#9333ea",formatter:"{value}"},splitLine:{show:false}});
+    series.push({name:"S&P500",type:"line",data:spy,smooth:true,symbol:"none",yAxisIndex:1,connectNulls:true,
+      lineStyle:{width:1.4,color:"#9333ea",opacity:.85}});
+  }
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:42,right:spy?44:14,top:14,bottom:30},
+    legend:spy?{data:series.map(x=>x.name),top:-2,right:0,itemWidth:14,itemHeight:8,textStyle:{fontSize:10}}:undefined,
+    tooltip:{trigger:"axis",formatter:function(ps){
+      if(!ps||!ps.length) return "";
+      let s2=ps[0].axisValueLabel||ps[0].axisValue;
+      ps.forEach(p=>{ s2+="<br>"+p.marker+p.seriesName+": "+(p.value==null?"—":(p.seriesName==="S&P500"?p.value:((p.value>0?"+":"")+p.value+"pt"))); });
+      return s2;
+    }},
+    dataZoom:[{type:"inside"}],
+    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
+    yAxis:yAxes,
+    series:series,
   }, true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }

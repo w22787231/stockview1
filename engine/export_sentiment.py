@@ -15,6 +15,7 @@ import yfinance as yf
 import adr_screen as eng
 import tw_margin_ratio as TWMR
 import equity_risk_premium as ERP
+import safe_haven as SH
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 BREADTH_POOL = "sp500"   # 用 SP500 當美股大盤廣度代表
@@ -196,12 +197,45 @@ def fetch_fear_greed():
         hist = data.get("fear_and_greed_historical", {}).get("data", [])
         spark = [round(_safe(p.get("y")), 0) for p in hist[-60:]
                  if _safe(p.get("y")) is not None]
+        safe_haven_raw = (data.get("safe_haven_demand") or {}).get("data") or []
         return {"score": _round(score, 0),
                 "prev": _round(prev, 0) if prev is not None else None,
                 "rating": fg.get("rating", ""),
-                "spark": spark}
+                "spark": spark,
+                "_safe_haven_raw": safe_haven_raw}
     except Exception:
         return None
+
+
+def fetch_safe_haven_demand(raw_points):
+    """CNN Fear & Greed 子指標「Safe Haven Demand」:股票(S&P500)相對公債 20 日滾動報酬差(百分點)。
+    raw_points 取自同一次 fetch_fear_greed() 的 CNN API 回應(不重抓 CNN),另抓 ^GSPC 日收盤疊圖對齊。
+    越高＝股票跑贏債券越多(貪婪);越低甚至轉負＝資金湧向公債避險(恐懼)。"""
+    if not raw_points:
+        return None
+    gspc_dates, gspc_close = [], []
+    try:
+        ch = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=2y",
+            headers={"User-Agent": "Mozilla/5.0"}), timeout=15).read().decode("utf-8", "ignore"))
+        res = ch["chart"]["result"][0]
+        ts, cl = res["timestamp"], res["indicators"]["quote"][0]["close"]
+        for t, c in zip(ts, cl):
+            if c is None:
+                continue
+            gspc_dates.append(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d"))
+            gspc_close.append(round(c, 2))
+    except Exception:
+        pass
+    dates, y, sp500 = SH.build_series(raw_points, gspc_dates, gspc_close)
+    if not dates:
+        return None
+    cur = y[-1]
+    hist = [v for v in y if v is not None]
+    pctile = round(sum(1 for v in hist if v <= cur) / len(hist) * 100) if hist else None
+    return {"label": "Safe Haven Demand", "cur": cur, "pctile": pctile,
+            "dates": dates, "y": y, "sp500": sp500,
+            "src": "CNN Fear & Greed(safe_haven_demand)+ ^GSPC"}
 
 
 def _fetch_gdp_trillions():
@@ -1241,6 +1275,8 @@ def build():
         failed.append("ODTE_PCR")
     breadth = market_breadth()
     fng = fetch_fear_greed()
+    safe_haven_raw = (fng or {}).pop("_safe_haven_raw", None)
+    safe_haven = fetch_safe_haven_demand(safe_haven_raw)
     # 「保證金借款」大圖:先讀上次線上 sentiment.json → 台股增量回補只查缺月、跨次累積成長
     prev_sent = _fetch_live_sentiment()
     leverage = fetch_leverage()
@@ -1283,6 +1319,7 @@ def build():
         "levels": levels,
         "breadth": breadth,
         "fear_greed": fng,
+        "safe_haven_demand": safe_haven,
         "leverage": leverage,
         "tw_margin": tw_margin,
         "tw_margin_ratio": tw_margin_ratio,

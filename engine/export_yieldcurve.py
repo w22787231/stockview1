@@ -2,11 +2,13 @@
 """美國國債收益率曲線(各天期時間序列)→ data/yieldcurve.json。
 - 10 個恆定到期名目公債殖利率(FRED DGS3MO…DGS30),各天期一條時間序列線。
 - 子圖:2s10s 利差 = 10Y − 2Y(<0 倒掛,經典衰退領先訊號)。
+- 另抓 Fed Funds 有效利率(DFF),供總體市場頁比較 Fed Funds vs 2Y/10Y。
 有 FRED_API_KEY 走官方 API(雲端不被擋),否則退 fredgraph(本機/無金鑰)。
 抓取全失敗 → 不覆寫(沿用線上 last-good,與 FSI/PI/TIPS 一致)。
 用法:cd engine && FRED_API_KEY=xxx python export_yieldcurve.py"""
 import os, io, json, datetime
 import urllib.request
+import urllib.parse
 import numpy as np, pandas as pd
 import fetch_pi as P   # 重用 fetch_fred
 
@@ -58,13 +60,48 @@ def fetch_dgs(series_id):
         return None
 
 
+def fetch_nyfed_effr(start=START):
+    """抓 New York Fed EFFR(有效聯邦基金利率)作為 DFF 備援。回 pandas.Series 或 None。"""
+    end = datetime.date.today().strftime("%Y-%m-%d")
+    params = urllib.parse.urlencode({
+        "startDate": start,
+        "endDate": end,
+        "type": "rate",
+    })
+    url = f"https://markets.newyorkfed.org/api/rates/unsecured/effr/search.json?{params}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=45) as r:
+            obj = json.loads(r.read().decode("utf-8"))
+        rows = obj.get("refRates") or []
+        dates, vals = [], []
+        for row in rows:
+            d = row.get("effectiveDate")
+            v = row.get("percentRate")
+            if d is None or v is None:
+                continue
+            dates.append(pd.Timestamp(d))
+            vals.append(float(v))
+        if not dates:
+            return None
+        return pd.Series(vals, index=pd.DatetimeIndex(dates), dtype=float).sort_index()
+    except Exception as e:
+        print(f"[yc] New York Fed EFFR 後備失敗: {e}")
+        return None
+
+
 def build_live():
-    """抓 10 個 DGS → yieldcurve.json dict。2Y/10Y(算利差骨幹)缺 → None。"""
+    """抓 DGS + DFF → yieldcurve.json dict。2Y/10Y(算利差骨幹)缺 → None。"""
     cols = {}
     for key, _lab, sid in MATS:
         s = fetch_dgs(sid)
         if s is not None:
             cols[key] = s
+    fed_funds = fetch_dgs("DFF")
+    if fed_funds is None:
+        fed_funds = fetch_nyfed_effr()
+    if fed_funds is not None:
+        cols["fed_funds"] = fed_funds
 
     if "2y" not in cols or "10y" not in cols:
         print("[yc] 關鍵來源缺失(需 2Y 與 10Y),放棄本次")
@@ -85,6 +122,8 @@ def build_live():
             yields[key] = [_num(v, 2) for v in df[key].values]
     spread = [(_num(a - b, 2) if (a == a and b == b) else None)
               for a, b in zip(df["10y"].values, df["2y"].values)]
+    fed_funds_series = ([_num(v, 2) for v in df["fed_funds"].values]
+                        if "fed_funds" in df.columns else [])
 
     # 最新讀數(各天期最後非空)
     def last_of(key):
@@ -94,19 +133,26 @@ def build_live():
         return next((v for v in reversed(arr) if v is not None), None)
 
     latest = {k: last_of(k) for k, _l, _s in MATS}
+    latest["fed_funds"] = (next((v for v in reversed(fed_funds_series) if v is not None), None)
+                           if fed_funds_series else None)
     spread_last = next((v for v in reversed(spread) if v is not None), None)
 
     return {
         "as_of": dates[-1],
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "FRED 恆定到期名目公債殖利率 (DGS3MO…DGS30)",
+        "source": "FRED 恆定到期名目公債殖利率 (DGS3MO…DGS30)；Fed Funds 有效利率 (DFF)",
         "maturities": [{"key": k, "label": lab} for k, lab, _s in MATS if k in df.columns],
         "latest": latest,
         "spread_last": spread_last,          # 10Y − 2Y(<0 倒掛)
         "windows": ["3m", "6m", "1y", "3y", "5y", "10y", "max"],
         "default_window": "5y",
-        "series": {"dates": dates, "yields": yields, "spread_2s10s": spread},
+        "series": {
+            "dates": dates,
+            "yields": yields,
+            "spread_2s10s": spread,
+            "fed_funds": fed_funds_series,
+        },
     }
 
 
@@ -125,9 +171,10 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(j, f, ensure_ascii=False, indent=1)
     s = j["series"]
-    print("✓ yieldcurve.json 已更新:as_of %s 10Y=%s%% 2Y=%s%% 2s10s=%s,序列 %d 點,%d 天期"
-          % (j["as_of"], j["latest"].get("10y"), j["latest"].get("2y"),
-             j["spread_last"], len(s["dates"]), len(j["maturities"])))
+    print("✓ yieldcurve.json 已更新:as_of %s FedFunds=%s%% 10Y=%s%% 2Y=%s%% 2s10s=%s,序列 %d 點,%d 天期"
+          % (j["as_of"], j["latest"].get("fed_funds"), j["latest"].get("10y"),
+             j["latest"].get("2y"), j["spread_last"], len(s["dates"]),
+             len(j["maturities"])))
 
 
 if __name__ == "__main__":

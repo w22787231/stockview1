@@ -1268,6 +1268,7 @@ function renderMacro(d){
       '<div id="usThemeFlowSummaryBlock"></div>'+
       '<div id="sentBox"><div class="loading-screen">載入情緒指標 …</div></div>'+
     '</section>'+
+    '<div id="fedYieldBlock"></div>'+
     '<div id="netLiqBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
@@ -1288,6 +1289,7 @@ function renderMacro(d){
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
   loadSentiment();
+  loadFedYield();
   loadUsThemeFlow();
   loadNetLiq();
   loadOnRp();
@@ -5908,6 +5910,110 @@ async function loadTips(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2></div>'+
       '<div class="legend">⚠️ tips.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_tips。</div></section>';
+  }
+}
+
+// ── Fed Funds vs 美國 2Y/10Y 公債殖利率 ──────────────────────────
+let FEDYIELD_DATA=null;
+let FEDYIELD_WIN="5y";
+const FEDYIELD_WIN_LABEL={"6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
+const FEDYIELD_WIN_N={"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};
+
+function drawFedYieldChart(id, dates, fedFunds, y2, y10){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  ch.setOption({
+    animation:false,
+    grid:{left:48,right:22,top:44,bottom:42},
+    legend:{top:0,textStyle:{fontSize:11},data:["Fed Funds(DFF)","2Y 美債","10Y 美債"]},
+    tooltip:{
+      trigger:"axis",
+      valueFormatter:v=>v==null?"-":Number(v).toFixed(2)+"%"
+    },
+    xAxis:{type:"time",axisLabel:{fontSize:10,hideOverlap:true,formatter:xfmt}},
+    yAxis:{type:"value",name:"利率 / 殖利率%",nameTextStyle:{fontSize:10},scale:true,
+      axisLabel:{fontSize:10,formatter:v=>Number(v).toFixed(1)},splitLine:{lineStyle:{opacity:.25}}},
+    series:[
+      {name:"Fed Funds(DFF)",type:"line",step:"end",showSymbol:false,connectNulls:true,
+        data:dates.map((d,i)=>[toMs(d),fedFunds[i]]),
+        lineStyle:{color:"#64748b",width:2.2},itemStyle:{color:"#64748b"}},
+      {name:"2Y 美債",type:"line",smooth:false,showSymbol:false,connectNulls:true,
+        data:dates.map((d,i)=>[toMs(d),y2[i]]),
+        lineStyle:{color:"#2563eb",width:2},itemStyle:{color:"#2563eb"}},
+      {name:"10Y 美債",type:"line",smooth:false,showSymbol:false,connectNulls:true,
+        data:dates.map((d,i)=>[toMs(d),y10[i]]),
+        lineStyle:{color:"#dc2626",width:2},itemStyle:{color:"#dc2626"}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderFedYield(d){
+  const box=$("#fedYieldBlock");
+  if(!box) return;
+  const ser=d.series||{};
+  const allD=ser.dates||[];
+  const allY=ser.yields||{};
+  const allFed=ser.fed_funds||[];
+  const all2y=allY["2y"]||[];
+  const all10y=allY["10y"]||[];
+  const win=FEDYIELD_WIN;
+  const n=Math.min(FEDYIELD_WIN_N[win]||allD.length, allD.length);
+  const dates=allD.slice(-n);
+  const fed=allFed.slice(-n);
+  const y2=all2y.slice(-n);
+  const y10=all10y.slice(-n);
+  const lat=d.latest||{};
+  const fmt=v=>v==null?"—":Number(v).toFixed(2)+"%";
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
+  const btns=["6m","1y","3y","5y","10y","max"].map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-fedyieldw="'+w+'">'+
+      (FEDYIELD_WIN_LABEL[w]||w)+'</button>').join("");
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>Fed Funds vs 美國2年/10年公債殖利率</h2>'+
+        '<span class="tag">政策利率 vs 市場利率</span>'+
+        '<span class="hint">2Y 常反映市場對未來 Fed 路徑的預期；10Y 更混合通膨、成長與期限溢酬</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">Fed Funds(DFF)</div><div class="cap-big" style="color:#64748b">'+esc(fmt(lat.fed_funds))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">2Y 美債</div><div class="cap-big" style="color:#2563eb">'+esc(fmt(lat["2y"]))+'</div></div>'+
+        '<div style="'+cardStyle+'"><div class="cap-lab">10Y 美債</div><div class="cap-big" style="color:#dc2626">'+esc(fmt(lat["10y"]))+'</div></div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="fedYieldChart" class="cap-chart" style="height:360px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED。Fed Funds 使用 DFF＝有效聯邦基金利率,是銀行間隔夜資金的實際成交利率;它每天可有 1–2bp 小幅波動,不等於 FOMC 正式升息或降息。正式政策變動仍應看 FOMC 目標區間。視窗 '+esc(FEDYIELD_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  if(dates.length>=2 && fed.length && y2.length && y10.length){
+    drawFedYieldChart("fedYieldChart", dates, fed, y2, y10);
+  }else{
+    const c=$("#fedYieldChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-fedyieldw]").forEach(b=>b.onclick=()=>{ FEDYIELD_WIN=b.dataset.fedyieldw; renderFedYield(FEDYIELD_DATA); });
+}
+
+async function loadFedYield(){
+  const box=$("#fedYieldBlock");
+  if(!box) return;
+  if(FEDYIELD_DATA){ renderFedYield(FEDYIELD_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 Fed Funds / 美債殖利率 …</div>';
+  try{
+    const res=await fetch("data/yieldcurve.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    FEDYIELD_DATA=await res.json();
+    renderFedYield(FEDYIELD_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>Fed Funds vs 美國2年/10年公債殖利率</h2></div>'+
+      '<div class="legend">⚠️ yieldcurve.json 尚未產生或缺少 Fed Funds（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_yieldcurve。</div></section>';
   }
 }
 

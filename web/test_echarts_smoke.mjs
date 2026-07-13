@@ -165,17 +165,20 @@ function synthSafeHaven(N){
   }
   return {cur:y[y.length-1], pctile:74, dates, y, sp500};
 }
-function smokeSafeHaven(label, N, invert){
+function smokeSafeHaven(label, N, invert, range){
   const echarts = makeEcharts();
-  const chartEl={}, invEl={};
+  const chartEl={}, invEl={}, rangeEl={querySelectorAll:()=>[]};
   const window = { echarts, addEventListener(){}, removeEventListener(){} };
   const document = { getElementById(id){
     if(id==="shChart") return chartEl;
     if(id==="shInvBtn") return invEl;
+    if(id==="shRange") return rangeEl;
     return null;
   }};
   const drawSafeHaven = new Function(
     "return (function(document, window, echarts){ let SH_INV=" + (!!invert) + "; "
+    + "let SH_RANGE='" + (range || "all") + "'; "
+    + "const SH_WINS=[['1m',21,'1M'],['3m',63,'3M'],['6m',126,'6M'],['all',Infinity,'ALL']]; "
     + extract("drawSafeHaven") + " " + extract("_renderSafeHaven") + " return drawSafeHaven; })"
   )()(document, window, echarts);
   try {
@@ -189,8 +192,9 @@ function smokeSafeHaven(label, N, invert){
 console.log("真 ECharts SSR 煙霧測試(drawSafeHaven):");
 smokeSafeHaven("250點(近1年,含S&P500右軸)", 250, false);
 smokeSafeHaven("反轉視角(-y)", 250, true);
+smokeSafeHaven("1M 視窗(21點)", 250, false, "1m");
 
-assert.ok(RENDER_COUNT >= 11, "應完成至少 11 次真渲染,實得 " + RENDER_COUNT);
+assert.ok(RENDER_COUNT >= 12, "應完成至少 12 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

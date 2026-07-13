@@ -16,9 +16,17 @@ function extract(name){
 const stub = `
 const esc = s => (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 let SH_INV=false;
+let SH_RANGE='all';
+const SH_WINS=[["1m",21,"1M"],["3m",63,"3M"],["6m",126,"6M"],["all",Infinity,"ALL"]];
 `;
-const withS = { cur: 3.04, pctile: 74, dates: ["2026-07-08", "2026-07-09", "2026-07-10"],
-  y: [1.39, 3.61, 3.04], sp500: [7482.71, 7543.64, 7575.39], src: "test" };
+const N = 60;
+const withS = {
+  cur: 3.04, pctile: 74,
+  dates: Array.from({length: N}, (_, i) => "2026-05-" + String((i % 28) + 1).padStart(2, "0")),
+  y: Array.from({length: N}, (_, i) => +(1.5 * Math.sin(i / 10)).toFixed(2)),
+  sp500: Array.from({length: N}, (_, i) => 6000 + i * 2),
+  src: "test",
+};
 const src = stub + extract("safeHavenBox") + "\nglobalThis.__OUT=safeHavenBox(" + JSON.stringify(withS) + ");\n";
 const fn = new Function(src + "return globalThis.__OUT;");
 const out = fn();
@@ -28,6 +36,7 @@ assert.ok(out.includes("第 <b>74</b> 百分位"), "缺歷史百分位");
 assert.ok(out.includes("shInvBtn") && out.includes("反轉視角"), "缺反轉按鈕");
 assert.ok(out.includes("紫線=S&amp;P500"), "缺 S&P500 疊圖說明");
 assert.ok(out.includes("shChart"), "缺圖表容器");
+assert.ok(out.includes('data-shw="1m"') && out.includes('data-shw="all"'), "缺時間按鈕");
 
 const srcInv = stub.replace("let SH_INV=false;", "let SH_INV=true;")
   + extract("safeHavenBox") + "\nglobalThis.__OUT=safeHavenBox(" + JSON.stringify(withS) + ");\n";

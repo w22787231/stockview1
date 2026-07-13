@@ -2854,15 +2854,22 @@ function _renderErp(){
 }
 
 let SH_INV=false;   // 反轉視角:顯示 -y,讓線與 S&P500 同向(正相關),較直覺
+let SH_RANGE="all";  // 日頻,近1年資料:1M/3M/6M/ALL
+const SH_WINS=[["1m",21,"1M"],["3m",63,"3M"],["6m",126,"6M"],["all",Infinity,"ALL"]];
 function safeHavenBox(s){
   if(!s || !s.y || !s.y.length) return '';
   const cur=s.cur, p=s.pctile;
   const vd = cur==null?{t:"—",c:"dim"}:(cur>0?{t:"股票跑贏公債(風險偏好)",c:"pos"}:{t:"公債跑贏股票(避險)",c:"neg"});
+  const n=s.y.length;
+  const wins=SH_WINS.filter(w=>w[1]===Infinity||w[1]<=n);
+  const _rb=(k,lab)=>'<button class="ntab'+(SH_RANGE===k?" on":"")+'" data-shw="'+k+'">'+lab+'</button>';
   const invBtn='<button class="btn'+(SH_INV?' active':'')+'" id="shInvBtn" title="反轉視角:顯示 -y,讓線與 S&amp;P500 同向(正相關),較直覺">🔄 反轉視角'+(SH_INV?'(-y)':'')+'</button>';
   return '<div class="guide" style="margin-top:12px">'+
     '<div class="gtitle">Safe Haven Demand · <b class="'+vd.c+'">'+(cur==null?'—':(cur>0?'+':'')+cur+'pt')+'（'+vd.t+'）</b></div>'+
     '<div id="shChart" class="m1m2-chart"></div>'+
-    '<div id="shRange" style="margin:4px 0 2px;display:flex;align-items:center;gap:6px">'+invBtn+'</div>'+
+    '<div id="shRange" style="margin:4px 0 2px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">'+
+      wins.map(w=>_rb(w[0],w[2])).join("")+
+      '<span style="width:1px;height:16px;background:var(--line);margin:0 2px"></span>'+invBtn+'</div>'+
     '<div class="ex">CNN Fear &amp; Greed 子指標:股票(S&amp;P500)近 20 日滾動報酬 − 公債近 20 日滾動報酬(百分點)。'+
       '<b class="pos">越高</b>＝股票跑贏公債越多(風險偏好升溫);<b class="neg">越低甚至轉負</b>＝資金轉向公債避險(恐慌升溫)。'+
       (p!=null?' 現值位居自身歷史(近1年)第 <b>'+p+'</b> 百分位。':'')+'虛線=0(股債打平參考)。'+
@@ -2871,6 +2878,12 @@ function safeHavenBox(s){
 }
 function drawSafeHaven(s){
   window._sh=s;
+  const rb=document.getElementById("shRange");
+  if(rb) rb.querySelectorAll(".ntab").forEach(b=>b.onclick=()=>{
+    SH_RANGE=b.dataset.shw;
+    rb.querySelectorAll(".ntab").forEach(x=>x.classList.toggle("on",x.dataset.shw===SH_RANGE));
+    _renderSafeHaven();
+  });
   const ib=document.getElementById("shInvBtn");
   if(ib) ib.onclick=()=>{ SH_INV=!SH_INV; renderSentiment(SENT_LAST); };
   _renderSafeHaven();
@@ -2879,8 +2892,10 @@ function _renderSafeHaven(){
   const s=window._sh, el=document.getElementById("shChart");
   if(!el || !window.echarts || !s || !s.y || !s.y.length) return;
   const sgn=SH_INV?-1:1;
-  const dates=s.dates, y=s.y.map(v=>v==null?null:+(v*sgn).toFixed(2));
-  const spy=(Array.isArray(s.sp500)&&s.sp500.length)?s.sp500:null;
+  const nWin=(SH_WINS.find(w=>w[0]===SH_RANGE)||SH_WINS[SH_WINS.length-1])[1];
+  const n=nWin===Infinity?s.y.length:Math.min(nWin,s.y.length);
+  const dates=s.dates.slice(-n), y=s.y.slice(-n).map(v=>v==null?null:+(v*sgn).toFixed(2));
+  const spy=(Array.isArray(s.sp500)&&s.sp500.length)?s.sp500.slice(-n):null;
   const series=[{name:SH_INV?"-y":"y",type:"line",data:y,smooth:true,symbol:"none",yAxisIndex:0,connectNulls:true,
       lineStyle:{width:2,color:"#0d9488"},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d948812"},
       markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}];

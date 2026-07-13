@@ -44,6 +44,15 @@ def test_build_series_aligns_weekly_pe_to_daily_yield():
     ]
 
 
+def test_pick_by_date_exact_match_and_missing():
+    out = ERP.pick_by_date(
+        ["2026-07-02", "2026-07-10"],
+        ["2026-06-25", "2026-07-02"],
+        [5800.0, 5900.0],
+    )
+    assert out == [5900.0, None]
+
+
 def test_build_series_skips_points_before_yield_history():
     pe_dates = ["2020-01-01", "2026-07-02"]
     pe = [18.0, 20.8]

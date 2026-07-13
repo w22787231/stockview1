@@ -1019,8 +1019,9 @@ def fetch_equity_risk_premium(fwd_pe):
     cur = ERP.compute_erp(fwd_pe.get("cur"), dgs10_cur) if dgs10_cur is not None else erp[-1]
     hist = [v for v in erp if v is not None]
     pctile = round(sum(1 for v in hist if v <= cur) / len(hist) * 100) if hist and cur is not None else None
+    spy = ERP.pick_by_date(dates, fwd_pe["dates"], fwd_pe.get("spy") or []) if fwd_pe.get("spy") else None
     return {"label": "股票風險溢酬 ERP", "cur": cur, "fwd_pe": fwd_pe.get("cur"), "dgs10": dgs10_cur,
-            "pctile": pctile, "dates": dates, "erp": erp,
+            "pctile": pctile, "dates": dates, "erp": erp, "spy": spy,
             "src": "S&P500 盈餘殖利率(FactSet fwd EPS)− 10年公債殖利率(FRED DGS10)"}
 
 

@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore")
 import yfinance as yf
 import adr_screen as eng
 import tw_margin_ratio as TWMR
+import equity_risk_premium as ERP
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 BREADTH_POOL = "sp500"   # 用 SP500 當美股大盤廣度代表
@@ -997,6 +998,32 @@ def fetch_sp500_fwd_pe():
             "thr": {"high": 21.5, "low": 20, "oversold": 16}, "src": "FactSet 週報(逐週 EPS)+ ^GSPC + SPY 價"}
 
 
+def fetch_equity_risk_premium(fwd_pe):
+    """股票風險溢酬 ERP = S&P500 盈餘殖利率(100/Forward PE) − 10年公債殖利率(DGS10)。
+    重用同一 job 內先跑過的 fetch_sp500_fwd_pe() 結果 + 已產出的 data/yieldcurve.json,不重抓。"""
+    if not fwd_pe or not fwd_pe.get("dates") or not fwd_pe.get("pe"):
+        return None
+    try:
+        with io.open(os.path.join(DATA_DIR, "yieldcurve.json"), encoding="utf-8-sig") as f:
+            yc = json.load(f)
+        yc_dates = (yc.get("series") or {}).get("dates") or []
+        yc_10y = ((yc.get("series") or {}).get("yields") or {}).get("10y") or []
+        dgs10_cur = (yc.get("latest") or {}).get("10y")
+    except Exception:
+        return None
+    if not yc_dates or not yc_10y:
+        return None
+    dates, erp = ERP.build_series(fwd_pe["dates"], fwd_pe["pe"], yc_dates, yc_10y)
+    if not dates:
+        return None
+    cur = ERP.compute_erp(fwd_pe.get("cur"), dgs10_cur) if dgs10_cur is not None else erp[-1]
+    hist = [v for v in erp if v is not None]
+    pctile = round(sum(1 for v in hist if v <= cur) / len(hist) * 100) if hist and cur is not None else None
+    return {"label": "股票風險溢酬 ERP", "cur": cur, "fwd_pe": fwd_pe.get("cur"), "dgs10": dgs10_cur,
+            "pctile": pctile, "dates": dates, "erp": erp,
+            "src": "S&P500 盈餘殖利率(FactSet fwd EPS)− 10年公債殖利率(FRED DGS10)"}
+
+
 def fetch_0dte():
     """SPY/QQQ 0DTE(當日到期)選擇權 Put/Call Ratio(成交量)。Yahoo 選擇權鏈(需 crumb)。
     歷史回讀已發布 sentiment.json 逐日累積 spark(Yahoo 無歷史選擇權量,只能往後累積)。"""
@@ -1247,6 +1274,7 @@ def build():
     if not cot_spx:
         failed.append("COT_SPX")
     tw_margin_ratio = fetch_tw_margin_ratio()
+    fwd_pe = fetch_sp500_fwd_pe()
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -1260,7 +1288,8 @@ def build():
         "insider_ratio": insider,
         "ai_capex": fetch_ai_capex(),
         "ndx_m2": ndx_m2,
-        "sp500_fwd_pe": fetch_sp500_fwd_pe(),
+        "sp500_fwd_pe": fwd_pe,
+        "equity_risk_premium": fetch_equity_risk_premium(fwd_pe),
         "cot_spx": cot_spx,
         "failed": failed,
     }

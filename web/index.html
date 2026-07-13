@@ -2700,16 +2700,19 @@ function renderSentiment(d){
     '<div id="aiCapexBlock"></div>'+
     '<div id="ndxM2Block"></div>'+
     sp500FwdPeBox(d.sp500_fwd_pe)+
+    erpBox(d.equity_risk_premium)+
     reservesBox(MACRO_RESERVES)+sofrIorbBox(MACRO_SOFR)+cotSpxBox(d.cot_spx)+
     '<div class="legend">VIX/VXN＝波動(恐慌)，越高越恐慌；SKEW＝尾部風險(買崩盤保險)；COR1M＝隱含相關性(越低=個股各走各、表面平靜底層脆弱，出事易齊跌)；HYG＝信用市場(跌=避險升溫)；廣度＝個股普遍強弱；F&amp;G＝綜合貪婪恐懼。'+
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(MACRO_RESERVES) drawReserves(MACRO_RESERVES);
   if(MACRO_SOFR) drawSofrIorb(MACRO_SOFR);
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
+  if(d.equity_risk_premium) drawErp(d.equity_risk_premium);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
   loadMacroScore();                                  // 評分卡:市場廣度上方(sentBox 內)
 }
 let FWDPE_RANGE="3y";   // forward PE 圖時間範圍:1y/3y/5y/all
+let ERP_RANGE="3y";     // ERP 圖時間範圍:1y/3y/5y/all
 function sp500FwdPeBox(v){
   if(!v || !v.pe || !v.pe.length) return '';
   const cur=v.cur, t=Object.assign({high:21.5,low:20,oversold:16}, v.thr||{}, {oversold:16});
@@ -2779,6 +2782,49 @@ function _renderFwdPe(){
     xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
     yAxis:yAxes,
     series:series,
+  }, true);
+  if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
+}
+
+function erpBox(e){
+  if(!e || !e.erp || !e.erp.length) return '';
+  const cur=e.cur, p=e.pctile;
+  const vd = p==null?{t:"—",c:"dim"}:(p>=65?{t:"股票相對債券便宜",c:"pos"}:(p<=35?{t:"股票相對債券昂貴",c:"neg"}:{t:"中性",c:"dim"}));
+  const _rb=(k,lab)=>'<button class="ntab'+(ERP_RANGE===k?" on":"")+'" data-er="'+k+'">'+lab+'</button>';
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">股票風險溢酬 ERP · <b class="'+vd.c+'">'+(cur==null?'—':(cur>0?'+':'')+cur+'%')+'（'+vd.t+'）</b></div>'+
+    '<div id="erpChart" class="m1m2-chart"></div>'+
+    '<div id="erpRange" class="news-tabs" style="margin:4px 0 2px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+'</div>'+
+    '<div class="ex">S&amp;P500 盈餘殖利率(100/Forward P/E'+(e.fwd_pe?'='+e.fwd_pe+'x':'')+')− 10年公債殖利率(DGS10'+(e.dgs10!=null?'='+e.dgs10+'%':'')+')。'+
+      '<b class="pos">越高</b>＝股票相對債券越便宜(偏多股市);<b class="neg">越低甚至轉負</b>＝股票相對債券越貴,常見於估值泡沫或升息末段。'+
+      (p!=null?' 現值位居自身歷史第 <b>'+p+'</b> 百分位。':'')+'虛線=0(股債打平參考)。</div>'+
+    '</div>';
+}
+function drawErp(e){
+  window._erp=e;
+  const rb=document.getElementById("erpRange");
+  if(rb) rb.querySelectorAll(".ntab").forEach(b=>b.onclick=()=>{
+    ERP_RANGE=b.dataset.er;
+    rb.querySelectorAll(".ntab").forEach(x=>x.classList.toggle("on",x.dataset.er===ERP_RANGE));
+    _renderErp();
+  });
+  _renderErp();
+}
+function _renderErp(){
+  const e=window._erp, el=document.getElementById("erpChart");
+  if(!el || !window.echarts || !e || !e.erp || !e.erp.length) return;
+  const n={"1y":52,"3y":156,"5y":260,"all":e.erp.length}[ERP_RANGE]||e.erp.length;
+  const dates=e.dates.slice(-n), erp=e.erp.slice(-n);
+  const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
+  ch.setOption({
+    grid:{left:42,right:14,top:14,bottom:30},
+    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":(v>0?"+":"")+Number(v).toFixed(2)+"%"},
+    dataZoom:[{type:"inside"}],
+    xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
+    yAxis:{type:"value",scale:true,axisLabel:{fontSize:10,formatter:"{value}%"},splitLine:{lineStyle:{opacity:.3}}},
+    series:[{name:"ERP",type:"line",data:erp,smooth:true,symbol:"none",connectNulls:true,
+      lineStyle:{width:2,color:"#0d9488"},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d948812"},
+      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}],
   }, true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }

@@ -3,8 +3,9 @@
 // 觸發的 "reading 'coord'")都會在此當場拋出。stub 版 echarts 抓不到這類錯,故需本測試。
 //
 // 目前涵蓋 drawTipsChart(TIPS 實質利率 × S&P500,含 20 日相關子圖)、drawYieldCurveChart
-// (10 天期殖利率 + 2s10s 子圖)、drawSafeHaven(Safe Haven Demand × S&P500 右軸,含反轉視角)。
-// 跨多個時間視窗與含 null 暖身的相關序列各渲染一次。要新增其他圖,照 smoke() 模式加即可。
+// (10 天期殖利率 + 2s10s 子圖)、drawErp(ERP × S&P500 右軸,含反轉視角)、drawSafeHaven
+// (Safe Haven Demand × S&P500 右軸,含反轉視角)。跨多個時間視窗與含 null 暖身的相關序列
+// 各渲染一次。要新增其他圖,照 smoke() 模式加即可。
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import assert from "node:assert";
@@ -115,6 +116,44 @@ console.log("真 ECharts SSR 煙霧測試(drawYieldCurveChart):");
 smokeYc("5y 視窗(1260點,10線+利差子圖)", 1260);
 smokeYc("max 視窗(5000點)", 5000);
 
+// ── drawErp / _renderErp(ERP 線 + S&P500 右軸疊圖,含反轉視角 ERP_INV)──
+function synthErp(N){
+  const dates=[], erp=[], spy=[];
+  let base=Date.UTC(2019,3,26);
+  for(let i=0;i<N;i++){
+    dates.push(new Date(base+i*7*86400000).toISOString().slice(0,10));   // 週頻
+    erp.push(+(0.2+3.0*Math.sin(i/40)).toFixed(2));
+    spy.push(+(3000+i*3.2).toFixed(2));
+  }
+  return {cur:erp[erp.length-1], fwd_pe:21.1, dgs10:4.54, pctile:7, dates, erp, spy};
+}
+function smokeErp(label, N, invert){
+  const echarts = makeEcharts();
+  const chartEl={}, rangeEl={querySelectorAll:()=>[]}, invEl={};
+  const window = { echarts, addEventListener(){}, removeEventListener(){} };
+  const document = { getElementById(id){
+    if(id==="erpChart") return chartEl;
+    if(id==="erpRange") return rangeEl;
+    if(id==="erpInvBtn") return invEl;
+    return null;
+  }};
+  const drawErp = new Function(
+    "return (function(document, window, echarts){ let ERP_RANGE='all'; let ERP_INV=" + (!!invert) + "; "
+    + extract("drawErp") + " " + extract("_renderErp") + " return drawErp; })"
+  )()(document, window, echarts);
+  try {
+    drawErp(synthErp(N));
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawErp):");
+smokeErp("3y 視窗(156點,含S&P500右軸)", 156, false);
+smokeErp("反轉視角(-ERP)", 156, true);
+smokeErp("ALL 視窗(363點)", 363, false);
+
 // ── drawSafeHaven / _renderSafeHaven(Safe Haven Demand 線 + S&P500 右軸,含反轉視角 SH_INV)──
 function synthSafeHaven(N){
   const dates=[], y=[], sp500=[];
@@ -151,7 +190,7 @@ console.log("真 ECharts SSR 煙霧測試(drawSafeHaven):");
 smokeSafeHaven("250點(近1年,含S&P500右軸)", 250, false);
 smokeSafeHaven("反轉視角(-y)", 250, true);
 
-assert.ok(RENDER_COUNT >= 8, "應完成至少 8 次真渲染,實得 " + RENDER_COUNT);
+assert.ok(RENDER_COUNT >= 11, "應完成至少 11 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

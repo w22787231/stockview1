@@ -23,6 +23,13 @@ def compute_erp(fwd_pe, dgs10):
     return round(100.0 / fwd_pe - dgs10, 2)
 
 
+def pick_by_date(dates, source_dates, source_vals):
+    """依日期精確比對(非最近前值),把 source 序列重排成 dates 的順序;找不到 → None。
+    用於已經同一批日期索引產生的資料(如 fwd_pe 的 dates/spy 本就同源對齊)。"""
+    m = dict(zip(source_dates, source_vals))
+    return [m.get(d) for d in dates]
+
+
 def build_series(pe_dates, pe, yc_dates, yc_10y):
     """把(通常週頻的)fwd PE 序列對齊到(日頻的)10Y 殖利率序列,逐點算 ERP。
     yc_dates/yc_10y 需已按日期遞增排序。pe 日期早於 yc 最早日期的點會被跳過。"""

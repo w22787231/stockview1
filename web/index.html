@@ -2788,18 +2788,22 @@ function _renderFwdPe(){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
+let ERP_INV=false;   // 反轉視角:顯示 -ERP,讓線與 S&P500 同向(正相關),較直覺
 function erpBox(e){
   if(!e || !e.erp || !e.erp.length) return '';
   const cur=e.cur, p=e.pctile;
   const vd = p==null?{t:"—",c:"dim"}:(p>=65?{t:"股票相對債券便宜",c:"pos"}:(p<=35?{t:"股票相對債券昂貴",c:"neg"}:{t:"中性",c:"dim"}));
   const _rb=(k,lab)=>'<button class="ntab'+(ERP_RANGE===k?" on":"")+'" data-er="'+k+'">'+lab+'</button>';
+  const invBtn='<button class="btn'+(ERP_INV?' active':'')+'" id="erpInvBtn" title="反轉視角:顯示 -ERP,讓線與 S&amp;P500 同向(正相關),較直覺">🔄 反轉視角'+(ERP_INV?'(-ERP)':'')+'</button>';
   return '<div class="guide" style="margin-top:12px">'+
     '<div class="gtitle">股票風險溢酬 ERP · <b class="'+vd.c+'">'+(cur==null?'—':(cur>0?'+':'')+cur+'%')+'（'+vd.t+'）</b></div>'+
     '<div id="erpChart" class="m1m2-chart"></div>'+
-    '<div id="erpRange" class="news-tabs" style="margin:4px 0 2px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+'</div>'+
+    '<div id="erpRange" class="news-tabs" style="margin:4px 0 2px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">'+_rb("1y","1年")+_rb("3y","3年")+_rb("5y","5年")+_rb("all","ALL")+
+      '<span style="width:1px;height:16px;background:var(--line);margin:0 2px"></span>'+invBtn+'</div>'+
     '<div class="ex">S&amp;P500 盈餘殖利率(100/Forward P/E'+(e.fwd_pe?'='+e.fwd_pe+'x':'')+')− 10年公債殖利率(DGS10'+(e.dgs10!=null?'='+e.dgs10+'%':'')+')。'+
       '<b class="pos">越高</b>＝股票相對債券越便宜(偏多股市);<b class="neg">越低甚至轉負</b>＝股票相對債券越貴,常見於估值泡沫或升息末段。'+
-      (p!=null?' 現值位居自身歷史第 <b>'+p+'</b> 百分位。':'')+'虛線=0(股債打平參考)。</div>'+
+      (p!=null?' 現值位居自身歷史第 <b>'+p+'</b> 百分位。':'')+'虛線=0(股債打平參考)'+
+      ((Array.isArray(e.spy)&&e.spy.length)?'。<b style="color:#9333ea">紫線=S&amp;P500(右軸)</b>,對照 ERP 與大盤走勢':'')+'。</div>'+
     '</div>';
 }
 function drawErp(e){
@@ -2810,23 +2814,41 @@ function drawErp(e){
     rb.querySelectorAll(".ntab").forEach(x=>x.classList.toggle("on",x.dataset.er===ERP_RANGE));
     _renderErp();
   });
+  const ib=document.getElementById("erpInvBtn");
+  if(ib) ib.onclick=()=>{ ERP_INV=!ERP_INV; renderSentiment(SENT_LAST); };
   _renderErp();
 }
 function _renderErp(){
   const e=window._erp, el=document.getElementById("erpChart");
   if(!el || !window.echarts || !e || !e.erp || !e.erp.length) return;
+  const sgn=ERP_INV?-1:1;
   const n={"1y":52,"3y":156,"5y":260,"all":e.erp.length}[ERP_RANGE]||e.erp.length;
-  const dates=e.dates.slice(-n), erp=e.erp.slice(-n);
+  const dates=e.dates.slice(-n), erp=e.erp.slice(-n).map(v=>v==null?null:+(v*sgn).toFixed(2));
+  const spy=(Array.isArray(e.spy)&&e.spy.length)?e.spy.slice(-n):null;
+  const series=[{name:ERP_INV?"-ERP":"ERP",type:"line",data:erp,smooth:true,symbol:"none",yAxisIndex:0,connectNulls:true,
+      lineStyle:{width:2,color:"#0d9488"},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d948812"},
+      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}];
+  const yAxes=[{type:"value",name:ERP_INV?"-ERP %":"ERP %",scale:true,nameTextStyle:{fontSize:10},axisLabel:{fontSize:10,formatter:"{value}%"},splitLine:{lineStyle:{opacity:.3}}}];
+  if(spy){
+    yAxes.push({type:"value",scale:true,position:"right",name:"S&P500",nameTextStyle:{fontSize:10,color:"#9333ea"},
+      axisLabel:{fontSize:10,color:"#9333ea",formatter:"{value}"},splitLine:{show:false}});
+    series.push({name:"S&P500",type:"line",data:spy,smooth:true,symbol:"none",yAxisIndex:1,
+      lineStyle:{width:1.4,color:"#9333ea",opacity:.85}});
+  }
   const ch=echarts.getInstanceByDom(el)||echarts.init(el,null,{renderer:"canvas"});
   ch.setOption({
-    grid:{left:42,right:14,top:14,bottom:30},
-    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":(v>0?"+":"")+Number(v).toFixed(2)+"%"},
+    grid:{left:42,right:spy?44:14,top:14,bottom:30},
+    legend:spy?{data:series.map(s=>s.name),top:-2,right:0,itemWidth:14,itemHeight:8,textStyle:{fontSize:10}}:undefined,
+    tooltip:{trigger:"axis",formatter:function(ps){
+      if(!ps||!ps.length) return "";
+      let s=ps[0].axisValueLabel||ps[0].axisValue;
+      ps.forEach(p=>{ s+="<br>"+p.marker+p.seriesName+": "+(p.value==null?"—":(p.seriesName==="S&P500"?p.value:((p.value>0?"+":"")+p.value+"%"))); });
+      return s;
+    }},
     dataZoom:[{type:"inside"}],
     xAxis:{type:"category",data:dates,axisLabel:{fontSize:10,interval:Math.max(0,Math.floor(dates.length/8))}},
-    yAxis:{type:"value",scale:true,axisLabel:{fontSize:10,formatter:"{value}%"},splitLine:{lineStyle:{opacity:.3}}},
-    series:[{name:"ERP",type:"line",data:erp,smooth:true,symbol:"none",connectNulls:true,
-      lineStyle:{width:2,color:"#0d9488"},itemStyle:{color:"#0d9488"},areaStyle:{color:"#0d948812"},
-      markLine:{silent:true,symbol:"none",lineStyle:{color:"#94a3b8",type:"dashed",width:1},data:[{yAxis:0}]}}],
+    yAxis:yAxes,
+    series:series,
   }, true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }

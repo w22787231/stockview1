@@ -16,11 +16,12 @@ function extract(name){
 const stub = `
 const esc = s => (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 let ERP_RANGE='3y';
+let ERP_INV=false;
 `;
-const src = stub + extract("erpBox")
-  + "\nglobalThis.__OUT=erpBox({cur:0.2,fwd_pe:21.1,dgs10:4.54,pctile:7,"
-  + "dates:['2026-06-25','2026-07-02','2026-07-10'],erp:[0.48,0.32,0.2],"
-  + "src:'test'});\n";
+const withE = { cur: 0.2, fwd_pe: 21.1, dgs10: 4.54, pctile: 7,
+  dates: ["2026-06-25", "2026-07-02", "2026-07-10"], erp: [0.48, 0.32, 0.2],
+  spy: [6180.5, 6230.1, 6279.4], src: "test" };
+const src = stub + extract("erpBox") + "\nglobalThis.__OUT=erpBox(" + JSON.stringify(withE) + ");\n";
 const fn = new Function(src + "return globalThis.__OUT;");
 const out = fn();
 assert.ok(out.includes("股票風險溢酬 ERP"), "缺標題");
@@ -29,5 +30,13 @@ assert.ok(out.includes("21.1x"), "缺 Forward P/E");
 assert.ok(out.includes("4.54%"), "缺 10Y 殖利率");
 assert.ok(out.includes("第 <b>7</b> 百分位"), "缺歷史百分位");
 assert.ok(out.includes("data-er="), "缺時間按鈕");
-assert.ok(out === "" || out.includes("erpChart"), "缺圖表容器");
+assert.ok(out.includes("erpInvBtn") && out.includes("反轉視角"), "缺反轉按鈕");
+assert.ok(out.includes("紫線=S&amp;P500"), "缺 S&P500 疊圖說明");
+assert.ok(out.includes("erpChart"), "缺圖表容器");
+
+// 反轉狀態:按鈕文字/class 要變
+const srcInv = stub.replace("let ERP_INV=false;", "let ERP_INV=true;")
+  + extract("erpBox") + "\nglobalThis.__OUT=erpBox(" + JSON.stringify(withE) + ");\n";
+const outInv = new Function(srcInv + "return globalThis.__OUT;")();
+assert.ok(outInv.includes("(-ERP)") && outInv.includes(" active"), "反轉狀態按鈕未反映 ERP_INV");
 console.log("ERP_DOM_OK");

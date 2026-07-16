@@ -22,7 +22,7 @@ const topNames = [...topBlock.matchAll(/["']([a-z0-9_]+)["']/gi)].map(m => m[1])
 const inlinePaths = [...pullPy.matchAll(/\/data\/([a-z0-9_]+)\.json/gi)].map(m => m[1]);
 
 // 3) 版控內既有的靜態資料檔(不經由 pull 產生/拉取;見 .gitignore 的 ! 例外)
-const COMMITTED = ["supply_chain", "valuations"];
+const COMMITTED = ["supply_chain", "valuations", "stock_reports"];
 
 const covered = new Set([...topNames, ...inlinePaths, ...COMMITTED]);
 

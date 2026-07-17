@@ -1371,11 +1371,19 @@ function divergenceTable(rows){
     }},
     {h:"e20 波峰→現在", key:"decay", cell:r=>'<td><span class="pos">'+r.peak_e20.toFixed(2)+'</span><span style="color:var(--ink3)"> → </span><span class="'+cls(r.cur_e20)+'">'+r.cur_e20.toFixed(2)+'</span></td>'},
     {h:"衰退量", key:"decay", cell:r=>'<td class="neg">-'+r.decay.toFixed(2)+'</td>'},
+    {h:"衰退速度", key:null, sortVal:r=>r.decay/r.days_since_peak, cell:r=>'<td class="dim">'+(r.decay/r.days_since_peak).toFixed(3)+'<span style="color:var(--ink3);font-size:10px">/日</span></td>'},
   ];
   return buildTable("t-divergence", rows, cols, {empty:"（查無符合的個股，可能不在背離清單內，或未達60日計算門檻）"});
 }
 
+const DIVERGENCE_SORTS = {
+  decay: {label:"衰退量最大", fn:(a,b)=>b.decay-a.decay},
+  fresh: {label:"最新出現",   fn:(a,b)=>a.days_since_peak-b.days_since_peak},
+  rate:  {label:"衰退速度最快", fn:(a,b)=>(b.decay/b.days_since_peak)-(a.decay/a.days_since_peak)},
+};
+let DIVERGENCE_SORT = "decay";
 let DIVERGENCE_DATA = null;
+
 async function loadDivergence(){
   const el = document.getElementById("divergenceBox");
   if(!el) return;
@@ -1384,41 +1392,69 @@ async function loadDivergence(){
     if(!res.ok) throw new Error("HTTP "+res.status);
     const d = await res.json();
     DIVERGENCE_DATA = d;
+    const sortBtns = Object.keys(DIVERGENCE_SORTS).map(k=>
+      '<button class="sr-filt'+(DIVERGENCE_SORT===k?" active":"")+'" data-dsort="'+k+'" style="border-radius:999px;font-size:12px;padding:5px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer">'+DIVERGENCE_SORTS[k].label+'</button>'
+    ).join("");
     el.innerHTML =
-      '<div class="dim" style="font-size:12px;margin:2px 0 8px">掃描 '+d.pools.join("/")+' 共 '+d.n_scanned+' 檔・符合背離條件 '+d.n_flagged+' 檔，預設顯示衰退幅度最大的前 '+d.topn+' 檔(可搜尋其餘 '+Math.max(0,d.exported-d.topn)+' 檔)・'+esc(fmtTime(d.generated_at))+'</div>'+
-      '<div class="search" id="divSearchBox" style="margin-bottom:10px;max-width:280px">'+
-        '<span>🔍</span>'+
-        '<input id="divSearchInput" type="text" placeholder="搜尋代號或公司名" autocomplete="off" spellcheck="false">'+
-        '<button class="clear" id="divSearchClear" type="button">✕</button>'+
+      '<div class="dim" style="font-size:12px;margin:2px 0 8px">掃描 '+d.pools.join("/")+' 共 '+d.n_scanned+' 檔・符合背離條件 '+d.n_flagged+' 檔，預設顯示前 '+d.topn+' 檔(可搜尋其餘 '+Math.max(0,d.exported-d.topn)+' 檔)・'+esc(fmtTime(d.generated_at))+'</div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div id="divSortBar" style="display:flex;gap:6px;flex-wrap:wrap">'+sortBtns+'</div>'+
+        '<span style="width:1px;height:16px;background:var(--line);margin:0 2px"></span>'+
+        '<div class="search" id="divSearchBox" style="max-width:260px">'+
+          '<span>🔍</span>'+
+          '<input id="divSearchInput" type="text" placeholder="搜尋代號或公司名" autocomplete="off" spellcheck="false">'+
+          '<button class="clear" id="divSearchClear" type="button">✕</button>'+
+        '</div>'+
       '</div>'+
       '<div class="dim" id="divSearchHit" style="font-size:11px;margin:-4px 0 8px;display:none"></div>'+
-      '<div id="divTableWrap">'+divergenceTable(d.rows.slice(0,d.topn))+'</div>';
-    bindDivergenceSearch();
+      '<div id="divTableWrap"></div>';
+    renderDivergenceView();
+    bindDivergenceControls();
   }catch(e){
     el.innerHTML = '<div class="loading-screen">⚠️ 載入 data/momentum_divergence.json 失敗（'+esc(e.message)+'）。</div>';
   }
 }
 
-function bindDivergenceSearch(){
-  const box=document.getElementById("divSearchBox"), input=document.getElementById("divSearchInput"),
-        clearBtn=document.getElementById("divSearchClear"), wrap=document.getElementById("divTableWrap"),
-        hit=document.getElementById("divSearchHit");
-  if(!input || !DIVERGENCE_DATA) return;
-  function apply(){
-    const term=(input.value||"").trim().toLowerCase();
-    box.classList.toggle("has-val", term.length>0);
-    if(!term){
-      wrap.innerHTML=divergenceTable(DIVERGENCE_DATA.rows.slice(0,DIVERGENCE_DATA.topn));
-      hit.style.display="none";
-      return;
-    }
-    const matched=DIVERGENCE_DATA.rows.filter(r=>r.sym.toLowerCase().includes(term) || (r.name||"").toLowerCase().includes(term));
-    wrap.innerHTML=divergenceTable(matched);
+function renderDivergenceView(){
+  const wrap=document.getElementById("divTableWrap"), hit=document.getElementById("divSearchHit"),
+        input=document.getElementById("divSearchInput"), box=document.getElementById("divSearchBox");
+  if(!wrap || !DIVERGENCE_DATA) return;
+  const term=(input&&input.value||"").trim().toLowerCase();
+  if(box) box.classList.toggle("has-val", term.length>0);
+  const sortFn = (DIVERGENCE_SORTS[DIVERGENCE_SORT]||DIVERGENCE_SORTS.decay).fn;
+
+  if(!term){
+    const rows=DIVERGENCE_DATA.rows.slice().sort(sortFn).slice(0,DIVERGENCE_DATA.topn);
+    wrap.innerHTML=divergenceTable(rows);
+    if(hit) hit.style.display="none";
+    return;
+  }
+  const matched=DIVERGENCE_DATA.rows.filter(r=>r.sym.toLowerCase().includes(term) || (r.name||"").toLowerCase().includes(term)).sort(sortFn);
+  wrap.innerHTML=divergenceTable(matched);
+  if(hit){
     hit.style.display="block";
     hit.textContent = matched.length ? ("符合 "+matched.length+" 檔") : "在已掃描的背離清單中查無符合（該股可能未達背離條件，或不在 tw150/sp500/ndx100 池內）";
   }
-  input.addEventListener("input", apply);
-  clearBtn.addEventListener("click", ()=>{ input.value=""; apply(); input.focus(); });
+}
+
+function bindDivergenceControls(){
+  const input=document.getElementById("divSearchInput"), clearBtn=document.getElementById("divSearchClear"),
+        sortBar=document.getElementById("divSortBar");
+  if(!input || !DIVERGENCE_DATA) return;
+  input.addEventListener("input", renderDivergenceView);
+  clearBtn.addEventListener("click", ()=>{ input.value=""; renderDivergenceView(); input.focus(); });
+  if(sortBar) sortBar.addEventListener("click", e=>{
+    const btn=e.target.closest("[data-dsort]"); if(!btn) return;
+    DIVERGENCE_SORT=btn.dataset.dsort;
+    sortBar.querySelectorAll("[data-dsort]").forEach(b=>{
+      const on=b.dataset.dsort===DIVERGENCE_SORT;
+      b.classList.toggle("active",on);
+      b.style.background=on?"var(--blue)":"var(--panel)";
+      b.style.color=on?"#fff":"var(--ink2)";
+      b.style.borderColor=on?"var(--blue)":"var(--line)";
+    });
+    renderDivergenceView();
+  });
 }
 
 let MACRO_TAB = "overview";

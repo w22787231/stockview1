@@ -50,7 +50,7 @@ TOP = ["macro", "capital", "calendar", "etf", "sentiment", "industry_pe",
        "us5000", "tw_all", "strong", "strong_tw", "smartmoney", "pi", "spec", "fsi",
        "tips", "yieldcurve", "breadth", "us_theme_flow", "0dte", "chicago_fci",
        "on_rp", "on_rp_liquidity", "macro_score", "momentum_divergence", "leveraged_ratio",
-       "tw_daytrading"]
+       "tw_daytrading", "soxx_ma"]
 
 
 def _get(path, timeout=30):

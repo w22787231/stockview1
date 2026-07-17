@@ -115,6 +115,16 @@ jobs:
           cd engine
           python export_tw_daytrading.py
 
+      - name: Export SOXX 200MA deviation
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"
+        run: |
+          cd engine
+          python export_soxx_ma.py
+
       - name: Export macro market (indices + sector ETFs)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

@@ -6,7 +6,8 @@
 // (10 天期殖利率 + 2s10s 子圖)、drawErp(ERP × S&P500 右軸,含反轉視角)、drawSafeHaven
 // (Safe Haven Demand × S&P500 右軸,含反轉視角)、drawLevRatioChart(SOXX/QQQ 股價 +
 // SOXL/SOXX、QQQ/TQQQ 成交額比值,2 grid 各左右分軸)、drawTwDayTradingChart(台股當沖
-// 占大盤比重,單 grid 三線,含早期稀疏/null 資料)。跨多個時間視窗與含 null 暖身的
+// 占大盤比重,單 grid 三線,含早期稀疏/null 資料)、drawSoxxMaChart(SOXX 股價×200MA,
+// 2 grid,下圖偏離率含 continuous visualMap 正負上色)。跨多個時間視窗與含 null 暖身的
 // 相關序列各渲染一次。要新增其他圖,照 smoke() 模式加即可。
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -269,7 +270,43 @@ smokeTwDt("極短(僅4點,剛上線第一天)", 4, false);
 smokeTwDt("稀疏(60點,buy/sell含null回填天)", 60, true);
 smokeTwDt("1y 視窗(252點)", 252, false);
 
-assert.ok(RENDER_COUNT >= 19, "應完成至少 19 次真渲染,實得 " + RENDER_COUNT);
+// ── drawSoxxMaChart(SOXX 股價 × 200MA,2 grid:上圖股價共軸,下圖偏離率含正負piecewise視覺映射)──
+function synthSoxxMa(N){
+  const dates=[], close=[], ma200=[], dev=[];
+  let base=Date.UTC(2002,4,3);
+  for(let i=0;i<N;i++){
+    dates.push(new Date(base+i*86400000).toISOString().slice(0,10));
+    const c = 100+80*Math.sin(i/300)+i*0.03;
+    const m = 100+70*Math.sin((i-100)/300)+i*0.03;
+    close.push(+c.toFixed(2));
+    ma200.push(+m.toFixed(2));
+    dev.push(+((c/m-1)*100).toFixed(2));
+  }
+  return {dates, close, ma200, dev};
+}
+function smokeSoxxMa(label, N){
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener(){}, removeEventListener(){} };
+  const el = {};
+  const $ = () => el;
+  const drawSoxxMaChart = new Function(
+    "return (function($, window, echarts){ " + extract("drawSoxxMaChart") + " return drawSoxxMaChart; })"
+  )()($, window, echarts);
+  const d = synthSoxxMa(N);
+  try {
+    drawSoxxMaChart("soxxMaChart", d.dates, d.close, d.ma200, d.dev);
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawSoxxMaChart):");
+smokeSoxxMa("1y 視窗(252點)", 252);
+smokeSoxxMa("max 視窗(6089點,24年)", 6089);
+smokeSoxxMa("極短(僅3點)", 3);
+
+assert.ok(RENDER_COUNT >= 22, "應完成至少 22 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

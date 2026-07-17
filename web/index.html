@@ -6615,6 +6615,8 @@ function drawSoxxMaChart(id, dates, close, ma200, dev){
          lineStyle:{type:"dashed",opacity:.7}, label:{fontSize:9},
          data:[
            {yAxis:0, lineStyle:{color:"#8b949e",opacity:.6}, label:{show:false}},
+           {yAxis:20, lineStyle:{color:"#e8923a",opacity:.55}, label:{formatter:"+20%",position:"insideStartTop",color:"#e8923a",fontSize:9}},
+           {yAxis:-20, lineStyle:{color:"#e8923a",opacity:.55}, label:{formatter:"-20%",position:"insideStartBottom",color:"#e8923a",fontSize:9}},
            {type:"max", name:"高點", lineStyle:{color:"#34d399"}, label:{formatter:"{c}% 高點",position:"insideEndTop",color:"#34d399"}},
            {type:"min", name:"低點", lineStyle:{color:"#fb7185"}, label:{formatter:"{c}% 低點",position:"insideEndBottom",color:"#fb7185"}}
          ]}}

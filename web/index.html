@@ -1351,12 +1351,52 @@ function etfTable(rows){
   return buildTable("t-etf", rows, cols, {empty:"（無 ETF 資料）"});
 }
 
+// ── 個股二階導(效率背離)：股價還在高檔附近、但20日效率已從近期高點明顯衰退 ──
+function divergenceTable(rows){
+  const cols=[
+    {h:"#", key:null, rownum:true},
+    {h:"代號/名稱", key:"sym", type:"str", cell:r=>'<td class="sym clickable" data-stk="'+esc(r.sym)+'">'+esc(r.sym)+(r.name&&r.name!==r.sym?'<span class="nm">'+esc(r.name)+'</span>':'')+'</td>'},
+    {h:"現價", key:"cur_price", cell:r=>'<td class="dim">'+(r.cur==="TWD"?"NT$":"$")+fmtNum(r.cur_price,2)+'</td>'},
+    {h:"波峰日", key:"peak_date", type:"str", cell:r=>'<td class="dim">'+esc(r.peak_date)+'<span style="color:var(--ink3);font-size:10px"> ('+r.days_since_peak+'個交易日前)</span></td>'},
+    {h:"波峰後最高", key:"max_price_since_peak", cell:r=>{
+      const stillHigh = r.max_price_since_peak > r.peak_price;
+      return '<td class="'+(stillHigh?"pos":"dim")+'">'+(r.cur==="TWD"?"NT$":"$")+fmtNum(r.max_price_since_peak,2)+(stillHigh?' <span style="font-size:10px">(創高過)</span>':'')+'</td>';
+    }},
+    {h:"e20 波峰→現在", key:"decay", cell:r=>'<td><span class="pos">'+r.peak_e20.toFixed(2)+'</span><span style="color:var(--ink3)"> → </span><span class="'+cls(r.cur_e20)+'">'+r.cur_e20.toFixed(2)+'</span></td>'},
+    {h:"衰退量", key:"decay", cell:r=>'<td class="neg">-'+r.decay.toFixed(2)+'</td>'},
+  ];
+  return buildTable("t-divergence", rows, cols, {empty:"（本期無符合背離條件的個股）"});
+}
+
+let DIVERGENCE_DATA = null;
+async function loadDivergence(){
+  const el = document.getElementById("divergenceBox");
+  if(!el) return;
+  try{
+    const res = await fetch("data/momentum_divergence.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const d = await res.json();
+    DIVERGENCE_DATA = d;
+    el.innerHTML =
+      '<div class="dim" style="font-size:12px;margin:2px 0 8px">掃描 '+d.pools.join("/")+' 共 '+d.n_scanned+' 檔・符合背離條件 '+d.n_flagged+' 檔，顯示衰退幅度最大的前 '+d.topn+' 檔・'+esc(fmtTime(d.generated_at))+'</div>'+
+      divergenceTable(d.rows);
+  }catch(e){
+    el.innerHTML = '<div class="loading-screen">⚠️ 載入 data/momentum_divergence.json 失敗（'+esc(e.message)+'）。</div>';
+  }
+}
+
 function renderMacro(d){
   MACRO_M1M2 = d.m1b_m2 || null;          // 台灣 M1B/M2 年增率,繪於 ON RP 下方的 #m1m2Block
   MACRO_RESERVES = d.us_reserves || null; // 美國聯準會準備金(於 renderSentiment 繪出)
   MACRO_SOFR = d.sofr_iorb || null;       // SOFR−IORB 利差,繪於準備金下方(renderSentiment)
   MACRO_LEI = {cfnai:d.lei_cfnai||null, oecd:d.lei_oecd||null};   // 美國景氣/領先指標(芝加哥聯儲 CFNAI / OECD CLI)
   $("#content").innerHTML =
+    '<section id="divergenceSec">'+
+      '<div class="sec-head"><h2>個股二階導</h2><span class="tag">效率背離(60日回溯)</span>'+
+        '<span class="hint">股價還在高檔、但20日效率已從近期高點腰斬 —— 動能先軟、價格還沒反映</span></div>'+
+      '<div id="divergenceBox"><div class="loading-screen">載入個股二階導 …</div></div>'+
+      '<div class="legend">口徑：60個交易日內找 e20(20日效率)波峰，現在的e20 ≤ 波峰的一半、現價仍 ≥ 波峰當天收盤的85% 才算背離(價格還沒真的破底)。同一套效率公式用於「趨勢動能榜」，跨頁一致。背離≠必反轉，健康整理後再創高也常見，適合當降低信心的風險旗標，非獨立賣出訊號。</div>'+
+    '</section>'+
     '<section>'+
       '<div class="sec-head"><h2>指數總覽</h2><span class="tag">今日漲跌</span>'+
         '<span class="hint">收益率顯示水準 + 與昨日差(bps)</span></div>'+
@@ -1387,6 +1427,7 @@ function renderMacro(d){
         '<span class="hint">點主題展開成分股；成分股代號可點進個股詳情</span></div>'+
       '<div id="twThemes"><div class="loading-screen">載入台股主題 …</div></div>'+
     '</section>';
+  loadDivergence();
   loadSentiment();
   loadFedYield();
   loadUsThemeFlow();

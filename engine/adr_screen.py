@@ -207,6 +207,71 @@ def _eff_n(sub, n):
     r = _ret_n(sub, n)
     return r / (a * n) if a > 0 else 0.0
 
+def compute_divergence(symbols, lookback=60, min_peak_e20=0.30, decay_ratio=0.5, price_floor_ratio=0.85):
+    """個股二階導背離掃描：股價還撐在高檔附近，但20日效率(單向性)已經從近期高點明顯衰退。
+    概念同「趨勢動能榜」的加速度(比較不同天期效率)，差別是這裡回溯 lookback 個交易日，
+    找「效率的高點」而非只看今天的快照，藉此抓「動能已經在流失、但股價還沒真的跌下來」的背離。
+
+    peak_e20  = 回溯窗口內 e20(20日效率)的最高值，peak_date = 對應日期，peak_price = 當天收盤
+    cur_e20   = 最新一筆 e20
+    max_price_since_peak = peak_date 之後(含)的最高收盤 —— 用來確認股價後續有沒有撐住/創高
+    決策條件(三者皆須成立才算背離)：
+      1) peak_e20 >= min_peak_e20            —— 曾經有過乾淨的單向趨勢，不是本來就在盤整
+      2) cur_e20 <= peak_e20 * decay_ratio    —— 效率已經衰退超過一半
+      3) 現價 >= peak_price * price_floor_ratio —— 股價還沒真的破底，屬於「量能先軟、價格還沒反映」
+
+    回傳依 decay(peak_e20 - cur_e20) 由大到小排序的 list[dict]。
+    """
+    rows, failed = [], []
+    if not symbols:
+        return rows, failed
+    df = _download(symbols, period="1y")
+    for sym in symbols:
+        try:
+            sub = _sub(df, symbols, sym)
+            need = lookback + 21   # 算 e20 要多留 20 根，避免窗口起點的 e20 用不足的資料算出來
+            if len(sub) < need:
+                failed.append((sym, f"<{need} bars ({len(sub)})")); continue
+
+            dates, e20s, closes = [], [], []
+            for i in range(len(sub) - lookback, len(sub)):
+                win = sub.iloc[:i + 1]
+                e20s.append(_eff_n(win, 20))
+                dates.append(win.index[-1])
+                closes.append(float(win["Close"].iloc[-1]))
+
+            peak_i = max(range(len(e20s)), key=lambda k: e20s[k])
+            peak_e20 = e20s[peak_i]
+            peak_date = dates[peak_i]
+            peak_price = closes[peak_i]
+            cur_e20 = e20s[-1]
+            cur_price = closes[-1]
+            max_price_since_peak = max(closes[peak_i:])
+            days_since_peak = len(e20s) - 1 - peak_i
+
+            if peak_e20 < min_peak_e20:
+                continue
+            if cur_e20 > peak_e20 * decay_ratio:
+                continue
+            if cur_price < peak_price * price_floor_ratio:
+                continue
+            if days_since_peak < 5:      # 剛見頂沒幾天，還不算「背離」，先排除雜訊
+                continue
+
+            rows.append({
+                "sym": sym, "cur": "TWD" if is_tw(sym) else "USD",
+                "cur_price": cur_price, "peak_price": peak_price,
+                "max_price_since_peak": max_price_since_peak,
+                "peak_date": str(peak_date.date()) if hasattr(peak_date, "date") else str(peak_date),
+                "days_since_peak": days_since_peak,
+                "peak_e20": round(float(peak_e20), 3), "cur_e20": round(float(cur_e20), 3),
+                "decay": round(float(peak_e20 - cur_e20), 3),
+            })
+        except Exception as e:
+            failed.append((sym, repr(e)[:40]))
+    rows.sort(key=lambda r: r["decay"], reverse=True)
+    return rows, failed
+
 def _eff_trend(e5, e10, e20):
     if e5 > e10 > e20: return "越來越單向 (趨勢轉強)"
     if e5 < e10 < e20: return "越來越震盪 (趨勢轉弱)"

@@ -85,6 +85,16 @@ jobs:
           cd engine
           python export_json.py all 50
 
+      - name: Export momentum divergence (個股二階導)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"
+        run: |
+          cd engine
+          python export_divergence.py
+
       - name: Export macro market (indices + sector ETFs)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

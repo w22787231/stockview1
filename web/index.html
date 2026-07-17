@@ -6175,6 +6175,7 @@ async function loadOdte(){
 // ── TIPS 實質利率 × S&P500(雙線)＋ 20 日滾動相關(子圖)──────────────────────────
 let TIPS_DATA=null;
 let TIPS_WIN="1y";
+let TIPS_INV=false;   // 反轉視角:顯示 -TIPS,讓線與 S&P500 同向(正相關),較直覺
 const TIPS_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
 const TIPS_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};  // max 不列→取全部
 
@@ -6186,6 +6187,11 @@ function drawTipsChart(id, dates, tips, sp500, corr, win){
   const ch=echarts.init(el, null, {renderer:"canvas"});
   const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
   const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  const sgn=TIPS_INV?-1:1;
+  const tipsPlot=tips.map(v=>v==null?null:v*sgn);
+  const corrPlot=corr.map(v=>v==null?null:v*sgn);
+  const tipsName=(TIPS_INV?"-":"")+"TIPS 實質利率(10Y)";
+  const corrName=(TIPS_INV?"-":"")+"20日相關";
   ch.setOption({
     animation:false,
     grid:[
@@ -6193,7 +6199,7 @@ function drawTipsChart(id, dates, tips, sp500, corr, win){
       {left:52, right:54, top:252, height:82}            // 相關子圖(底部留 36px 給年份標籤)
     ],
     legend:{top:0, textStyle:{fontSize:11},
-      data:["TIPS 實質利率(10Y)","S&P 500"]},
+      data:[tipsName,"S&P 500"]},
     tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]},
       valueFormatter:null},
     axisPointer:{link:[{xAxisIndex:"all"}]},
@@ -6202,11 +6208,11 @@ function drawTipsChart(id, dates, tips, sp500, corr, win){
       {type:"time", gridIndex:1, axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}}
     ],
     yAxis:[
-      {type:"value", gridIndex:0, name:"實質利率%", nameTextStyle:{fontSize:10}, scale:true,
+      {type:"value", gridIndex:0, name:(TIPS_INV?"-":"")+"實質利率%", nameTextStyle:{fontSize:10}, scale:true,
        axisLabel:{fontSize:10, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.3}}},
       {type:"value", gridIndex:0, name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
        axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"},
-      {type:"value", gridIndex:1, name:"20日相關", nameTextStyle:{fontSize:9}, min:-1, max:1,
+      {type:"value", gridIndex:1, name:corrName, nameTextStyle:{fontSize:9}, min:-1, max:1,
        interval:1, axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.25}}}
     ],
     // 子圖線依相關值上色(紅負→灰零→綠正 漸層)。
@@ -6214,18 +6220,18 @@ function drawTipsChart(id, dates, tips, sp500, corr, win){
     visualMap:{show:false, type:"continuous", seriesIndex:2, dimension:1, min:-1, max:1,
       inRange:{color:["#e11d48","#8b949e","#16a34a"]}},
     series:[
-      {name:"TIPS 實質利率(10Y)", type:"line", smooth:true, showSymbol:false,
+      {name:tipsName, type:"line", smooth:true, showSymbol:false,
        xAxisIndex:0, yAxisIndex:0,
-       data:dates.map((d,i)=>[toMs(d), tips[i]]),
+       data:dates.map((d,i)=>[toMs(d), tipsPlot[i]]),
        lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
        areaStyle:{color:"#e8923a", opacity:.06}},
       {name:"S&P 500", type:"line", smooth:true, showSymbol:false,
        xAxisIndex:0, yAxisIndex:1,
        data:dates.map((d,i)=>[toMs(d), sp500[i]]),
        lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}},
-      {name:"20日相關", type:"line", smooth:true, showSymbol:false, connectNulls:false,
+      {name:corrName, type:"line", smooth:true, showSymbol:false, connectNulls:false,
        xAxisIndex:1, yAxisIndex:2,
-       data:dates.map((d,i)=>[toMs(d), corr[i]]),
+       data:dates.map((d,i)=>[toMs(d), corrPlot[i]]),
        lineStyle:{width:1.5}, areaStyle:{opacity:.10},
        markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},
          label:{show:false}, data:[{yAxis:0}]}}
@@ -6244,6 +6250,7 @@ function renderTips(d){
   const btns=wins.map(w=>
     '<button class="btn'+(w===win?" active":"")+'" data-tw="'+w+'">'+
       (TIPS_WIN_LABEL[w]||w)+'</button>').join("");
+  const invBtn='<button class="btn'+(TIPS_INV?' active':'')+'" id="tipsInvBtn" title="反轉視角:顯示 -TIPS,讓線與 S&amp;P500 同向(正相關),較直覺">🔄 反轉視角'+(TIPS_INV?'(-TIPS)':'')+'</button>';
 
   const tl=d.tips_last, db=d.tips_diff_bps, cl=d.corr20_last;
   const tipsStr=tl!=null?tl.toFixed(2)+"%":"—";
@@ -6257,7 +6264,7 @@ function renderTips(d){
     '<section>'+
       '<div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2>'+
         '<span class="tag">10Y TIPS · 20日滾動相關</span>'+
-        '<span class="hint">實質利率是股市估值的貼現率;利率升多半壓抑股市。子圖看兩者短期連動強弱</span></div>'+
+        '<span class="hint">'+(TIPS_INV?'反轉視角:顯示 -TIPS,數值越高代表實質利率越低(利多股市)、較接近股市同向。':'實質利率是股市估值的貼現率;利率升多半壓抑股市。子圖看兩者短期連動強弱')+'</span></div>'+
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
         '<div style="'+cardStyle+'">'+
           '<div class="cap-lab">10Y TIPS 實質利率</div>'+
@@ -6270,9 +6277,10 @@ function renderTips(d){
           '<div style="font-size:12px;color:var(--ink2)">'+(cl==null?'':(cl>=0?'同向':'反向'))+'</div>'+
         '</div>'+
       '</div>'+
-      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+
+        '<span style="width:1px;height:16px;background:var(--line);margin:0 2px"></span>'+invBtn+'</div>'+
       '<div id="tipsChart" class="cap-chart" style="height:370px"></div>'+
-      '<div class="legend" style="margin-top:10px">資料來源:FRED <b>DFII10</b>(10年期 TIPS 實質殖利率)＋ Yahoo Finance <b>^GSPC</b>。子圖為「TIPS 殖利率每日變動」與「S&amp;P500 每日報酬」的 '+(d.corr_win||20)+' 日滾動皮爾森相關(<b class="pos">綠=同向</b>、<b class="neg">紅=反向</b>);多數時間偏負(實質利率上升壓抑股市估值)。視窗 '+esc(TIPS_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:FRED <b>DFII10</b>(10年期 TIPS 實質殖利率)＋ Yahoo Finance <b>^GSPC</b>。子圖為「TIPS 殖利率每日變動」與「S&amp;P500 每日報酬」的 '+(d.corr_win||20)+' 日滾動皮爾森相關(<b class="pos">綠=同向</b>、<b class="neg">紅=反向</b>);多數時間偏負(實質利率上升壓抑股市估值)。視窗 '+esc(TIPS_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+(TIPS_INV?'。<b>(反轉視角:主圖線與相關子圖皆為 -TIPS 口徑)</b>':'')+'。</div>'+
     '</section>';
 
   const ser=d.series||{};
@@ -6286,6 +6294,8 @@ function renderTips(d){
   }
 
   box.querySelectorAll("[data-tw]").forEach(b=>b.onclick=()=>{ TIPS_WIN=b.dataset.tw; renderTips(TIPS_DATA); });
+  const ib=document.getElementById("tipsInvBtn");
+  if(ib) ib.onclick=()=>{ TIPS_INV=!TIPS_INV; renderTips(TIPS_DATA); };
 }
 
 async function loadTips(){

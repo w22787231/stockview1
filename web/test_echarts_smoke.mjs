@@ -55,13 +55,13 @@ function synth(N, warm) {
   return { dates, tips, sp500, corr };
 }
 
-function smokeTips(label, N, warm, win) {
+function smokeTips(label, N, warm, win, invert) {
   const echarts = makeEcharts();
   const window = { echarts, addEventListener() {}, removeEventListener() {} };
   const el = {};
   const $ = () => el;
   const drawTipsChart = new Function(
-    "return (function($, window, echarts){ " + extract("drawTipsChart") + " return drawTipsChart; })"
+    "return (function($, window, echarts){ let TIPS_INV=" + (!!invert) + "; " + extract("drawTipsChart") + " return drawTipsChart; })"
   )()($, window, echarts);
   const d = synth(N, warm);
   try {
@@ -74,10 +74,11 @@ function smokeTips(label, N, warm, win) {
 }
 
 console.log("真 ECharts SSR 煙霧測試(drawTipsChart):");
-smokeTips("1y 視窗(252點)", 252, 20, "1y");
-smokeTips("3m 視窗(63點,含null暖身)", 63, 20, "3m");
-smokeTips("max 視窗(5800點)", 5800, 20, "max");
-smokeTips("極短(僅25點,corr幾乎全null)", 25, 20, "1y");
+smokeTips("1y 視窗(252點)", 252, 20, "1y", false);
+smokeTips("3m 視窗(63點,含null暖身)", 63, 20, "3m", false);
+smokeTips("max 視窗(5800點)", 5800, 20, "max", false);
+smokeTips("極短(僅25點,corr幾乎全null)", 25, 20, "1y", false);
+smokeTips("反轉視角(-TIPS)", 252, 20, "1y", true);
 
 // ── drawYieldCurveChart(10 天期多線 + 2s10s 子圖,多 grid + visualMap + markLine)──
 function synthYc(N) {

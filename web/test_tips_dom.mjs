@@ -37,23 +37,28 @@ const DATA = {
 // ── stub：$ / esc / echarts,並捕捉 setOption 與按鈕 ──
 let BOX_HTML="", CHART_HTML="", CAP=null, BTNS=[];
 const chartEl={ set innerHTML(v){CHART_HTML=v;}, get innerHTML(){return CHART_HTML;}, _ro:null };
+let INV_BTN={onclick:null};
 const boxEl={
   set innerHTML(v){ BOX_HTML=v;
     // 解析 data-tw 按鈕數量
     BTNS=[...v.matchAll(/data-tw="([^"]+)"/g)].map(m=>({dataset:{tw:m[1]}, onclick:null}));
+    INV_BTN = v.includes("tipsInvBtn") ? {onclick:null} : INV_BTN;
   },
   get innerHTML(){return BOX_HTML;},
   querySelectorAll(sel){ return sel.includes("data-tw") ? BTNS : []; },
 };
+const DOC = { getElementById(id){ return id==="tipsInvBtn" ? INV_BTN : null; } };
 const stub = `
 const esc = s => (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const $ = sel => sel==='#tipsBlock' ? BOX : CHART;
 let TIPS_WIN="1y";
+let TIPS_INV=false;
 const TIPS_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
 const TIPS_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
 `;
-const src = "const {BOX,CHART,ECH,DATA}=__ctx;\n" +
+const src = "const {BOX,CHART,ECH,DATA,DOC}=__ctx;\n" +
   "const echarts=ECH;\n" +
+  "const document={getElementById:DOC.getElementById};\n" +
   "const window={echarts:ECH, addEventListener(){}, removeEventListener(){}};\n" +
   stub +
   "let TIPS_DATA=DATA;\n" +      // 模擬 loadTips 已填快取,讓按鈕 onclick 的 renderTips(TIPS_DATA) 可用
@@ -67,7 +72,7 @@ const ECH = {
   init(){ return { setOption(opt){ CAP=opt; }, resize(){}, dispose(){} }; },
 };
 const factory = new Function("__ctx", src);
-const api = factory({BOX:boxEl, CHART:chartEl, ECH, DATA});
+const api = factory({BOX:boxEl, CHART:chartEl, ECH, DATA, DOC});
 
 // 1) 正常渲染不報錯
 api.renderTips(DATA);

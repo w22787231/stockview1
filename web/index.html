@@ -2934,6 +2934,7 @@ function renderSentiment(d){
     '<div id="fsiBlock"></div>'+
     '<div id="piBlock"></div>'+
     '<div id="tipsBlock"></div>'+
+    '<div id="levRatioBlock"></div>'+
     '<div id="yieldCurveBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
@@ -3287,6 +3288,7 @@ async function loadSentiment(){
     loadFsi();
     loadPI();
     loadTips();
+    loadLevRatio();
     loadYieldCurve();
     loadInsider();
     loadSpec();
@@ -6414,6 +6416,142 @@ async function loadTips(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>TIPS 實質利率 × S&P500</h2></div>'+
       '<div class="legend">⚠️ tips.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_tips。</div></section>';
+  }
+}
+
+// ── 槓桿ETF成交額佔比:SOXX/QQQ 股價 × SOXL/SOXX、QQQ/TQQQ 20日均成交額比值 ──
+let LEV_DATA=null;
+let LEV_WIN="1y";
+const LEV_WIN_LABEL={"3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
+const LEV_WIN_N={"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260,"10y":2520};  // max 不列→取全部
+
+// 雙 grid:上圖 SOXX/QQQ 股價(各自獨立左右軸，量級差異大)；下圖 SOXL/SOXX、QQQ/TQQQ 成交額比值(各自獨立左右軸)。
+function drawLevRatioChart(id, dates, soxxPrice, ratio1, qqqPrice, ratio2, win){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  ch.setOption({
+    animation:false,
+    grid:[
+      {left:56, right:56, top:34, height:172},          // 主圖:股價(下方 x 軸標籤隱藏)
+      {left:56, right:56, top:252, height:82}            // 子圖:成交額比值(底部留 36px 給年份標籤)
+    ],
+    legend:{top:0, textStyle:{fontSize:11},
+      data:["SOXX 股價","QQQ 股價","SOXL/SOXX 成交額比","QQQ/TQQQ 成交額比"]},
+    tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]}},
+    axisPointer:{link:[{xAxisIndex:"all"}]},
+    xAxis:[
+      {type:"time", gridIndex:0, axisLabel:{show:false}, axisTick:{show:false}},
+      {type:"time", gridIndex:1, axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}}
+    ],
+    yAxis:[
+      {type:"value", gridIndex:0, name:"SOXX $", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value", gridIndex:0, name:"QQQ $", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"},
+      {type:"value", gridIndex:1, name:"SOXL/SOXX", nameTextStyle:{fontSize:9}, scale:true,
+       axisLabel:{fontSize:9, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.25}}},
+      {type:"value", gridIndex:1, name:"QQQ/TQQQ", nameTextStyle:{fontSize:9}, scale:true,
+       axisLabel:{fontSize:9, formatter:v=>v.toFixed(1)}, splitLine:{show:false}, position:"right"}
+    ],
+    series:[
+      {name:"SOXX 股價", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:0, yAxisIndex:0,
+       data:dates.map((d,i)=>[toMs(d), soxxPrice[i]]),
+       lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
+       areaStyle:{color:"#e8923a", opacity:.06}},
+      {name:"QQQ 股價", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:0, yAxisIndex:1,
+       data:dates.map((d,i)=>[toMs(d), qqqPrice[i]]),
+       lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}},
+      {name:"SOXL/SOXX 成交額比", type:"line", smooth:true, showSymbol:false, connectNulls:false,
+       xAxisIndex:1, yAxisIndex:2,
+       data:dates.map((d,i)=>[toMs(d), ratio1[i]]),
+       lineStyle:{color:"#16a34a", width:1.5}, itemStyle:{color:"#16a34a"}},
+      {name:"QQQ/TQQQ 成交額比", type:"line", smooth:true, showSymbol:false, connectNulls:false,
+       xAxisIndex:1, yAxisIndex:3,
+       data:dates.map((d,i)=>[toMs(d), ratio2[i]]),
+       lineStyle:{color:"#dc2626", width:1.5, type:"dashed"}, itemStyle:{color:"#dc2626"}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderLevRatio(d){
+  const box=$("#levRatioBlock");
+  if(!box) return;
+  const win=LEV_WIN;
+  const wins=d.windows||["3m","6m","1y","3y","5y","10y","max"];
+  const btns=wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-lw="'+w+'">'+
+      (LEV_WIN_LABEL[w]||w)+'</button>').join("");
+
+  const sp=d.soxx_price_last, r1=d.soxl_soxx_ratio_last, qp=d.qqq_price_last, r2=d.qqq_tqqq_ratio_last;
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>槓桿ETF成交額佔比</h2>'+
+        '<span class="tag">SOXL/SOXX · QQQ/TQQQ · '+(d.roll_win||20)+'日均成交額比值</span>'+
+        '<span class="hint">比值=槓桿ETF成交額 ÷ 正股ETF成交額;越高代表資金越集中在槓桿版做短線/當沖</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">SOXX 股價</div>'+
+          '<div class="cap-big" style="color:#e8923a">'+(sp!=null?"$"+sp.toFixed(2):"—")+'</div>'+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">SOXL/SOXX 成交額比</div>'+
+          '<div class="cap-big" style="color:#16a34a">'+(r1!=null?r1.toFixed(2)+"x":"—")+'</div>'+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">QQQ 股價</div>'+
+          '<div class="cap-big" style="color:#2563eb">'+(qp!=null?"$"+qp.toFixed(2):"—")+'</div>'+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">QQQ/TQQQ 成交額比</div>'+
+          '<div class="cap-big" style="color:#dc2626">'+(r2!=null?r2.toFixed(2)+"x":"—")+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<div id="levRatioChart" class="cap-chart" style="height:370px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:Yahoo Finance SOXL/SOXX/QQQ/TQQQ 日成交額(收盤價×成交量)，'+(d.roll_win||20)+'日滾動均值後取比值降噪。上圖為 SOXX/QQQ 股價(左右分軸)，下圖為兩組槓桿/正股成交額比值(左右分軸)。視窗 '+esc(LEV_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  const ser=d.series||{};
+  const allD=ser.dates||[], allSx=ser.soxx_price||[], allR1=ser.soxl_soxx_ratio||[],
+        allQ=ser.qqq_price||[], allR2=ser.qqq_tqqq_ratio||[];
+  const n=Math.min(LEV_WIN_N[win]||allD.length, allD.length, allSx.length, allR1.length, allQ.length, allR2.length);
+  const dates=allD.slice(-n), soxxPrice=allSx.slice(-n), ratio1=allR1.slice(-n),
+        qqqPrice=allQ.slice(-n), ratio2=allR2.slice(-n);
+  if(dates.length>=2){
+    drawLevRatioChart("levRatioChart", dates, soxxPrice, ratio1, qqqPrice, ratio2, win);
+  }else{
+    const c=$("#levRatioChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-lw]").forEach(b=>b.onclick=()=>{ LEV_WIN=b.dataset.lw; renderLevRatio(LEV_DATA); });
+}
+
+async function loadLevRatio(){
+  const box=$("#levRatioBlock");
+  if(!box) return;
+  if(LEV_DATA){ renderLevRatio(LEV_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入槓桿ETF成交額佔比 …</div>';
+  try{
+    const res=await fetch("data/leveraged_ratio.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    LEV_DATA=await res.json();
+    if(LEV_DATA.default_window) LEV_WIN=LEV_DATA.default_window;
+    renderLevRatio(LEV_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>槓桿ETF成交額佔比</h2></div>'+
+      '<div class="legend">⚠️ leveraged_ratio.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_leveraged_ratio。</div></section>';
   }
 }
 

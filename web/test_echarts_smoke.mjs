@@ -4,8 +4,9 @@
 //
 // 目前涵蓋 drawTipsChart(TIPS 實質利率 × S&P500,含 20 日相關子圖)、drawYieldCurveChart
 // (10 天期殖利率 + 2s10s 子圖)、drawErp(ERP × S&P500 右軸,含反轉視角)、drawSafeHaven
-// (Safe Haven Demand × S&P500 右軸,含反轉視角)。跨多個時間視窗與含 null 暖身的相關序列
-// 各渲染一次。要新增其他圖,照 smoke() 模式加即可。
+// (Safe Haven Demand × S&P500 右軸,含反轉視角)、drawLevRatioChart(SOXX/QQQ 股價 +
+// SOXL/SOXX、QQQ/TQQQ 成交額比值,2 grid 各左右分軸)。跨多個時間視窗與含 null 暖身的
+// 相關序列各渲染一次。要新增其他圖,照 smoke() 模式加即可。
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import assert from "node:assert";
@@ -195,7 +196,42 @@ smokeSafeHaven("250點(近1年,含S&P500右軸)", 250, false);
 smokeSafeHaven("反轉視角(-y)", 250, true);
 smokeSafeHaven("1M 視窗(21點)", 250, false, "1m");
 
-assert.ok(RENDER_COUNT >= 12, "應完成至少 12 次真渲染,實得 " + RENDER_COUNT);
+// ── drawLevRatioChart(SOXX/QQQ 股價 + SOXL/SOXX、QQQ/TQQQ 成交額比值,2 grid 各左右分軸)──
+function synthLev(N){
+  const dates=[], soxxPrice=[], ratio1=[], qqqPrice=[], ratio2=[];
+  let base=Date.UTC(2010,2,11);
+  for(let i=0;i<N;i++){
+    dates.push(new Date(base+i*86400000).toISOString().slice(0,10));
+    soxxPrice.push(+(60+40*Math.sin(i/200)+i*0.05).toFixed(2));
+    ratio1.push(+(2.0+1.2*Math.sin(i/90)).toFixed(3));
+    qqqPrice.push(+(100+i*0.08+30*Math.sin(i/150)).toFixed(2));
+    ratio2.push(+(5.0+2.0*Math.sin(i/70)).toFixed(3));
+  }
+  return {dates, soxxPrice, ratio1, qqqPrice, ratio2};
+}
+function smokeLevRatio(label, N, win){
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener(){}, removeEventListener(){} };
+  const el = {};
+  const $ = () => el;
+  const drawLevRatioChart = new Function(
+    "return (function($, window, echarts){ " + extract("drawLevRatioChart") + " return drawLevRatioChart; })"
+  )()($, window, echarts);
+  const d = synthLev(N);
+  try {
+    drawLevRatioChart("levRatioChart", d.dates, d.soxxPrice, d.ratio1, d.qqqPrice, d.ratio2, win);
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawLevRatioChart):");
+smokeLevRatio("1y 視窗(252點)", 252, "1y");
+smokeLevRatio("max 視窗(4112點,16年)", 4112, "max");
+smokeLevRatio("3m 視窗(63點)", 63, "3m");
+
+assert.ok(RENDER_COUNT >= 15, "應完成至少 15 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

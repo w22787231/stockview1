@@ -95,6 +95,16 @@ jobs:
           cd engine
           python export_divergence.py
 
+      - name: Export leveraged ETF ratio (SOXL/SOXX, QQQ/TQQQ)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"
+        run: |
+          cd engine
+          python export_leveraged_ratio.py
+
       - name: Export macro market (indices + sector ETFs)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

@@ -591,6 +591,11 @@
 #stockReportsView .sr-c-count{font-size:11px;color:var(--ink3);margin:2px 0 12px}
 #stockReportsView .sr-c-row{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:end;margin-bottom:10px}
 #stockReportsView .sr-c-row .rlbl{font-size:11px;color:var(--ink3);font-weight:650;grid-column:1/-1}
+#stockReportsView .sr-momentum{font-family:var(--mono);font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:6px;letter-spacing:0}
+#stockReportsView .sr-momentum.accel-up{background:rgba(var(--green-rgb),.22);color:var(--green)}
+#stockReportsView .sr-momentum.decel-up{background:rgba(var(--green-rgb),.10);color:var(--green)}
+#stockReportsView .sr-momentum.accel-down{background:rgba(var(--red-rgb),.22);color:var(--red)}
+#stockReportsView .sr-momentum.decel-down{background:rgba(var(--red-rgb),.10);color:var(--red)}
 #stockReportsView .sr-c-row .rnum{font-family:var(--mono);font-size:16.5px;font-weight:760;letter-spacing:-.2px;color:var(--ink)}
 #stockReportsView .sr-c-row .arrow{font-size:12px;margin:0 3px;color:var(--ink3);font-weight:500}
 #stockReportsView .sr-c-row .rdelta{font-family:var(--mono);font-size:12px;font-weight:750;padding:1px 7px;border-radius:6px;white-space:nowrap}
@@ -4339,7 +4344,19 @@ function srSparkline(points, color){
     '<circle cx="'+lastX.toFixed(1)+'" cy="'+lastY.toFixed(1)+'" r="3" fill="'+color+'"/></svg>';
 }
 
-function srTrendRow(label, points, unit){
+function srMomentumBadge(m){
+  if(!m || m.state==="flat") return "";
+  const map = {
+    accel_up:   {cls:"accel-up",   label:"▲上修加速"},
+    decel_up:   {cls:"decel-up",   label:"上修放緩"},
+    accel_down: {cls:"accel-down", label:"▼下修加速"},
+    decel_down: {cls:"decel-down", label:"下修放緩"},
+  };
+  const info = map[m.state]; if(!info) return "";
+  return '<span class="sr-momentum '+info.cls+'">'+info.label+'</span>';
+}
+
+function srTrendRow(label, points, unit, mom){
   if(!points || points.length===0){
     return '<div class="sr-c-row"><div class="rlbl">'+label+'</div><div class="rnum" style="color:var(--ink3);font-size:13px">無資料</div></div>';
   }
@@ -4355,7 +4372,7 @@ function srTrendRow(label, points, unit){
   }
   const numHtml = points.length>=2 ? first+'<span class="arrow">→</span>'+last : ''+first;
   return '<div class="sr-c-row">'+
-    '<div class="rlbl">'+label+'</div>'+
+    '<div class="rlbl">'+label+srMomentumBadge(mom)+'</div>'+
     '<div class="rnum">'+numHtml+unit+'</div>'+
     deltaHtml+
     srSparkline(points, color)+
@@ -4415,8 +4432,8 @@ function srCardHtml(s){
     '<div class="sr-c-head"><div class="sr-c-id"><span class="sr-c-code">'+s.code+'</span><span class="sr-c-name">'+esc(s.company)+'</span></div>'+
     srFreshBadge(s.days_ago)+'</div>'+
     '<div class="sr-c-count">'+s.report_count+' 份研報・'+s.broker_count+' 家券商（'+dateRange+'）</div>'+
-    srTrendRow("EPS 提及值（元，報告內最大值）", s.eps_points, "") +
-    srTrendRow("目標價（元）", s.tp_points, "") +
+    srTrendRow("EPS 提及值（元，報告內最大值）", s.eps_points, "", s.eps_momentum) +
+    srTrendRow("目標價（元）", s.tp_points, "", s.tp_momentum) +
     srRatingPills(s.rating_buckets) +
     srSignalBox(s.signals[s.signals.length-1]) +
     '<div class="sr-c-latest">'+srLatestLine(s.latest)+'</div>'+

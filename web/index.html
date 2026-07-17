@@ -48,6 +48,9 @@
     width:150px;font-family:var(--mono);letter-spacing:.5px}
   .search input::placeholder{color:var(--ink3)}
   .search .sicon{color:var(--ink3);font-size:13px}
+  .search .clear{border:none;background:none;color:var(--ink3);cursor:pointer;font-size:12px;padding:2px 5px;border-radius:5px;display:none;margin-left:auto}
+  .search .clear:hover{background:var(--panel2);color:var(--ink)}
+  .search.has-val .clear{display:inline-block}
   .meta{font-family:var(--mono);font-size:11.5px;color:var(--ink3);text-align:right;line-height:1.7}
   .meta b{color:var(--ink2);font-weight:600}
 
@@ -1369,7 +1372,7 @@ function divergenceTable(rows){
     {h:"e20 波峰→現在", key:"decay", cell:r=>'<td><span class="pos">'+r.peak_e20.toFixed(2)+'</span><span style="color:var(--ink3)"> → </span><span class="'+cls(r.cur_e20)+'">'+r.cur_e20.toFixed(2)+'</span></td>'},
     {h:"衰退量", key:"decay", cell:r=>'<td class="neg">-'+r.decay.toFixed(2)+'</td>'},
   ];
-  return buildTable("t-divergence", rows, cols, {empty:"（本期無符合背離條件的個股）"});
+  return buildTable("t-divergence", rows, cols, {empty:"（查無符合的個股，可能不在背離清單內，或未達60日計算門檻）"});
 }
 
 let DIVERGENCE_DATA = null;
@@ -1382,11 +1385,40 @@ async function loadDivergence(){
     const d = await res.json();
     DIVERGENCE_DATA = d;
     el.innerHTML =
-      '<div class="dim" style="font-size:12px;margin:2px 0 8px">掃描 '+d.pools.join("/")+' 共 '+d.n_scanned+' 檔・符合背離條件 '+d.n_flagged+' 檔，顯示衰退幅度最大的前 '+d.topn+' 檔・'+esc(fmtTime(d.generated_at))+'</div>'+
-      divergenceTable(d.rows);
+      '<div class="dim" style="font-size:12px;margin:2px 0 8px">掃描 '+d.pools.join("/")+' 共 '+d.n_scanned+' 檔・符合背離條件 '+d.n_flagged+' 檔，預設顯示衰退幅度最大的前 '+d.topn+' 檔(可搜尋其餘 '+Math.max(0,d.exported-d.topn)+' 檔)・'+esc(fmtTime(d.generated_at))+'</div>'+
+      '<div class="search" id="divSearchBox" style="margin-bottom:10px;max-width:280px">'+
+        '<span>🔍</span>'+
+        '<input id="divSearchInput" type="text" placeholder="搜尋代號或公司名" autocomplete="off" spellcheck="false">'+
+        '<button class="clear" id="divSearchClear" type="button">✕</button>'+
+      '</div>'+
+      '<div class="dim" id="divSearchHit" style="font-size:11px;margin:-4px 0 8px;display:none"></div>'+
+      '<div id="divTableWrap">'+divergenceTable(d.rows.slice(0,d.topn))+'</div>';
+    bindDivergenceSearch();
   }catch(e){
     el.innerHTML = '<div class="loading-screen">⚠️ 載入 data/momentum_divergence.json 失敗（'+esc(e.message)+'）。</div>';
   }
+}
+
+function bindDivergenceSearch(){
+  const box=document.getElementById("divSearchBox"), input=document.getElementById("divSearchInput"),
+        clearBtn=document.getElementById("divSearchClear"), wrap=document.getElementById("divTableWrap"),
+        hit=document.getElementById("divSearchHit");
+  if(!input || !DIVERGENCE_DATA) return;
+  function apply(){
+    const term=(input.value||"").trim().toLowerCase();
+    box.classList.toggle("has-val", term.length>0);
+    if(!term){
+      wrap.innerHTML=divergenceTable(DIVERGENCE_DATA.rows.slice(0,DIVERGENCE_DATA.topn));
+      hit.style.display="none";
+      return;
+    }
+    const matched=DIVERGENCE_DATA.rows.filter(r=>r.sym.toLowerCase().includes(term) || (r.name||"").toLowerCase().includes(term));
+    wrap.innerHTML=divergenceTable(matched);
+    hit.style.display="block";
+    hit.textContent = matched.length ? ("符合 "+matched.length+" 檔") : "在已掃描的背離清單中查無符合（該股可能未達背離條件，或不在 tw150/sp500/ndx100 池內）";
+  }
+  input.addEventListener("input", apply);
+  clearBtn.addEventListener("click", ()=>{ input.value=""; apply(); input.focus(); });
 }
 
 let MACRO_TAB = "overview";

@@ -12,7 +12,8 @@ import adr_screen as eng
 
 DATA_DIR = os.path.join(HERE, "..", "data")
 POOLS = ["tw150", "sp500", "ndx100"]
-TOPN = 40
+TOPN = 40           # 預設顯示前 N 檔(依衰退量排序)
+EXPORT_CAP = 150    # 實際輸出到 JSON 的上限，讓前端搜尋能找到 40 名以外的個股
 
 
 def main():
@@ -26,7 +27,7 @@ def main():
     rows, failed = eng.compute_divergence(symbols, lookback=60)
 
     out = []
-    for r in rows[:TOPN]:
+    for r in rows[:EXPORT_CAP]:
         out.append({**r, "name": eng.disp(r["sym"]) if eng.is_tw(r["sym"]) else r["sym"]})
 
     payload = {
@@ -34,7 +35,8 @@ def main():
         "pools": POOLS,
         "n_scanned": len(symbols) - len(failed),
         "n_flagged": len(rows),
-        "topn": len(out),
+        "topn": TOPN,
+        "exported": len(out),
         "lookback_days": 60,
         "criteria": "peak_e20>=0.30 且 cur_e20<=peak_e20*0.5 且 現價>=波峰價*0.85 且 波峰後>=5個交易日",
         "rows": out,

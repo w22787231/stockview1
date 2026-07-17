@@ -105,16 +105,6 @@ jobs:
           cd engine
           python export_leveraged_ratio.py
 
-      - name: Export TW day-trading ratio (每日自累積)
-        if: ${{ github.event.inputs.web_only != 'true' }}
-        env:
-          PYTHONUTF8: "1"
-          PYTHONIOENCODING: "utf-8"
-          NO_COLOR: "1"
-        run: |
-          cd engine
-          python export_tw_daytrading.py
-
       - name: Export SOXX 200MA deviation
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

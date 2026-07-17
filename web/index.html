@@ -2936,6 +2936,7 @@ function renderSentiment(d){
     '<div id="tipsBlock"></div>'+
     '<div id="levRatioBlock"></div>'+
     '<div id="soxxMaBlock"></div>'+
+    '<div id="capexBlock"></div>'+
     '<div id="yieldCurveBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
@@ -3291,6 +3292,7 @@ async function loadSentiment(){
     loadTips();
     loadLevRatio();
     loadSoxxMa();
+    loadCapex();
     loadYieldCurve();
     loadInsider();
     loadSpec();
@@ -6693,6 +6695,120 @@ async function loadSoxxMa(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>SOXX 股價 × 200日均線</h2></div>'+
       '<div class="legend">⚠️ soxx_ma.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_soxx_ma。</div></section>';
+  }
+}
+
+// ── 七雄資本支出二階導:短期動能(近2季YoY)vs長期動能(近6季YoY) ──
+let CAPEX_DATA=null;
+const CAPEX_COLORS={bar:"#2563eb", line:"#e8923a", pos:"#16a34a", neg:"#dc2626", shortAvg:"#e8923a", longAvg:"#8b949e"};
+
+function drawCapexChart(id, labels, capex, pct, pctName, shortAvg, longAvg){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const markData=[{yAxis:0, lineStyle:{color:"#8b949e", opacity:.4}, label:{show:false}}];
+  if(longAvg!=null) markData.push({yAxis:longAvg, name:"長期均值", lineStyle:{color:CAPEX_COLORS.longAvg, type:"dashed", width:1.3},
+    label:{formatter:"長期均值 {c}%", position:"insideStartTop", color:CAPEX_COLORS.longAvg, fontSize:10}});
+  if(shortAvg!=null) markData.push({yAxis:shortAvg, name:"短期均值", lineStyle:{color:CAPEX_COLORS.shortAvg, type:"dashed", width:1.3},
+    label:{formatter:"短期均值 {c}%", position:"insideStartBottom", color:CAPEX_COLORS.shortAvg, fontSize:10}});
+  ch.setOption({
+    animation:false,
+    grid:{left:44, right:44, top:12, bottom:26},
+    legend:{top:0, right:0, textStyle:{fontSize:10}, data:["單季資本支出",pctName]},
+    tooltip:{trigger:"axis"},
+    xAxis:{type:"category", data:labels, axisLabel:{fontSize:9, interval:0, rotate:labels.length>8?45:0}},
+    yAxis:[
+      {type:"value", name:"$B", nameTextStyle:{fontSize:9}, scale:true, axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value", name:"%", nameTextStyle:{fontSize:9}, scale:true, axisLabel:{fontSize:9,formatter:v=>v.toFixed(0)+"%"}, splitLine:{show:false}}
+    ],
+    series:[
+      {name:"單季資本支出", type:"bar", yAxisIndex:0, data:capex,
+       itemStyle:{color:CAPEX_COLORS.bar, opacity:.55, borderRadius:[2,2,0,0]},
+       label:{show:true, position:"top", fontSize:9, color:"#334155",
+         formatter:p=>"$"+(p.value<10?p.value.toFixed(2):p.value.toFixed(1))+"B"}},
+      {name:pctName, type:"line", yAxisIndex:1, data:pct, connectNulls:false, smooth:true,
+       lineStyle:{color:CAPEX_COLORS.line, width:1.8}, symbolSize:6,
+       itemStyle:{color:p=>p.value==null?CAPEX_COLORS.line:(p.value>=0?CAPEX_COLORS.pos:CAPEX_COLORS.neg)},
+       label:{show:true, formatter:p=>p.value==null?"":(p.value>0?"+":"")+p.value.toFixed(1)+"%",
+         fontSize:9, fontWeight:"bold",
+         color:p=>p.value==null?CAPEX_COLORS.line:(p.value>=0?CAPEX_COLORS.pos:CAPEX_COLORS.neg)},
+       markLine:{symbol:"none", silent:true, data:markData}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function capexCardHtml(co){
+  const isLimited = co.mode === "limited";
+  const pctSeries = isLimited ? co.qoq : co.yoy;
+  const pctName = isLimited ? "QoQ季增率(僅此可用)" : "YoY年增率";
+  const sd = co.second_deriv;
+  let verdictHtml="", takeHtml="";
+  if(sd!=null){
+    const decel = sd<0;
+    const col = decel?"var(--red)":"var(--green)";
+    const arrow = decel?"▼ 減緩":"▲ 加速";
+    verdictHtml = '<span class="tag" style="color:'+col+';border-color:'+col+'55;background:'+col+'14">'+arrow+' ('+(sd>0?"+":"")+sd.toFixed(1)+'pp)</span>';
+    takeHtml = '短期動能(近'+CAPEX_DATA.short_n+'季YoY均) <b>'+fmtCapexPct(co.short_avg)+'</b>　vs　長期動能(近'+CAPEX_DATA.long_n+'季YoY均) <b>'+fmtCapexPct(co.long_avg)+'</b>　→　二階導 = <b style="color:'+col+'">'+(sd>0?"+":"")+sd.toFixed(1)+'個百分點</b>，'+
+      (decel?'短期動能低於長期趨勢(動能減緩)':'短期動能高於長期趨勢(動能加速)')+'。';
+  } else if(isLimited){
+    const yl=co.yoy[co.yoy.length-1];
+    verdictHtml = '<span class="tag">◆ 資料有限</span>';
+    takeHtml = 'SEC無季度資料(僅20-F年報)，僅能算出 <b>1個YoY點:'+fmtCapexPct(yl)+'</b>，樣本不足以算二階導；下圖改顯示QoQ,僅供參考。';
+  } else {
+    verdictHtml = '<span class="tag">◆ 樣本不足</span>';
+    takeHtml = 'YoY有效點不足，無法穩健計算二階導。';
+  }
+  const chartId = "capexChart_"+co.ticker;
+  return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--panel)">'+
+    '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">'+
+      '<div><b style="font-size:15px">'+co.ticker+'</b> <span style="color:var(--ink2);font-size:12px">'+co.name+'</span></div>'+
+      '<span style="font-size:10px;color:var(--ink3)">原幣:'+co.ccy+'</span>'+
+    '</div>'+
+    verdictHtml+
+    '<div style="font-size:12px;color:var(--ink2);margin:6px 0 4px;line-height:1.5">'+takeHtml+'</div>'+
+    '<div id="'+chartId+'" class="cap-chart" style="height:260px"></div>'+
+  '</div>';
+}
+function fmtCapexPct(v){ return v==null?"—":(v>0?"+":"")+v.toFixed(1)+"%"; }
+
+function renderCapex(d){
+  const box=$("#capexBlock");
+  if(!box) return;
+  const cards = d.companies.map(capexCardHtml).join("");
+  box.innerHTML =
+    '<section>'+
+      '<div class="sec-head"><h2>七雄資本支出二階導</h2>'+
+        '<span class="tag">MSFT/META/GOOGL/AMZN/TSM/ASML</span>'+
+        '<span class="hint">二階導=短期動能(近'+d.short_n+'季YoY均)−長期動能(近'+d.long_n+'季YoY均)；正=加速、負=減緩(即使YoY仍是正成長)</span></div>'+
+      cards+
+      '<div class="legend">資料來源:MSFT/META/GOOGL/AMZN 取自 SEC XBRL companyconcept API(10-Q單季+10-K全年反推缺口季度)；TSM/ASML 境外私人發行人僅申報20-F年報，SEC無結構化季度資料，改用 Yahoo Finance 季度現金流量表(即期匯率換算美元，近5季，YoY僅1點無法算二階導)。資料日 '+esc(d.generated_at||"")+'。</div>'+
+    '</section>';
+  d.companies.forEach(co=>{
+    const isLimited = co.mode === "limited";
+    const pctSeries = isLimited ? co.qoq : co.yoy;
+    const pctName = isLimited ? "QoQ季增率(僅此可用)" : "YoY年增率";
+    drawCapexChart("capexChart_"+co.ticker, co.labels, co.capex, pctSeries, pctName, co.short_avg, co.long_avg);
+  });
+}
+
+async function loadCapex(){
+  const box=$("#capexBlock");
+  if(!box) return;
+  if(CAPEX_DATA){ renderCapex(CAPEX_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入七雄資本支出二階導 …</div>';
+  try{
+    const res=await fetch("data/capex_2nd_deriv.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    CAPEX_DATA=await res.json();
+    renderCapex(CAPEX_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>七雄資本支出二階導</h2></div>'+
+      '<div class="legend">⚠️ capex_2nd_deriv.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_capex_2nd_deriv。</div></section>';
   }
 }
 

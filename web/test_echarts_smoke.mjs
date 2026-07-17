@@ -6,8 +6,9 @@
 // (10 天期殖利率 + 2s10s 子圖)、drawErp(ERP × S&P500 右軸,含反轉視角)、drawSafeHaven
 // (Safe Haven Demand × S&P500 右軸,含反轉視角)、drawLevRatioChart(SOXX/QQQ 股價 +
 // SOXL/SOXX、QQQ/TQQQ 成交額比值,2 grid 各左右分軸)、drawSoxxMaChart(SOXX 股價×200MA,
-// 2 grid,下圖偏離率含 continuous visualMap 正負上色 + 高低點 markLine)。跨多個時間視窗與含 null 暖身的
-// 相關序列各渲染一次。要新增其他圖,照 smoke() 模式加即可。
+// 2 grid,下圖偏離率含 continuous visualMap 正負上色 + 高低點 markLine)、drawCapexChart
+// (七雄資本支出 bar+line combo,含短期/長期均值 markLine + itemStyle/label 正負色 callback)。
+// 跨多個時間視窗與含 null 暖身的相關序列各渲染一次。要新增其他圖,照 smoke() 模式加即可。
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import assert from "node:assert";
@@ -268,7 +269,40 @@ smokeSoxxMa("1y 視窗(252點)", 252);
 smokeSoxxMa("max 視窗(6089點,24年)", 6089);
 smokeSoxxMa("極短(僅3點)", 3);
 
-assert.ok(RENDER_COUNT >= 19, "應完成至少 19 次真渲染,實得 " + RENDER_COUNT);
+// ── drawCapexChart(七雄資本支出:bar+line combo,含短期/長期均值markLine、正負色callback)──
+function synthCapex(N, withAvg){
+  const labels=[], capex=[], pct=[];
+  for(let i=0;i<N;i++){
+    labels.push("2"+(3+Math.floor(i/4))+"Q"+((i%4)+1));
+    capex.push(+(5+i*1.5+3*Math.sin(i/2)).toFixed(2));
+    pct.push(i<4 ? null : +(20+40*Math.sin(i/3)).toFixed(1));
+  }
+  return {labels, capex, pct, shortAvg: withAvg?30.5:null, longAvg: withAvg?15.2:null};
+}
+function smokeCapex(label, N, withAvg){
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener(){}, removeEventListener(){} };
+  const el = {};
+  const $ = () => el;
+  const drawCapexChart = new Function(
+    "return (function($, window, echarts){ let CAPEX_COLORS={bar:'#2563eb',line:'#e8923a',pos:'#16a34a',neg:'#dc2626',shortAvg:'#e8923a',longAvg:'#8b949e'}; "
+    + extract("drawCapexChart") + " return drawCapexChart; })"
+  )()($, window, echarts);
+  const d = synthCapex(N, withAvg);
+  try {
+    drawCapexChart("capexChart", d.labels, d.capex, d.pct, withAvg?"YoY年增率":"QoQ季增率(僅此可用)", d.shortAvg, d.longAvg);
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawCapexChart):");
+smokeCapex("13季(含短期/長期均值markLine)", 13, true);
+smokeCapex("5季(無均值,僅QoQ,TSM/ASML情境)", 5, false);
+smokeCapex("極短(僅2季)", 2, false);
+
+assert.ok(RENDER_COUNT >= 22, "應完成至少 22 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

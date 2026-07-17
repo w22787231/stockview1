@@ -115,6 +115,16 @@ jobs:
           cd engine
           python export_soxx_ma.py
 
+      - name: Export capex 2nd derivative (七雄資本支出二階導)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"
+        run: |
+          cd engine
+          python export_capex_2nd_deriv.py
+
       - name: Export macro market (indices + sector ETFs)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

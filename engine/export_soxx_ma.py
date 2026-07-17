@@ -4,7 +4,7 @@
 扣 200 日均線暖身後序列從 2002-05 起，約 24 年)。
 抓取全失敗 → 不覆寫(沿用線上 last-good)。
 用法:cd engine && python export_soxx_ma.py"""
-import sys, os, json, datetime
+import sys, os, json, datetime, urllib.request
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -16,7 +16,28 @@ import yfinance as yf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "data", "soxx_ma.json")
+LIVE = "https://stockview1.pages.dev/data/soxx_ma.json"
 MA_WIN = 200
+
+
+def _load_old():
+    """CI 每次都是乾淨 checkout，本機沒有舊檔；重試後仍失敗時改回讀「線上目前這份」
+    當備援，避免單次 yfinance 限流(Too Many Requests)就讓整個區塊從網站消失。"""
+    if os.path.exists(OUT):
+        try:
+            with open(OUT, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    try:
+        req = urllib.request.Request(LIVE, headers={"User-Agent": "Mozilla/5.0 Chrome/124"})
+        old = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "ignore"))
+        print("[soxx_ma] 本機無檔，改用線上 soxx_ma.json 當備援(%d 點)"
+              % len((old.get("series") or {}).get("dates") or []))
+        return old
+    except Exception as e:
+        print("[soxx_ma] 線上回讀失敗:", e)
+        return None
 
 
 def _num(x, n):
@@ -91,7 +112,10 @@ def main():
     except Exception as e:
         print("[soxx_ma] 抓取失敗:", e)
     if not (isinstance(j, dict) and (j.get("series") or {}).get("dates")):
-        print("[!] SOXX MA200 抓取失敗或資料不足 → 不覆寫 soxx_ma.json，保留上次資料")
+        print("[!] SOXX MA200 抓取失敗或資料不足 → 嘗試沿用線上 last-good")
+        j = _load_old()
+    if not (isinstance(j, dict) and (j.get("series") or {}).get("dates")):
+        print("[!] 無可用資料(新舊皆失敗) → 不寫檔")
         return
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

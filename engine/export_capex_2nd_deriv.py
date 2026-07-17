@@ -21,6 +21,27 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "data", "capex_2nd_deriv.json")
+LIVE = "https://stockview1.pages.dev/data/capex_2nd_deriv.json"
+
+
+def _load_old():
+    """CI 每次都是乾淨 checkout，本機沒有舊檔；抓取失敗/不足時改回讀「線上目前這份」
+    當備援，避免單次 API 限流/故障就讓整個區塊從網站消失。"""
+    if os.path.exists(OUT):
+        try:
+            with open(OUT, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    try:
+        req = urllib.request.Request(LIVE, headers={"User-Agent": "Mozilla/5.0 Chrome/124"})
+        old = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "ignore"))
+        print("[capex] 本機無檔，改用線上 capex_2nd_deriv.json 當備援(%d 家公司)"
+              % len(old.get("companies") or []))
+        return old
+    except Exception as e:
+        print("[capex] 線上回讀失敗:", e)
+        return None
 
 SEC_HEADERS = {"User-Agent": "stockview-research contact@example.com"}
 SEC_COMPANIES = {
@@ -212,7 +233,15 @@ def main():
     except Exception as e:
         print("[capex] 抓取失敗:", e)
     if not rows or len(rows) < 4:
-        print("[!] 資料不足(<4家公司) → 不覆寫 capex_2nd_deriv.json，保留上次資料")
+        print("[!] 資料不足(<4家公司) → 嘗試沿用線上 last-good")
+        old = _load_old()
+        if isinstance(old, dict) and len(old.get("companies") or []) >= 4:
+            os.makedirs(os.path.dirname(OUT), exist_ok=True)
+            with open(OUT, "w", encoding="utf-8") as f:
+                json.dump(old, f, ensure_ascii=False, indent=1)
+            print(f"✓ capex_2nd_deriv.json 沿用線上舊資料：{len(old['companies'])} 家公司")
+        else:
+            print("[!] 無可用資料(新舊皆失敗) → 不寫檔")
         return
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)

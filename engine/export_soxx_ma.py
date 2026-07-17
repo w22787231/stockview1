@@ -11,6 +11,7 @@ except Exception:
     pass
 import warnings
 warnings.filterwarnings("ignore")
+import time
 import yfinance as yf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,8 +27,27 @@ def _num(x, n):
         return None
 
 
+def _fetch_history(tries=3, wait=8):
+    """yfinance 偶爾被 Yahoo 限流(Too Many Requests);CI 內同一 workflow 前面
+    已跑過多支抓 yfinance 的腳本，容易撞到。重試幾次、間隔拉長，減少整次落空。"""
+    last_err = None
+    for i in range(tries):
+        try:
+            h = yf.Ticker("SOXX").history(period="max", interval="1d", auto_adjust=False)
+            if h is not None and len(h) > 0:
+                return h
+        except Exception as e:
+            last_err = e
+        if i < tries - 1:
+            print("[soxx_ma] 第 %d 次抓取失敗(%s)，%d 秒後重試" % (i + 1, last_err, wait))
+            time.sleep(wait)
+    if last_err:
+        raise last_err
+    raise RuntimeError("yfinance 回傳空資料")
+
+
 def build_live():
-    h = yf.Ticker("SOXX").history(period="max", interval="1d", auto_adjust=False)
+    h = _fetch_history()
     h = h.dropna(subset=["Close"])
     if len(h) < MA_WIN + 30:
         print("[soxx_ma] 資料不足(%d 筆)，放棄本次" % len(h))

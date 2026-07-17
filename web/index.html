@@ -6436,11 +6436,11 @@ function drawLevRatioChart(id, dates, soxxPrice, ratio1, qqqPrice, ratio2, win){
   ch.setOption({
     animation:false,
     grid:[
-      {left:56, right:56, top:34, height:172},          // 主圖:股價(下方 x 軸標籤隱藏)
-      {left:56, right:56, top:252, height:82}            // 子圖:成交額比值(底部留 36px 給年份標籤)
+      {left:56, right:56, top:34, height:172},          // 上圖:SOXX 股價 × SOXL/SOXX 成交額比(下方 x 軸標籤隱藏)
+      {left:56, right:56, top:252, height:82}            // 下圖:QQQ 股價 × QQQ/TQQQ 成交額比(底部留 36px 給年份標籤)
     ],
     legend:{top:0, textStyle:{fontSize:11},
-      data:["SOXX 股價","QQQ 股價","SOXL/SOXX 成交額比","QQQ/TQQQ 成交額比"]},
+      data:["SOXX 股價","SOXL/SOXX 成交額比","QQQ 股價","QQQ/TQQQ 成交額比"]},
     tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]}},
     axisPointer:{link:[{xAxisIndex:"all"}]},
     xAxis:[
@@ -6450,10 +6450,10 @@ function drawLevRatioChart(id, dates, soxxPrice, ratio1, qqqPrice, ratio2, win){
     yAxis:[
       {type:"value", gridIndex:0, name:"SOXX $", nameTextStyle:{fontSize:10}, scale:true,
        axisLabel:{fontSize:10}, splitLine:{lineStyle:{opacity:.3}}},
-      {type:"value", gridIndex:0, name:"QQQ $", nameTextStyle:{fontSize:10}, scale:true,
-       axisLabel:{fontSize:10}, splitLine:{show:false}, position:"right"},
-      {type:"value", gridIndex:1, name:"SOXL/SOXX", nameTextStyle:{fontSize:9}, scale:true,
-       axisLabel:{fontSize:9, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.25}}},
+      {type:"value", gridIndex:0, name:"SOXL/SOXX", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10, formatter:v=>v.toFixed(1)}, splitLine:{show:false}, position:"right"},
+      {type:"value", gridIndex:1, name:"QQQ $", nameTextStyle:{fontSize:9}, scale:true,
+       axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.25}}},
       {type:"value", gridIndex:1, name:"QQQ/TQQQ", nameTextStyle:{fontSize:9}, scale:true,
        axisLabel:{fontSize:9, formatter:v=>v.toFixed(1)}, splitLine:{show:false}, position:"right"}
     ],
@@ -6463,14 +6463,15 @@ function drawLevRatioChart(id, dates, soxxPrice, ratio1, qqqPrice, ratio2, win){
        data:dates.map((d,i)=>[toMs(d), soxxPrice[i]]),
        lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
        areaStyle:{color:"#e8923a", opacity:.06}},
-      {name:"QQQ 股價", type:"line", smooth:true, showSymbol:false,
-       xAxisIndex:0, yAxisIndex:1,
-       data:dates.map((d,i)=>[toMs(d), qqqPrice[i]]),
-       lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}},
       {name:"SOXL/SOXX 成交額比", type:"line", smooth:true, showSymbol:false, connectNulls:false,
-       xAxisIndex:1, yAxisIndex:2,
+       xAxisIndex:0, yAxisIndex:1,
        data:dates.map((d,i)=>[toMs(d), ratio1[i]]),
-       lineStyle:{color:"#16a34a", width:1.5}, itemStyle:{color:"#16a34a"}},
+       lineStyle:{color:"#16a34a", width:1.5, type:"dashed"}, itemStyle:{color:"#16a34a"}},
+      {name:"QQQ 股價", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:1, yAxisIndex:2,
+       data:dates.map((d,i)=>[toMs(d), qqqPrice[i]]),
+       lineStyle:{color:"#2563eb", width:2}, itemStyle:{color:"#2563eb"},
+       areaStyle:{color:"#2563eb", opacity:.06}},
       {name:"QQQ/TQQQ 成交額比", type:"line", smooth:true, showSymbol:false, connectNulls:false,
        xAxisIndex:1, yAxisIndex:3,
        data:dates.map((d,i)=>[toMs(d), ratio2[i]]),
@@ -6519,7 +6520,7 @@ function renderLevRatio(d){
       '</div>'+
       '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>'+
       '<div id="levRatioChart" class="cap-chart" style="height:370px"></div>'+
-      '<div class="legend" style="margin-top:10px">資料來源:Yahoo Finance SOXL/SOXX/QQQ/TQQQ 日成交額(收盤價×成交量)，'+(d.roll_win||20)+'日滾動均值後取比值降噪。上圖為 SOXX/QQQ 股價(左右分軸)，下圖為兩組槓桿/正股成交額比值(左右分軸)。視窗 '+esc(LEV_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:Yahoo Finance SOXL/SOXX/QQQ/TQQQ 日成交額(收盤價×成交量)，'+(d.roll_win||20)+'日滾動均值後取比值降噪。上圖為 SOXX 股價 × SOXL/SOXX 成交額比(左右分軸)，下圖為 QQQ 股價 × QQQ/TQQQ 成交額比(左右分軸)。視窗 '+esc(LEV_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。</div>'+
     '</section>';
 
   const ser=d.series||{};

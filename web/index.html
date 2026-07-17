@@ -2935,6 +2935,7 @@ function renderSentiment(d){
     '<div id="piBlock"></div>'+
     '<div id="tipsBlock"></div>'+
     '<div id="levRatioBlock"></div>'+
+    '<div id="twDayTradingBlock"></div>'+
     '<div id="yieldCurveBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
@@ -3289,6 +3290,7 @@ async function loadSentiment(){
     loadPI();
     loadTips();
     loadLevRatio();
+    loadTwDayTrading();
     loadYieldCurve();
     loadInsider();
     loadSpec();
@@ -6553,6 +6555,118 @@ async function loadLevRatio(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>槓桿ETF成交額佔比</h2></div>'+
       '<div class="legend">⚠️ leveraged_ratio.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_leveraged_ratio。</div></section>';
+  }
+}
+
+// ── 台股全市場當沖占比(每日自累積,來源:證交所投資資訊中心) ──
+let TWDT_DATA=null;
+let TWDT_WIN="all";
+const TWDT_WIN_LABEL={"1m":"1月","3m":"3月","6m":"6月","1y":"1年","all":"全部"};
+const TWDT_WIN_N={"1m":21,"3m":63,"6m":126,"1y":252};  // all 不列→取全部
+
+function drawTwDayTradingChart(id, dates, qtyPct, buyPct, sellPct){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  ch.setOption({
+    animation:false,
+    grid:{left:48, right:16, top:34, bottom:26},
+    legend:{top:0, textStyle:{fontSize:11},
+      data:["當沖成交量占大盤比重","當沖買金額占比","當沖賣金額占比"]},
+    tooltip:{trigger:"axis"},
+    xAxis:{type:"time", axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}},
+    yAxis:{type:"value", name:"%", nameTextStyle:{fontSize:10}, scale:true,
+      axisLabel:{fontSize:10, formatter:v=>v.toFixed(0)+"%"}, splitLine:{lineStyle:{opacity:.3}}},
+    series:[
+      {name:"當沖成交量占大盤比重", type:"line", smooth:true, showSymbol:dates.length<=30,
+       data:dates.map((d,i)=>[toMs(d), qtyPct[i]]),
+       lineStyle:{color:"#e8923a", width:2}, itemStyle:{color:"#e8923a"},
+       areaStyle:{color:"#e8923a", opacity:.08}},
+      {name:"當沖買金額占比", type:"line", smooth:true, showSymbol:dates.length<=30, connectNulls:false,
+       data:dates.map((d,i)=>[toMs(d), buyPct[i]]),
+       lineStyle:{color:"#16a34a", width:1.3, type:"dashed"}, itemStyle:{color:"#16a34a"}},
+      {name:"當沖賣金額占比", type:"line", smooth:true, showSymbol:dates.length<=30, connectNulls:false,
+       data:dates.map((d,i)=>[toMs(d), sellPct[i]]),
+       lineStyle:{color:"#dc2626", width:1.3, type:"dashed"}, itemStyle:{color:"#dc2626"}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderTwDayTrading(d){
+  const box=$("#twDayTradingBlock");
+  if(!box) return;
+  const ser=d.series||{};
+  const allD=ser.dates||[];
+  const wins=["1m","3m","6m","1y","all"].filter(w=>w==="all" || (TWDT_WIN_N[w]||0) < allD.length);
+  const win=wins.includes(TWDT_WIN) ? TWDT_WIN : "all";
+  const btns=wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-tw-dt="'+w+'">'+
+      (TWDT_WIN_LABEL[w]||w)+'</button>').join("");
+
+  const qp=d.qty_pct_last, bp=d.buy_pct_last, sp=d.sell_pct_last, avg=d.avg_last;
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:130px;margin-right:12px';
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>台股全市場當沖占比</h2>'+
+        '<span class="tag">TWSE 官方每日快照 · 每日自累積</span>'+
+        '<span class="hint">當沖成交量／金額占「大盤總成交」比重;比重越高代表當日短線資金越活躍</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">當沖成交量占大盤比重</div>'+
+          '<div class="cap-big" style="color:#e8923a">'+(qp!=null?qp.toFixed(2)+"%":"—")+'</div>'+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">當沖買金額占比</div>'+
+          '<div class="cap-big" style="color:#16a34a">'+(bp!=null?bp.toFixed(2)+"%":"—")+'</div>'+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">當沖賣金額占比</div>'+
+          '<div class="cap-big" style="color:#dc2626">'+(sp!=null?sp.toFixed(2)+"%":"—")+'</div>'+
+        '</div>'+
+        (avg!=null?(
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">近期平均(證交所口徑)</div>'+
+          '<div class="cap-big" style="color:var(--ink2)">'+avg.toFixed(2)+"%"+'</div>'+
+        '</div>'):'')+
+      '</div>'+
+      (wins.length>1?'<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>':'')+
+      '<div id="twDayTradingChart" class="cap-chart" style="height:280px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:證交所投資資訊中心「當沖占比」。該官方小工具只回傳最近4天快照、不提供歷史查詢，本站自 2026-07-17 起每次部署自動累積一筆，故序列會逐日變長;較早的日期尚無資料。資料日 '+esc(d.as_of||"")+'。</div>'+
+    '</section>';
+
+  const allQ=ser.qty_pct||[], allB=ser.buy_pct||[], allS=ser.sell_pct||[];
+  const n=win==="all" ? allD.length : Math.min(TWDT_WIN_N[win]||allD.length, allD.length);
+  const dates=allD.slice(-n), qtyPct=allQ.slice(-n), buyPct=allB.slice(-n), sellPct=allS.slice(-n);
+  if(dates.length>=2){
+    drawTwDayTradingChart("twDayTradingChart", dates, qtyPct, buyPct, sellPct);
+  }else{
+    const c=$("#twDayTradingChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖(累積中)。</div>';
+  }
+
+  box.querySelectorAll("[data-tw-dt]").forEach(b=>b.onclick=()=>{ TWDT_WIN=b.dataset.twDt; renderTwDayTrading(TWDT_DATA); });
+}
+
+async function loadTwDayTrading(){
+  const box=$("#twDayTradingBlock");
+  if(!box) return;
+  if(TWDT_DATA){ renderTwDayTrading(TWDT_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入台股當沖占比 …</div>';
+  try{
+    const res=await fetch("data/tw_daytrading.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    TWDT_DATA=await res.json();
+    renderTwDayTrading(TWDT_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>台股全市場當沖占比</h2></div>'+
+      '<div class="legend">⚠️ tw_daytrading.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_tw_daytrading。</div></section>';
   }
 }
 

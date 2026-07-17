@@ -49,7 +49,8 @@ TOP = ["macro", "capital", "calendar", "etf", "sentiment", "industry_pe",
        "tw_chain", "tw_themes", "index", "tw150", "ndx100", "sp500", "sp400", "sp600",
        "us5000", "tw_all", "strong", "strong_tw", "smartmoney", "pi", "spec", "fsi",
        "tips", "yieldcurve", "breadth", "us_theme_flow", "0dte", "chicago_fci",
-       "on_rp", "on_rp_liquidity", "macro_score", "momentum_divergence", "leveraged_ratio"]
+       "on_rp", "on_rp_liquidity", "macro_score", "momentum_divergence", "leveraged_ratio",
+       "tw_daytrading"]
 
 
 def _get(path, timeout=30):

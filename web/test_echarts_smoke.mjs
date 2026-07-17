@@ -5,7 +5,8 @@
 // 目前涵蓋 drawTipsChart(TIPS 實質利率 × S&P500,含 20 日相關子圖)、drawYieldCurveChart
 // (10 天期殖利率 + 2s10s 子圖)、drawErp(ERP × S&P500 右軸,含反轉視角)、drawSafeHaven
 // (Safe Haven Demand × S&P500 右軸,含反轉視角)、drawLevRatioChart(SOXX/QQQ 股價 +
-// SOXL/SOXX、QQQ/TQQQ 成交額比值,2 grid 各左右分軸)。跨多個時間視窗與含 null 暖身的
+// SOXL/SOXX、QQQ/TQQQ 成交額比值,2 grid 各左右分軸)、drawTwDayTradingChart(台股當沖
+// 占大盤比重,單 grid 三線,含早期稀疏/null 資料)。跨多個時間視窗與含 null 暖身的
 // 相關序列各渲染一次。要新增其他圖,照 smoke() 模式加即可。
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -231,7 +232,44 @@ smokeLevRatio("1y 視窗(252點)", 252, "1y");
 smokeLevRatio("max 視窗(4112點,16年)", 4112, "max");
 smokeLevRatio("3m 視窗(63點)", 63, "3m");
 
-assert.ok(RENDER_COUNT >= 15, "應完成至少 15 次真渲染,實得 " + RENDER_COUNT);
+// ── drawTwDayTradingChart(台股當沖占大盤比重,單 grid 三線,早期資料點稀疏含 null)──
+function synthTwDt(N, sparse){
+  const dates=[], qtyPct=[], buyPct=[], sellPct=[];
+  let base=Date.UTC(2026,6,17);
+  for(let i=0;i<N;i++){
+    dates.push(new Date(base+i*86400000).toISOString().slice(0,10));
+    qtyPct.push(+(25+8*Math.sin(i/15)).toFixed(2));
+    if(sparse && i%3!==0){ buyPct.push(null); sellPct.push(null); }
+    else{
+      buyPct.push(+(35+10*Math.sin(i/15+0.3)).toFixed(2));
+      sellPct.push(+(35+10*Math.sin(i/15-0.3)).toFixed(2));
+    }
+  }
+  return {dates, qtyPct, buyPct, sellPct};
+}
+function smokeTwDt(label, N, sparse){
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener(){}, removeEventListener(){} };
+  const el = {};
+  const $ = () => el;
+  const drawTwDayTradingChart = new Function(
+    "return (function($, window, echarts){ " + extract("drawTwDayTradingChart") + " return drawTwDayTradingChart; })"
+  )()($, window, echarts);
+  const d = synthTwDt(N, sparse);
+  try {
+    drawTwDayTradingChart("twDayTradingChart", d.dates, d.qtyPct, d.buyPct, d.sellPct);
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawTwDayTradingChart):");
+smokeTwDt("極短(僅4點,剛上線第一天)", 4, false);
+smokeTwDt("稀疏(60點,buy/sell含null回填天)", 60, true);
+smokeTwDt("1y 視窗(252點)", 252, false);
+
+assert.ok(RENDER_COUNT >= 19, "應完成至少 19 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

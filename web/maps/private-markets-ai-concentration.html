@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crunchbase：全球創投 vs S&P 500 季度趨勢</title>
+<meta name="theme-color" content="#2a78d6">
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f4f3f0;
+    --border:         #e4e2dc;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #86847d;
+    --series-1:       #2a78d6;
+    --series-2:       #008300;
+    --status-warning: #fab219;
+    --status-critical:#d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --surface-2: #232320; --border: #35342f;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8f8d84;
+      --series-1: #3987e5; --series-2: #008300; --status-warning: #fab219; --status-critical:#e66767;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --surface-2: #232320; --border: #35342f;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8f8d84;
+    --series-1: #3987e5; --series-2: #008300; --status-warning: #fab219; --status-critical:#e66767;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  .viz-root {
+    background: var(--surface-1); color: var(--text-primary);
+    font-family: -apple-system, "Segoe UI", "Noto Sans TC", system-ui, sans-serif;
+    padding: 32px 20px 48px; max-width: 1020px; margin: 0 auto;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 13.5px; margin: 0 0 16px; line-height: 1.6; }
+  .section-note { font-size: 12px; color: var(--text-muted); margin: 8px 0 20px; line-height: 1.6; }
+
+  .legend { display: flex; gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
+  .legend-line { width: 16px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .legend-dot-approx { width: 9px; height: 9px; border-radius: 50%; border: 2px dashed var(--text-muted); background: var(--surface-1); flex-shrink: 0; }
+
+  .chart-wrap { position: relative; }
+  svg { width: 100%; height: auto; overflow: visible; }
+  .gridline { stroke: var(--border); stroke-width: 1; }
+  .axis-label { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+  .axis-title { fill: var(--text-secondary); font-size: 11.5px; font-weight: 700; font-family: inherit; }
+  .x-label { fill: var(--text-secondary); font-size: 12px; font-weight: 600; font-family: inherit; }
+  .line-path { fill: none; stroke-width: 2px; stroke-linecap: round; stroke-linejoin: round; }
+  .sp-line { stroke: var(--series-2); stroke-width: 1.5px; }
+  .point { stroke: var(--surface-1); stroke-width: 2px; cursor: pointer; }
+  .point.approx { fill: var(--surface-1) !important; stroke-width: 2px; stroke-dasharray: 2 1.5; }
+  .point-hit { fill: transparent; cursor: pointer; }
+  .value-label { fill: var(--text-primary); font-size: 11.5px; font-weight: 700; font-family: inherit; text-anchor: middle; }
+  .crosshair-line { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; pointer-events: none; }
+
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; padding: 8px 12px; border-radius: 8px; opacity: 0; transition: opacity 0.12s;
+    z-index: 10; white-space: nowrap; transform: translate(-50%, -115%); line-height: 1.6;
+  }
+  .tooltip .tt-q { font-weight: 700; margin-bottom: 3px; }
+  .tooltip .tt-row { display: flex; align-items: center; gap: 6px; }
+  .tooltip .tt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .sources { margin-top: 28px; font-size: 11.5px; color: var(--text-muted); line-height: 2; }
+  .sources a { color: var(--series-1); text-decoration: none; }
+  .sources a:hover { text-decoration: underline; }
+  .back-link { display: inline-block; margin-bottom: 18px; font-size: 12.5px; color: var(--text-secondary); text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  @media (max-width: 480px) {
+    .value-label { font-size: 9.5px; }
+    .x-label { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <a class="back-link" href="/">← 回股觀觀股首頁</a>
+  <h1>Crunchbase：全球創投募資 vs S&P 500</h1>
+  <p class="subtitle">2019年1月 – 2026年6月。左軸＝創投單季募資（$B，藍色，僅季底有值），右軸＝S&P 500（綠色，月度數字，逐月變化）</p>
+  <p class="section-note" style="margin-top:-8px">創投數字Crunchbase僅按季揭露，故藍線只在每季最後一個月（3/6/9/12月）出現節點；S&P 500改用逐月收盤，綠線每月都有節點，更能看出月度波動細節。空心虛線點為約略值。</p>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-line" style="background:var(--series-1)"></span>全球創投單季募資（左軸，$B）</div>
+    <div class="legend-item"><span class="legend-line" style="background:var(--series-2)"></span>S&P 500（右軸，點數，月度）</div>
+    <div class="legend-item"><span class="legend-dot-approx"></span>約略值</div>
+  </div>
+
+  <div class="chart-wrap">
+    <svg id="chart" viewBox="0 0 1600 440" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="tooltip" id="tooltip">
+      <div class="tt-q" id="tt-q"></div>
+      <div class="tt-row" id="tt-vc-row"><span class="tt-dot" style="background:var(--series-1)"></span><span id="tt-vc"></span></div>
+      <div class="tt-row"><span class="tt-dot" style="background:var(--series-2)"></span><span id="tt-sp"></span></div>
+    </div>
+  </div>
+
+  <p class="section-note">
+    改成月度S&P 500後看得更細：**2022年市場修正其實跟創投重挫幾乎同步下探**（S&P在Q2-Q3見底，創投也在同期最弱），只是創投的跌幅更深、恢復更慢；**2025年3-4月S&P出現一次明顯的月度回檔**（3月$5,684 → 4月$5,370，跌約5.5%），但同期創投數字仍持穩在$91-113B區間，顯示當時私募市場情緒比公開市場更抗跌；進入**2026年，S&P從1月$6,929一路墊高到6月$7,474**，走勢平順，但創投卻是Q1單季暴衝到$300B、Q2又急落到$205B——**創投的月度/季度波動明顯比S&P 500劇烈得多**，這正是私募市場「資訊不透明、估值不連續、少數巨額交易主導單季數字」的特性，波動天生比逐日交易的公開市場更大，解讀時要把這個特性納入考量，不能直接套用公開市場的異常/正常判斷標準。
+  </p>
+
+  <div class="sources">
+    資料來源：<br>
+    <a href="https://news.crunchbase.com/venture/venture-capital-in-q1-2019-the-world-pulls-back-from-record-highs/" target="_blank">Crunchbase News — Q1 2019 Global VC Report</a><br>
+    <a href="https://news.crunchbase.com/data/the-q4-eoy-2019-global-vc-report-a-strong-end-to-a-good-but-not-fantastic-year/" target="_blank">Crunchbase News — Q4/EOY 2019 Global VC Report</a><br>
+    <a href="https://news.crunchbase.com/venture/the-q1-2020-global-vc-report-funding-slowly-impacted-by-coronavirus/" target="_blank">Crunchbase News — Q1 2020 Global VC Report</a><br>
+    <a href="https://news.crunchbase.com/venture/q3-2020-global-venture-report/" target="_blank">Crunchbase News — Q3 2020 Global Venture Report</a><br>
+    <a href="https://news.crunchbase.com/venture/global-vc-funding-slide-q4-2022/" target="_blank">Crunchbase News — Global Funding Slide In 2022</a><br>
+    <a href="https://news.crunchbase.com/venture/funding-data-third-largest-year-2025/" target="_blank">Crunchbase News — Global Venture Funding In 2025 Surged</a><br>
+    <a href="https://news.crunchbase.com/venture/record-breaking-funding-ai-global-q1-2026/" target="_blank">Crunchbase News — Q1 2026 Shatters Venture Funding Records</a><br>
+    <a href="https://news.crunchbase.com/venture/global-startup-exits-ipo-ma-soar-ai-q2-h1-2026/" target="_blank">Crunchbase News — Global Startup Investment Hit Record $510B In H1 2026</a><br>
+    <a href="https://assets.kpmg.com/content/dam/kpmg/xx/pdf/2022/01/venture-pulse-q4-2021.pdf" target="_blank">KPMG Venture Pulse Q4 2021（交叉比對2021 Q3/Q4數字用）</a><br>
+    <a href="https://www.multpl.com/s-p-500-historical-prices/table/by-month" target="_blank">multpl.com — S&P 500 月度收盤價歷史數據</a>
+  </div>
+</div>
+
+<script>
+  // Monthly S&P 500 data, Jan 2019 - Jun 2026
+  const spMonthly = [
+    2607.39,2754.86,2803.98,2903.80,2854.71,2890.17,2996.11,2897.50,2982.16,2977.68,3104.90,3176.75,
+    3278.20,3277.31,2652.39,2761.98,2919.61,3104.66,3207.62,3391.71,3365.52,3418.70,3548.99,3695.31,
+    3793.75,3883.43,3910.51,4141.18,4167.85,4238.49,4363.71,4454.21,4445.54,4460.71,4667.39,4674.77,
+    4573.82,4435.98,4391.27,4391.30,4040.36,3898.95,3911.73,4158.56,3850.52,3726.05,3917.49,3912.38,
+    3960.66,4079.68,3968.56,4121.47,4146.17,4345.37,4508.08,4426.24,4409.10,4258.98,4460.06,4685.05,
+    4804.49,5011.96,5170.57,5095.46,5235.23,5415.14,5542.89,5502.17,5626.12,5792.32,5929.92,6010.91,
+    5979.52,6038.69,5683.98,5369.50,5810.92,6029.95,6296.50,6408.95,6584.02,6735.69,6740.89,6853.03,
+    6929.12,6893.81,6654.42,6957.01,7412.55,7473.85,
+  ];
+  const startYear = 2019, startMonth = 1; // Jan 2019
+  const months = spMonthly.map((sp, i) => {
+    const y = startYear + Math.floor((startMonth - 1 + i) / 12);
+    const m = ((startMonth - 1 + i) % 12) + 1;
+    return { y, m, sp, label: y + '-' + String(m).padStart(2, '0') };
+  });
+
+  // Quarterly VC data — attach to the quarter-ending month (Mar/Jun/Sep/Dec)
+  const vcQuarters = [
+    { y: 2019, q: 1, v: 75 },    { y: 2019, q: 2, v: 69.8 },  { y: 2019, q: 3, v: 75.6 },  { y: 2019, q: 4, v: 80.7 },
+    { y: 2020, q: 1, v: 63.8 },  { y: 2020, q: 2, v: 69.5 },  { y: 2020, q: 3, v: 76.4 },  { y: 2020, q: 4, v: 68, approx: true },
+    { y: 2021, q: 1, v: 125 },   { y: 2021, q: 2, v: 165 },   { y: 2021, q: 3, v: 178, approx: true }, { y: 2021, q: 4, v: 176, approx: true },
+    { y: 2022, q: 1, v: 162 },   { y: 2022, q: 2, v: 120 },   { y: 2022, q: 3, v: 86 },    { y: 2022, q: 4, v: 77 },
+    { y: 2023, q: 1, v: 76 },    { y: 2023, q: 2, v: 71 },    { y: 2023, q: 3, v: 73 },    { y: 2023, q: 4, v: 69 },
+    { y: 2024, q: 1, v: 66 },    { y: 2024, q: 2, v: 79 },    { y: 2024, q: 3, v: 66.5 },  { y: 2024, q: 4, v: 93 },
+    { y: 2025, q: 1, v: 113 },   { y: 2025, q: 2, v: 91 },    { y: 2025, q: 3, v: 97 },    { y: 2025, q: 4, v: 113 },
+    { y: 2026, q: 1, v: 300 },   { y: 2026, q: 2, v: 205 },
+  ];
+  const qEndMonth = { 1: 3, 2: 6, 3: 9, 4: 12 };
+  const vcByKey = {};
+  vcQuarters.forEach(d => { vcByKey[d.y + '-' + qEndMonth[d.q]] = d; });
+  months.forEach(m => {
+    const match = vcByKey[m.y + '-' + m.m];
+    if (match) { m.vc = match.v; m.vcApprox = !!match.approx; m.vcQLabel = 'Q' + Object.keys(qEndMonth).find(k => qEndMonth[k] === m.m); }
+  });
+
+  const svg = document.getElementById('chart');
+  const W = 1600, H = 440;
+  const padL = 56, padR = 60, padT = 30, padB = 40;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const vcMax = 320, vcMin = 0;
+  const spValues = spMonthly;
+  const spMax = Math.ceil(Math.max(...spValues) / 500) * 500 + 200;
+  const spMin = Math.floor(Math.min(...spValues) / 500) * 500 - 200;
+
+  function x(i) { return padL + (i / (months.length - 1)) * plotW; }
+  function yVC(v) { return padT + plotH - ((v - vcMin) / (vcMax - vcMin)) * plotH; }
+  function ySP(v) { return padT + plotH - ((v - spMin) / (spMax - spMin)) * plotH; }
+
+  const ns = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs) {
+    const e = document.createElementNS(ns, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // gridlines (based on left/VC axis steps) + left axis labels
+  const vcSteps = [0, 80, 160, 240, 320];
+  vcSteps.forEach(g => {
+    const gy = yVC(g);
+    svg.appendChild(el('line', { class: 'gridline', x1: padL, x2: W - padR, y1: gy, y2: gy }));
+    const t = el('text', { class: 'axis-label', x: padL - 10, y: gy + 4, 'text-anchor': 'end' });
+    t.textContent = '$' + g + 'B';
+    t.style.fill = 'var(--series-1)';
+    svg.appendChild(t);
+  });
+  const leftTitle = el('text', { class: 'axis-title', x: padL, y: 16, 'text-anchor': 'start' });
+  leftTitle.textContent = '創投募資（$B）';
+  leftTitle.style.fill = 'var(--series-1)';
+  svg.appendChild(leftTitle);
+
+  // right axis labels (S&P), mapped at same plot height as vcSteps for a clean shared gridline,
+  // but showing the actual S&P value at that height per the S&P scale
+  vcSteps.forEach(g => {
+    const gy = yVC(g);
+    const spAtThisHeight = spMin + ((padT + plotH - gy) / plotH) * (spMax - spMin);
+    const t = el('text', { class: 'axis-label', x: W - padR + 10, y: gy + 4, 'text-anchor': 'start' });
+    t.textContent = Math.round(spAtThisHeight / 100) * 100;
+    t.style.fill = 'var(--series-2)';
+    svg.appendChild(t);
+  });
+  const rightTitle = el('text', { class: 'axis-title', x: W - padR, y: 16, 'text-anchor': 'end' });
+  rightTitle.textContent = 'S&P 500（點）';
+  rightTitle.style.fill = 'var(--series-2)';
+  svg.appendChild(rightTitle);
+
+  // x labels — label January of each year
+  months.forEach((m, i) => {
+    const isYearStart = m.m === 1;
+    const tickY1 = padT + plotH;
+    const tickY2 = padT + plotH + (isYearStart ? 6 : 3);
+    if (isYearStart || m.m % 3 === 0) {
+      svg.appendChild(el('line', { class: 'gridline', x1: x(i), x2: x(i), y1: tickY1, y2: tickY2 }));
+    }
+    if (isYearStart) {
+      const t = el('text', { class: 'x-label', x: x(i), y: H - 12, 'text-anchor': 'middle' });
+      t.textContent = m.y;
+      svg.appendChild(t);
+    }
+  });
+
+  const crosshair = el('line', { class: 'crosshair-line', x1: 0, x2: 0, y1: padT, y2: padT + plotH });
+  svg.appendChild(crosshair);
+
+  // S&P line (monthly, continuous)
+  let spD = '';
+  months.forEach((m, i) => { spD += (i === 0 ? 'M ' : 'L ') + x(i) + ' ' + ySP(m.sp) + ' '; });
+  svg.appendChild(el('path', { class: 'line-path sp-line', d: spD }));
+
+  // VC line (quarterly, connect only the quarter-end months)
+  const vcMonths = months.map((m, i) => ({ m, i })).filter(o => o.m.vc !== undefined);
+  let vcD = '';
+  vcMonths.forEach((o, idx) => { vcD += (idx === 0 ? 'M ' : 'L ') + x(o.i) + ' ' + yVC(o.m.vc) + ' '; });
+  svg.appendChild(el('path', { class: 'line-path', d: vcD, style: 'stroke:var(--series-1)' }));
+
+  // selective labels
+  function labelAt(px, py, text, colorVar, dy) {
+    const t = el('text', { class: 'value-label', x: px, y: py + dy, 'text-anchor': 'middle', style: `fill:var(${colorVar})` });
+    t.textContent = text;
+    svg.appendChild(t);
+  }
+  const lastVC = vcMonths[vcMonths.length - 1];
+  const peakVCIdx = vcMonths.reduce((best, o) => o.m.vc > best.m.vc ? o : best, vcMonths[0]);
+  labelAt(x(peakVCIdx.i), yVC(peakVCIdx.m.vc), '$' + peakVCIdx.m.vc + 'B', '--series-1', -14);
+  labelAt(x(lastVC.i), yVC(lastVC.m.vc), '$' + lastVC.m.vc + 'B', '--series-1', 18);
+  const lastMonth = months[months.length - 1];
+  labelAt(x(months.length - 1), ySP(lastMonth.sp), Math.round(lastMonth.sp), '--series-2', -14);
+
+  // hover points
+  const tooltip = document.getElementById('tooltip');
+  const ttQ = document.getElementById('tt-q');
+  const ttVCRow = document.getElementById('tt-vc-row');
+  const ttVC = document.getElementById('tt-vc');
+  const ttSP = document.getElementById('tt-sp');
+  const wrap = document.querySelector('.chart-wrap');
+
+  months.forEach((m, i) => {
+    const px = x(i);
+    const hit = el('rect', { class: 'point-hit', x: px - (plotW / (months.length - 1)) / 2, y: padT, width: plotW / (months.length - 1), height: plotH });
+    svg.appendChild(hit);
+
+    const spPoint = el('circle', { class: 'point', cx: px, cy: ySP(m.sp), r: 3.5, style: 'fill:var(--series-2)' });
+    svg.appendChild(spPoint);
+
+    let vcPoint = null;
+    if (m.vc !== undefined) {
+      vcPoint = el('circle', {
+        class: 'point' + (m.vcApprox ? ' approx' : ''),
+        cx: px, cy: yVC(m.vc), r: 5,
+        style: m.vcApprox ? 'stroke:var(--series-1)' : 'fill:var(--series-1)'
+      });
+      svg.appendChild(vcPoint);
+    }
+
+    function onEnter() {
+      crosshair.setAttribute('x1', px);
+      crosshair.setAttribute('x2', px);
+      crosshair.style.opacity = '1';
+      spPoint.setAttribute('r', 5.5);
+      if (vcPoint) vcPoint.setAttribute('r', 7);
+      ttQ.textContent = m.y + '年' + m.m + '月' + (m.vcQLabel ? '（' + m.vcQLabel + '季底）' : '');
+      if (m.vc !== undefined) {
+        ttVCRow.style.display = 'flex';
+        ttVC.textContent = '創投：' + (m.vcApprox ? '~$' : '$') + m.vc + 'B';
+      } else {
+        ttVCRow.style.display = 'none';
+      }
+      ttSP.textContent = 'S&P 500：' + m.sp.toFixed(0) + '點';
+      const rect = svg.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const scale = rect.width / W;
+      tooltip.style.left = (rect.left - wrapRect.left + px * scale) + 'px';
+      tooltip.style.top = (rect.top - wrapRect.top + ySP(m.sp) * scale) + 'px';
+      tooltip.style.opacity = '1';
+    }
+    function onLeave() {
+      crosshair.style.opacity = '0';
+      spPoint.setAttribute('r', 3.5);
+      if (vcPoint) vcPoint.setAttribute('r', 5);
+      tooltip.style.opacity = '0';
+    }
+    hit.addEventListener('mouseenter', onEnter);
+    hit.addEventListener('mouseleave', onLeave);
+  });
+</script>
+</body>
+</html>

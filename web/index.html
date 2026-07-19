@@ -2945,6 +2945,7 @@ function renderSentiment(d){
     '<div id="aiCapexBlock"></div>'+
     '<div id="ndxM2Block"></div>'+
     sp500FwdPeBox(d.sp500_fwd_pe)+
+    privateMarketsBox()+
     erpBox(d.equity_risk_premium)+
     safeHavenBox(d.safe_haven_demand)+
     reservesBox(MACRO_RESERVES)+sofrIorbBox(MACRO_SOFR)+cotSpxBox(d.cot_spx)+
@@ -2953,6 +2954,7 @@ function renderSentiment(d){
   if(MACRO_RESERVES) drawReserves(MACRO_RESERVES);
   if(MACRO_SOFR) drawSofrIorb(MACRO_SOFR);
   if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
+  drawPrivateMarketsChart();
   if(d.equity_risk_premium) drawErp(d.equity_risk_premium);
   if(d.safe_haven_demand) drawSafeHaven(d.safe_haven_demand);
   if(d.cot_spx) drawCotSpx(d.cot_spx);
@@ -3033,6 +3035,164 @@ function _renderFwdPe(){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
+// ── 全球創投募資 vs S&P500(Crunchbase) · 私募市場過熱/反轉指標,放 S&P500 Forward P/E 下方 ──
+function privateMarketsBox(){
+  return '<div class="guide" style="margin-top:12px">'+
+    '<div class="gtitle">全球創投募資 vs S&P 500（Crunchbase） · 私募市場過熱觀察</div>'+
+    '<div style="position:relative;padding:10px 14px 0">'+
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--ink2);font-weight:600;margin-bottom:8px">'+
+        '<span><span style="display:inline-block;width:14px;height:2px;background:var(--blue);vertical-align:middle;margin-right:5px"></span>全球創投單季募資（左軸，$B）</span>'+
+        '<span><span style="display:inline-block;width:14px;height:2px;background:var(--green);vertical-align:middle;margin-right:5px"></span>S&P 500（右軸，點數，月度）</span>'+
+        '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:2px dashed var(--ink3);vertical-align:middle;margin-right:5px"></span>約略值</span>'+
+      '</div>'+
+      '<div style="position:relative">'+
+        '<svg id="pmChart" viewBox="0 0 1600 440" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;overflow:visible"></svg>'+
+        '<div id="pmTooltip" style="position:absolute;pointer-events:none;background:var(--ink);color:#fff;font-size:12px;padding:8px 12px;border-radius:8px;opacity:0;transition:opacity .12s;z-index:10;white-space:nowrap;transform:translate(-50%,-115%);line-height:1.6">'+
+          '<div id="pmTtQ" style="font-weight:700;margin-bottom:3px"></div>'+
+          '<div id="pmTtVcRow" style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none"></span><span id="pmTtVc"></span></div>'+
+          '<div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);flex:none"></span><span id="pmTtSp"></span></div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="ex">2019年1月–2026年6月。創投數字Crunchbase僅按季揭露，藍線只在每季最後一個月(3/6/9/12月)出現節點；S&P 500用逐月收盤，綠線每月都有節點。'+
+      '2026 Q1創投單季暴衝到$300B（OpenAI、Anthropic等超大型AI輪次拉動），Q2回落至$205B，波動明顯比S&P 500劇烈——私募市場「少數巨額交易主導單季數字」的特性，波動天生比逐日交易的公開市場更大，解讀異常/正常不能直接套用公開市場標準。'+
+      ' 資料來源 <a href="https://news.crunchbase.com/venture/record-breaking-funding-ai-global-q1-2026/" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">Crunchbase News</a>'+
+      ' · <a href="https://www.multpl.com/s-p-500-historical-prices/table/by-month" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">multpl.com（S&P 500）</a></div>'+
+    '</div>';
+}
+function drawPrivateMarketsChart(){
+  const svg=document.getElementById("pmChart");
+  if(!svg || svg.dataset.rendered) return;
+  svg.dataset.rendered="1";
+  const spMonthly=[
+    2607.39,2754.86,2803.98,2903.80,2854.71,2890.17,2996.11,2897.50,2982.16,2977.68,3104.90,3176.75,
+    3278.20,3277.31,2652.39,2761.98,2919.61,3104.66,3207.62,3391.71,3365.52,3418.70,3548.99,3695.31,
+    3793.75,3883.43,3910.51,4141.18,4167.85,4238.49,4363.71,4454.21,4445.54,4460.71,4667.39,4674.77,
+    4573.82,4435.98,4391.27,4391.30,4040.36,3898.95,3911.73,4158.56,3850.52,3726.05,3917.49,3912.38,
+    3960.66,4079.68,3968.56,4121.47,4146.17,4345.37,4508.08,4426.24,4409.10,4258.98,4460.06,4685.05,
+    4804.49,5011.96,5170.57,5095.46,5235.23,5415.14,5542.89,5502.17,5626.12,5792.32,5929.92,6010.91,
+    5979.52,6038.69,5683.98,5369.50,5810.92,6029.95,6296.50,6408.95,6584.02,6735.69,6740.89,6853.03,
+    6929.12,6893.81,6654.42,6957.01,7412.55,7473.85
+  ];
+  const startYear=2019, startMonth=1;
+  const pmMonths=spMonthly.map((sp,i)=>{
+    const y=startYear+Math.floor((startMonth-1+i)/12), m=((startMonth-1+i)%12)+1;
+    return {y,m,sp};
+  });
+  const vcQuarters=[
+    {y:2019,q:1,v:75},{y:2019,q:2,v:69.8},{y:2019,q:3,v:75.6},{y:2019,q:4,v:80.7},
+    {y:2020,q:1,v:63.8},{y:2020,q:2,v:69.5},{y:2020,q:3,v:76.4},{y:2020,q:4,v:68,approx:true},
+    {y:2021,q:1,v:125},{y:2021,q:2,v:165},{y:2021,q:3,v:178,approx:true},{y:2021,q:4,v:176,approx:true},
+    {y:2022,q:1,v:162},{y:2022,q:2,v:120},{y:2022,q:3,v:86},{y:2022,q:4,v:77},
+    {y:2023,q:1,v:76},{y:2023,q:2,v:71},{y:2023,q:3,v:73},{y:2023,q:4,v:69},
+    {y:2024,q:1,v:66},{y:2024,q:2,v:79},{y:2024,q:3,v:66.5},{y:2024,q:4,v:93},
+    {y:2025,q:1,v:113},{y:2025,q:2,v:91},{y:2025,q:3,v:97},{y:2025,q:4,v:113},
+    {y:2026,q:1,v:300},{y:2026,q:2,v:205}
+  ];
+  const qEndMonth={1:3,2:6,3:9,4:12};
+  const vcByKey={};
+  vcQuarters.forEach(d=>{vcByKey[d.y+"-"+qEndMonth[d.q]]=d;});
+  pmMonths.forEach(m=>{
+    const match=vcByKey[m.y+"-"+m.m];
+    if(match){m.vc=match.v;m.vcApprox=!!match.approx;m.vcQLabel="Q"+Object.keys(qEndMonth).find(k=>qEndMonth[k]===m.m);}
+  });
+
+  const W=1600,H=440,padL=56,padR=60,padT=30,padB=40;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+  const vcMax=320, vcMin=0;
+  const spMax=Math.ceil(Math.max.apply(null,spMonthly)/500)*500+200;
+  const spMin=Math.floor(Math.min.apply(null,spMonthly)/500)*500-200;
+  const pmX=i=>padL+(i/(pmMonths.length-1))*plotW;
+  const pmYVC=v=>padT+plotH-((v-vcMin)/(vcMax-vcMin))*plotH;
+  const pmYSP=v=>padT+plotH-((v-spMin)/(spMax-spMin))*plotH;
+  const pmNs="http://www.w3.org/2000/svg";
+  const pmEl=(tag,attrs)=>{const e=document.createElementNS(pmNs,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;};
+
+  const vcSteps=[0,80,160,240,320];
+  vcSteps.forEach(g=>{
+    const gy=pmYVC(g);
+    svg.appendChild(pmEl("line",{x1:padL,x2:W-padR,y1:gy,y2:gy,stroke:"var(--line)","stroke-width":1}));
+    const t=pmEl("text",{x:padL-10,y:gy+4,"text-anchor":"end","font-size":11,fill:"var(--blue)"});
+    t.textContent="$"+g+"B"; svg.appendChild(t);
+  });
+  let lt=pmEl("text",{x:padL,y:16,"text-anchor":"start","font-size":11.5,"font-weight":700,fill:"var(--blue)"});
+  lt.textContent="創投募資（$B）"; svg.appendChild(lt);
+  vcSteps.forEach(g=>{
+    const gy=pmYVC(g);
+    const spAt=spMin+((padT+plotH-gy)/plotH)*(spMax-spMin);
+    const t=pmEl("text",{x:W-padR+10,y:gy+4,"text-anchor":"start","font-size":11,fill:"var(--green)"});
+    t.textContent=Math.round(spAt/100)*100; svg.appendChild(t);
+  });
+  let rt=pmEl("text",{x:W-padR,y:16,"text-anchor":"end","font-size":11.5,"font-weight":700,fill:"var(--green)"});
+  rt.textContent="S&P 500（點）"; svg.appendChild(rt);
+
+  pmMonths.forEach((m,i)=>{
+    const isYearStart=m.m===1;
+    const ty1=padT+plotH, ty2=padT+plotH+(isYearStart?6:3);
+    if(isYearStart||m.m%3===0) svg.appendChild(pmEl("line",{x1:pmX(i),x2:pmX(i),y1:ty1,y2:ty2,stroke:"var(--line)","stroke-width":1}));
+    if(isYearStart){
+      const t=pmEl("text",{x:pmX(i),y:H-12,"text-anchor":"middle","font-size":12,"font-weight":600,fill:"var(--ink2)"});
+      t.textContent=m.y; svg.appendChild(t);
+    }
+  });
+
+  const crosshair=pmEl("line",{x1:0,x2:0,y1:padT,y2:padT+plotH,stroke:"var(--ink3)","stroke-width":1,"stroke-dasharray":"3 3",opacity:0});
+  svg.appendChild(crosshair);
+
+  let spD="";
+  pmMonths.forEach((m,i)=>{spD+=(i===0?"M ":"L ")+pmX(i)+" "+pmYSP(m.sp)+" ";});
+  svg.appendChild(pmEl("path",{d:spD,fill:"none",stroke:"var(--green)","stroke-width":1.5,"stroke-linecap":"round","stroke-linejoin":"round"}));
+
+  const vcMonths=pmMonths.map((m,i)=>({m,i})).filter(o=>o.m.vc!==undefined);
+  let vcD="";
+  vcMonths.forEach((o,idx)=>{vcD+=(idx===0?"M ":"L ")+pmX(o.i)+" "+pmYVC(o.m.vc)+" ";});
+  svg.appendChild(pmEl("path",{d:vcD,fill:"none",stroke:"var(--blue)","stroke-width":2,"stroke-linecap":"round","stroke-linejoin":"round"}));
+
+  function pmLabel(px,py,text,color,dy){
+    const t=pmEl("text",{x:px,y:py+dy,"text-anchor":"middle","font-size":11.5,"font-weight":700,fill:color});
+    t.textContent=text; svg.appendChild(t);
+  }
+  const lastVC=vcMonths[vcMonths.length-1];
+  const peakVC=vcMonths.reduce((best,o)=>o.m.vc>best.m.vc?o:best,vcMonths[0]);
+  pmLabel(pmX(peakVC.i),pmYVC(peakVC.m.vc),"$"+peakVC.m.vc+"B","var(--blue)",-14);
+  pmLabel(pmX(lastVC.i),pmYVC(lastVC.m.vc),"$"+lastVC.m.vc+"B","var(--blue)",18);
+  const lastMonth=pmMonths[pmMonths.length-1];
+  pmLabel(pmX(pmMonths.length-1),pmYSP(lastMonth.sp),Math.round(lastMonth.sp),"var(--green)",-14);
+
+  const tooltip=document.getElementById("pmTooltip"),ttQ=document.getElementById("pmTtQ"),
+    ttVcRow=document.getElementById("pmTtVcRow"),ttVc=document.getElementById("pmTtVc"),ttSp=document.getElementById("pmTtSp"),
+    wrap=svg.parentElement;
+  pmMonths.forEach((m,i)=>{
+    const px=pmX(i);
+    const hit=pmEl("rect",{x:px-(plotW/(pmMonths.length-1))/2,y:padT,width:plotW/(pmMonths.length-1),height:plotH,fill:"transparent",style:"cursor:pointer"});
+    svg.appendChild(hit);
+    const spPoint=pmEl("circle",{cx:px,cy:pmYSP(m.sp),r:3.5,fill:"var(--green)",stroke:"var(--panel)","stroke-width":2,style:"cursor:pointer"});
+    svg.appendChild(spPoint);
+    let vcPoint=null;
+    if(m.vc!==undefined){
+      vcPoint=pmEl("circle",{cx:px,cy:pmYVC(m.vc),r:5,style:"cursor:pointer"});
+      if(m.vcApprox){vcPoint.setAttribute("fill","var(--panel)");vcPoint.setAttribute("stroke","var(--blue)");vcPoint.setAttribute("stroke-width",2);vcPoint.setAttribute("stroke-dasharray","2 1.5");}
+      else{vcPoint.setAttribute("fill","var(--blue)");vcPoint.setAttribute("stroke","var(--panel)");vcPoint.setAttribute("stroke-width",2);}
+      svg.appendChild(vcPoint);
+    }
+    hit.addEventListener("mouseenter",()=>{
+      crosshair.setAttribute("x1",px);crosshair.setAttribute("x2",px);crosshair.setAttribute("opacity",1);
+      spPoint.setAttribute("r",5.5); if(vcPoint) vcPoint.setAttribute("r",7);
+      ttQ.textContent=m.y+"年"+m.m+"月"+(m.vcQLabel?"（"+m.vcQLabel+"季底）":"");
+      if(m.vc!==undefined){ttVcRow.style.display="flex";ttVc.textContent="創投："+(m.vcApprox?"~$":"$")+m.vc+"B";}
+      else{ttVcRow.style.display="none";}
+      ttSp.textContent="S&P 500："+m.sp.toFixed(0)+"點";
+      const rect=svg.getBoundingClientRect(), wrapRect=wrap.getBoundingClientRect(), scale=rect.width/W;
+      tooltip.style.left=(rect.left-wrapRect.left+px*scale)+"px";
+      tooltip.style.top=(rect.top-wrapRect.top+pmYSP(m.sp)*scale)+"px";
+      tooltip.style.opacity=1;
+    });
+    hit.addEventListener("mouseleave",()=>{
+      crosshair.setAttribute("opacity",0); spPoint.setAttribute("r",3.5); if(vcPoint) vcPoint.setAttribute("r",5);
+      tooltip.style.opacity=0;
+    });
+  });
+}
 let ERP_INV=false;   // 反轉視角:顯示 -ERP,讓線與 S&P500 同向(正相關),較直覺
 function erpBox(e){
   if(!e || !e.erp || !e.erp.length) return '';

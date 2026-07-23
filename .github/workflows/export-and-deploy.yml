@@ -125,6 +125,16 @@ jobs:
           cd engine
           python export_capex_2nd_deriv.py
 
+      - name: Export big tech ROIC (大科技ROIC逐季)
+        if: ${{ github.event.inputs.web_only != 'true' }}
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          NO_COLOR: "1"
+        run: |
+          cd engine
+          python export_roic.py || echo "[roic] 失敗,沿用線上"
+
       - name: Export macro market (indices + sector ETFs)
         if: ${{ github.event.inputs.web_only != 'true' }}
         env:

@@ -302,6 +302,41 @@ smokeCapex("13季(含短期/長期均值markLine)", 13, true);
 smokeCapex("5季(無均值,僅QoQ,TSM/ASML情境)", 5, false);
 smokeCapex("極短(僅2季)", 2, false);
 
+// ── drawRoicChart(大科技ROIC逐季:多公司多線,各自起訖範圍不同、需connectNulls:false)──
+function synthRoic(nCompanies, len, offsetLast){
+  const TICKERS=["AAPL","MSFT","GOOGL","AMZN","META","NVDA"].slice(0, nCompanies);
+  const allLabels=[];
+  for(let i=0;i<len+1;i++){ const y=23+Math.floor(i/4), q=(i%4)+1; allLabels.push(""+y+"Q"+q); }
+  return TICKERS.map((tk,ti)=>{
+    // 模擬 GOOGL 情境:比其他公司多涵蓋最後一季(offsetLast) → 各線起訖範圍不一致
+    const n = len + (ti===2 && offsetLast ? 1 : 0);
+    const labels = allLabels.slice(allLabels.length-n);
+    const roic = labels.map((_,i)=>+(10+ti*15+8*Math.sin(i/2)).toFixed(2));
+    return {ticker:tk, name:tk+"公司", labels, roic};
+  });
+}
+function smokeRoic(label, nCompanies, len, offsetLast){
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener(){}, removeEventListener(){} };
+  const el = {};
+  const $ = () => el;
+  const draw = new Function(
+    "return (function($, window, echarts){ const ROIC_COLORS={AAPL:'#8b8f96',MSFT:'#2563eb',GOOGL:'#e8923a',AMZN:'#f4a300',META:'#7c5cff',NVDA:'#16a34a'}; "
+    + extract("_qlabelSortKey") + " " + extract("drawRoicChart") + " return drawRoicChart; })"
+  )()($, window, echarts);
+  try {
+    draw(synthRoic(nCompanies, len, offsetLast));
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawRoicChart):");
+smokeRoic("6家公司×13季,起訖範圍一致", 6, 13, false);
+smokeRoic("6家公司,其中1家多涵蓋最後一季(GOOGL情境,需connectNulls處理)", 6, 13, true);
+smokeRoic("僅3家公司×4季(最短情境)", 3, 4, false);
+
 assert.ok(RENDER_COUNT >= 22, "應完成至少 22 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)

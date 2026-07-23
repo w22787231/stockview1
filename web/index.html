@@ -2937,6 +2937,7 @@ function renderSentiment(d){
     '<div id="levRatioBlock"></div>'+
     '<div id="soxxMaBlock"></div>'+
     '<div id="capexBlock"></div>'+
+    '<div id="roicBlock"></div>'+
     '<div id="yieldCurveBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
@@ -3453,6 +3454,7 @@ async function loadSentiment(){
     loadLevRatio();
     loadSoxxMa();
     loadCapex();
+    loadRoic();
     loadYieldCurve();
     loadInsider();
     loadSpec();
@@ -6971,6 +6973,97 @@ async function loadCapex(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>七雄資本支出二階導</h2></div>'+
       '<div class="legend">⚠️ capex_2nd_deriv.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_capex_2nd_deriv。</div></section>';
+  }
+}
+
+// ── 大科技 ROIC(投入資本回報率,TTM年化)逐季 ──
+let ROIC_DATA=null;
+const ROIC_COLORS={AAPL:"#8b8f96", MSFT:"#2563eb", GOOGL:"#e8923a", AMZN:"#f4a300", META:"#7c5cff", NVDA:"#16a34a"};
+
+function _qlabelSortKey(lb){
+  // "23Q1" -> 2301, 用於把各公司不同起訖範圍的季度標籤排成同一條時間軸
+  const y=parseInt(lb.slice(0,2),10), q=parseInt(lb.slice(3),10);
+  return y*10+q;
+}
+
+function drawRoicChart(companies){
+  const el=$("#roicChart");
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+
+  const labelSet=new Set();
+  companies.forEach(c=>c.labels.forEach(lb=>labelSet.add(lb)));
+  const axisLabels=[...labelSet].sort((a,b)=>_qlabelSortKey(a)-_qlabelSortKey(b));
+
+  const series=companies.map(c=>{
+    const byLabel={}; c.labels.forEach((lb,i)=>byLabel[lb]=c.roic[i]);
+    const data=axisLabels.map(lb=> byLabel.hasOwnProperty(lb) ? byLabel[lb] : null);
+    return {
+      name:c.ticker, type:"line", data, connectNulls:false, smooth:true, symbolSize:5,
+      lineStyle:{color:ROIC_COLORS[c.ticker]||"#888", width:2},
+      itemStyle:{color:ROIC_COLORS[c.ticker]||"#888"}
+    };
+  });
+
+  ch.setOption({
+    animation:false,
+    grid:{left:46, right:16, top:36, bottom:30},
+    legend:{top:0, textStyle:{fontSize:11}, data:companies.map(c=>c.ticker)},
+    tooltip:{trigger:"axis", valueFormatter:v=>v==null?"–":v.toFixed(1)+"%"},
+    xAxis:{type:"category", data:axisLabels, axisLabel:{fontSize:9}},
+    yAxis:{type:"value", name:"ROIC % (TTM年化)", nameTextStyle:{fontSize:10}, scale:true,
+      axisLabel:{fontSize:9, formatter:v=>v.toFixed(0)+"%"}, splitLine:{lineStyle:{opacity:.3}}},
+    series
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function roicLatestRow(c){
+  const last=c.roic.length?c.roic[c.roic.length-1]:null;
+  const lastLabel=c.labels.length?c.labels[c.labels.length-1]:"–";
+  const cls=last==null?"dim":(last>=0?"pos":"neg");
+  return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">'+
+    '<span><b>'+esc(c.ticker)+'</b> <span style="color:var(--ink2);font-size:12px">'+esc(c.name)+'</span></span>'+
+    '<span class="'+cls+'">'+(last==null?"–":last.toFixed(1)+"%")+' <span style="color:var(--ink3);font-size:10px">('+esc(lastLabel)+')</span></span>'+
+  '</div>';
+}
+
+function renderRoic(d){
+  const box=$("#roicBlock");
+  if(!box) return;
+  const rows=d.companies.slice().sort((a,b)=>{
+    const av=a.roic.length?a.roic[a.roic.length-1]:-Infinity, bv=b.roic.length?b.roic[b.roic.length-1]:-Infinity;
+    return bv-av;
+  }).map(roicLatestRow).join("");
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>大科技 ROIC(投入資本回報率)逐季</h2>'+
+        '<span class="tag">AAPL/MSFT/GOOGL/AMZN/META/NVDA</span>'+
+        '<span class="hint">TTM年化,避開單季季節性(如AMZN Q4旺季)造成的鋸齒</span></div>'+
+      '<div id="roicChart" style="height:320px;margin-bottom:10px"></div>'+
+      '<div style="max-width:420px;margin:0 auto 8px">'+rows+'</div>'+
+      '<div class="legend">口徑:'+esc(d.methodology||"")+' 資料源自 SEC XBRL companyconcept API(10-Q單季+10-K全年反推缺口季度)。資料日 '+esc(d.generated_at||"")+'。</div>'+
+    '</section>';
+  drawRoicChart(d.companies);
+}
+
+async function loadRoic(){
+  const box=$("#roicBlock");
+  if(!box) return;
+  if(ROIC_DATA){ renderRoic(ROIC_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入大科技 ROIC 逐季 …</div>';
+  try{
+    const res=await fetch("data/roic.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    ROIC_DATA=await res.json();
+    renderRoic(ROIC_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>大科技 ROIC(投入資本回報率)逐季</h2></div>'+
+      '<div class="legend">⚠️ roic.json 尚未產生(' +esc(e.message)+ ')。請先在 GitHub Actions 執行 export_roic。</div></section>';
   }
 }
 

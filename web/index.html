@@ -2938,6 +2938,7 @@ function renderSentiment(d){
     '<div id="soxxMaBlock"></div>'+
     '<div id="capexBlock"></div>'+
     '<div id="roicBlock"></div>'+
+    '<div id="gammaBlock"></div>'+
     '<div id="yieldCurveBlock"></div>'+
     '<div id="insiderBlock"></div>'+
     '<div id="specBlock"></div>'+
@@ -3455,6 +3456,7 @@ async function loadSentiment(){
     loadSoxxMa();
     loadCapex();
     loadRoic();
+    loadGamma();
     loadYieldCurve();
     loadInsider();
     loadSpec();
@@ -7064,6 +7066,87 @@ async function loadRoic(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>大科技 ROIC(投入資本回報率)逐季</h2></div>'+
       '<div class="legend">⚠️ roic.json 尚未產生(' +esc(e.message)+ ')。請先在 GitHub Actions 執行 export_roic。</div></section>';
+  }
+}
+
+// ── SPX 選擇權 Gamma 曝險(GEX) ──────────────────────────
+let GAMMA_DATA=null;
+
+function drawGammaChart(d){
+  const el=$("#gammaChart");
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+
+  const rows=d.by_strike||[];
+  const xData=rows.map(r=>r.strike);
+  const yData=rows.map(r=>r.gex_bn);
+
+  const markLines=[{xAxis: d.spot, label:{formatter:"現貨 "+d.spot.toFixed(0)}, lineStyle:{color:"var(--ink2)", type:"dashed"}}];
+  if(d.flip_point!=null){
+    markLines.push({xAxis: d.flip_point, label:{formatter:"翻轉點 "+d.flip_point.toFixed(0)}, lineStyle:{color:"#e8923a", type:"dashed"}});
+  }
+
+  ch.setOption({
+    animation:false,
+    grid:{left:50, right:16, top:36, bottom:34},
+    tooltip:{trigger:"axis", valueFormatter:v=>v==null?"–":v.toFixed(3)+"B"},
+    xAxis:{type:"category", data:xData, axisLabel:{fontSize:9, rotate:45},
+      name:"履約價", nameLocation:"end", nameTextStyle:{fontSize:10}},
+    yAxis:{type:"value", name:"GEX(十億美元/1%現貨變動)", nameTextStyle:{fontSize:10}, scale:true,
+      axisLabel:{fontSize:9, formatter:v=>v.toFixed(1)}, splitLine:{lineStyle:{opacity:.3}}},
+    series:[{
+      type:"bar", data:yData,
+      itemStyle:{color: p => p.value>=0 ? "#2563eb" : "#dc2626"},
+      markLine:{symbol:"none", data:markLines, label:{fontSize:10}}
+    }]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderGamma(d){
+  const box=$("#gammaBlock");
+  if(!box) return;
+  const nearCls = d.total_gex_near_bn>=0 ? "pos" : "neg";
+  const stateLabel = d.total_gex_near_bn>=0
+    ? "正 Gamma(做市商對沖傾向抑制波動)"
+    : "負 Gamma(做市商對沖傾向放大波動)";
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>SPX 選擇權 Gamma 曝險(GEX)</h2>'+
+        '<span class="tag">現貨 '+esc((d.spot||0).toFixed(1))+'</span>'+
+        '<span class="hint">近端到期(≤'+esc(d.near_term_days)+'天)加總,近似值非官方指標</span></div>'+
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;padding:6px 0 10px">'+
+        '<div><div style="color:var(--ink2);font-size:11px">近端 GEX</div>'+
+          '<div class="'+nearCls+'" style="font-size:20px;font-weight:600">'+esc(d.total_gex_near_bn.toFixed(2))+'B</div>'+
+          '<div style="color:var(--ink3);font-size:11px">'+esc(stateLabel)+'</div></div>'+
+        '<div><div style="color:var(--ink2);font-size:11px">全期 GEX</div>'+
+          '<div style="font-size:16px">'+esc(d.total_gex_all_bn.toFixed(2))+'B</div></div>'+
+        '<div><div style="color:var(--ink2);font-size:11px">零 Gamma 翻轉點</div>'+
+          '<div style="font-size:16px">'+(d.flip_point!=null?esc(d.flip_point.toFixed(0)):"—")+'</div></div>'+
+      '</div>'+
+      '<div id="gammaChart" style="height:280px;margin-bottom:10px"></div>'+
+      '<div class="legend">'+esc(d.methodology||"")+' 資料日 '+esc(d.generated_at||"")+'。</div>'+
+    '</section>';
+  drawGammaChart(d);
+}
+
+async function loadGamma(){
+  const box=$("#gammaBlock");
+  if(!box) return;
+  if(GAMMA_DATA){ renderGamma(GAMMA_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 SPX Gamma 曝險 …</div>';
+  try{
+    const res=await fetch("data/gamma.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    GAMMA_DATA=await res.json();
+    renderGamma(GAMMA_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>SPX 選擇權 Gamma 曝險(GEX)</h2></div>'+
+      '<div class="legend">⚠️ gamma.json 尚未產生(' +esc(e.message)+ ')。請先在 GitHub Actions 執行 export_gamma。</div></section>';
   }
 }
 

@@ -337,7 +337,41 @@ smokeRoic("6家公司×13季,起訖範圍一致", 6, 13, false);
 smokeRoic("6家公司,其中1家多涵蓋最後一季(GOOGL情境,需connectNulls處理)", 6, 13, true);
 smokeRoic("僅3家公司×4季(最短情境)", 3, 4, false);
 
-assert.ok(RENDER_COUNT >= 22, "應完成至少 22 次真渲染,實得 " + RENDER_COUNT);
+// ── drawGammaChart(SPX Gamma曝險:履約價bar,itemStyle正負色callback + markLine現貨/翻轉點)──
+function synthGamma(n, withFlip){
+  const spot = 7300;
+  const by_strike = [];
+  for(let i=0;i<n;i++){
+    const strike = spot - (n/2)*10 + i*10;
+    const gex_bn = +((strike - spot) / 200 + Math.sin(i/3)*0.3).toFixed(4);
+    by_strike.push({strike, gex_bn});
+  }
+  return {spot, flip_point: withFlip ? spot - 30 : null, near_term_days: 45,
+    total_gex_near_bn: -5.2, total_gex_all_bn: -6.8, by_strike,
+    generated_at:"2026-07-30T00:00:00Z", methodology:"synthetic"};
+}
+function smokeGamma(label, n, withFlip){
+  const echarts = makeEcharts();
+  const window = { echarts, addEventListener(){}, removeEventListener(){} };
+  const el = {};
+  const $ = () => el;
+  const draw = new Function(
+    "return (function($, window, echarts){ " + extract("drawGammaChart") + " return drawGammaChart; })"
+  )()($, window, echarts);
+  try {
+    draw(synthGamma(n, withFlip));
+    console.log(`  ${label}: ✅ 真 ECharts ${echarts.version} 渲染成功`);
+  } catch (e) {
+    console.log(`  ${label}: ❌ ${e.message}`);
+    throw e;
+  }
+}
+console.log("真 ECharts SSR 煙霧測試(drawGammaChart):");
+smokeGamma("60檔履約價,含翻轉點markLine", 60, true);
+smokeGamma("60檔履約價,無翻轉點(flip_point=null)", 60, false);
+smokeGamma("僅5檔履約價(最短情境)", 5, false);
+
+assert.ok(RENDER_COUNT >= 25, "應完成至少 25 次真渲染,實得 " + RENDER_COUNT);
 console.log(`✅ test_echarts_smoke 通過:${RENDER_COUNT} 次真 ECharts 渲染皆無崩潰`);
 // ECharts SSR 實例會佔住 node 事件迴圈,明確結束避免測試掛住(CI/npm test 會逾時)
 process.exit(0);

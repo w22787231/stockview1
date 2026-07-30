@@ -213,15 +213,21 @@ def _taifex_post(path, params):
         timeout=45, context=_SSL).read().decode("big5", "ignore")
 
 
-def fetch_futures(now, days=95):
-    end = now.date(); start = end - datetime.timedelta(days=days)
-    rng = {"queryStartDate": start.strftime("%Y/%m/%d"), "queryEndDate": end.strftime("%Y/%m/%d")}
+def _fetch_futcontracts(query_start, query_end):
+    """單次查 futContractsDateDown(TX 綁定回傳含大台+微型+小型臺指)。
+    期交所這個下載介面對「今天」當 queryEndDate 常回 HTML 錯誤頁(alert DateTime error),
+    不是 CSV——回傳 (ok, tx, micro_inst, small_inst),ok=False 時三者皆空,呼叫端決定重試/放棄。"""
     tx = {"foreign": [], "trust": [], "dealer": []}
     micro_inst = {}     # date -> 微型臺指 三大法人未平倉淨額合計(口)
     small_inst = {}     # date -> 小型臺指 三大法人未平倉淨額合計(口)
+    rng = {"queryStartDate": query_start.strftime("%Y/%m/%d"), "queryEndDate": query_end.strftime("%Y/%m/%d")}
     try:
-        rows = list(csv.reader(io.StringIO(_taifex_post(
-            "futContractsDateDown", dict(rng, down_type="1", commodity_id="TX")))))
+        raw = _taifex_post("futContractsDateDown", dict(rng, down_type="1", commodity_id="TX"))
+        if "<html" in raw[:200].lower():
+            print("[capital] futContractsDateDown(end=%s)回傳非CSV(疑似期交所當日資料未就緒):" % query_end,
+                  raw[:120].replace("\n", " "))
+            return False, tx, micro_inst, small_inst
+        rows = list(csv.reader(io.StringIO(raw)))
         for r in rows:
             if len(r) < 14:
                 continue
@@ -240,8 +246,25 @@ def fetch_futures(now, days=95):
                 micro_inst[dt] = micro_inst.get(dt, 0) + net
             elif prod == "小型臺指期貨":
                 small_inst[dt] = small_inst.get(dt, 0) + net
-    except Exception:
-        pass
+        return True, tx, micro_inst, small_inst
+    except Exception as e:
+        print("[capital] futContractsDateDown(end=%s)抓取/解析失敗:" % query_end, e)
+        return False, tx, micro_inst, small_inst
+
+
+def fetch_futures(now, days=95):
+    end = now.date(); start = end - datetime.timedelta(days=days)
+    ok, tx, micro_inst, small_inst = _fetch_futcontracts(start, end)
+    if not ok:
+        # 期交所這個介面對「今天」常態性拒絕(非單純時機運氣問題,實測同日不同時間點皆同),
+        # 退一天重試——T-1 的資料期交所已經有,能讓序列繼續往前走,不會每天都卡在原地。
+        # 若之後改用 merge_hist 疊在舊歷史上,單次抓空也不會清掉既有歷史,但沒有這個重試,
+        # 序列會永遠停在「今天抓不到」而不再新增資料點。
+        end = end - datetime.timedelta(days=1)
+        print("[capital] futContractsDateDown 改查 end=%s(T-1)重試" % end)
+        ok, tx, micro_inst, small_inst = _fetch_futcontracts(start, end)
+        if not ok:
+            print("[capital] futContractsDateDown T-1 重試仍失敗,本次期貨籌碼跳過,交由 merge_hist 沿用前值")
     for k in tx:
         tx[k] = sorted(tx[k], key=lambda x: x["date"])[-60:]
 
@@ -532,7 +555,17 @@ def main():
     margin_hist = merge_hist(pv.get("margin_hist"), fetch_margin_hist(now, 60))
     margin_today = margin_hist[-1] if margin_hist else None
     fut = fetch_futures(now, 95)
-    tx_oi = fut["tx"]; retail = fut["retail"]; retail_small = fut["retail_small"]
+    # 期交所 futContractsDateDown 偶爾在資料未就緒時回錯誤頁(見 fetch_futures 內的偵測),
+    # 這裡跟 inst_hist/margin_hist 一樣套 merge_hist:單次抓空只是「今天沒新點」,
+    # 不會把 tx_oi/retail/retail_small 的既有歷史整批清空(此前無此保護,已造成線上資料被清空過)。
+    prev_tx = pv.get("tx_oi") or {}
+    tx_oi = {
+        "foreign": merge_hist(prev_tx.get("foreign"), fut["tx"]["foreign"]),
+        "trust": merge_hist(prev_tx.get("trust"), fut["tx"]["trust"]),
+        "dealer": merge_hist(prev_tx.get("dealer"), fut["tx"]["dealer"]),
+    }
+    retail = merge_hist(pv.get("retail"), fut["retail"])
+    retail_small = merge_hist(pv.get("retail_small"), fut["retail_small"])
     large = fetch_large_holders(prev)
     time.sleep(2)
     borrow = fetch_borrow(now)

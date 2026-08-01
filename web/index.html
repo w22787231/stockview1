@@ -1469,6 +1469,7 @@ function renderMacro(d){
     '<nav class="macro-tabs">'+
       '<button class="ntab'+(MACRO_TAB==="overview"?" on":"")+'" data-mtab="overview">總覽</button>'+
       '<button class="ntab'+(MACRO_TAB==="divergence"?" on":"")+'" data-mtab="divergence">個股二階導</button>'+
+      '<button class="ntab'+(MACRO_TAB==="williamsr"?" on":"")+'" data-mtab="williamsr">Williams %R</button>'+
     '</nav>'+
     '<div id="macroTabBody"></div>';
   document.querySelectorAll("[data-mtab]").forEach(b=>b.onclick=()=>{
@@ -1493,6 +1494,12 @@ function renderMacroTabBody(){
         '<div class="legend">口徑：60個交易日內找 e20(20日效率)波峰，現在的e20 ≤ 波峰的一半、現價仍 ≥ 波峰當天收盤的85% 才算背離(價格還沒真的破底)。同一套效率公式用於「趨勢動能榜」，跨頁一致。背離≠必反轉，健康整理後再創高也常見，適合當降低信心的風險旗標，非獨立賣出訊號。</div>'+
       '</section>';
     loadDivergence();
+    return;
+  }
+
+  if(MACRO_TAB==="williamsr"){
+    body.innerHTML = '<div id="williamsRBlock"><div class="loading-screen">載入 Williams %R …</div></div>';
+    loadWilliamsR();
     return;
   }
 
@@ -6861,6 +6868,136 @@ async function loadSoxxMa(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>SOXX 股價 × 200日均線</h2></div>'+
       '<div class="legend">⚠️ soxx_ma.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_soxx_ma。</div></section>';
+  }
+}
+
+// ── S&P 500 Williams %R(14日):短線超買超賣振盪指標 ──
+let WILLIAMSR_DATA=null;
+let WILLIAMSR_WIN="3m";
+const WILLIAMSR_WIN_LABEL={"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","max":"全部"};
+const WILLIAMSR_WIN_N={"1m":21,"3m":63,"6m":126,"1y":252,"3y":756};  // max 不列→取全部
+
+function drawWilliamsRChart(id, dates, close, wr, obLevel, osLevel){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const _old=echarts.getInstanceByDom(el); if(_old) _old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s.length<=10 ? s+"T00:00:00" : s).getTime();
+  const xfmt=(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";};
+  ch.setOption({
+    animation:false,
+    grid:[
+      {left:52, right:16, top:34, height:130},           // 主圖:S&P500 收盤(下方 x 軸標籤隱藏)
+      {left:52, right:16, top:186, height:130}            // 子圖:Williams %R(底部留 30px 給年份標籤)
+    ],
+    legend:{top:0, textStyle:{fontSize:11}, data:["S&P 500 收盤價","Williams %R"]},
+    tooltip:{trigger:"axis", axisPointer:{link:[{xAxisIndex:"all"}]}},
+    axisPointer:{link:[{xAxisIndex:"all"}]},
+    xAxis:[
+      {type:"time", gridIndex:0, axisLabel:{show:false}, axisTick:{show:false}},
+      {type:"time", gridIndex:1, axisLabel:{fontSize:9, hideOverlap:true, formatter:xfmt}}
+    ],
+    yAxis:[
+      {type:"value", gridIndex:0, name:"S&P500", nameTextStyle:{fontSize:10}, scale:true,
+       axisLabel:{fontSize:10}, splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value", gridIndex:1, name:"%R", nameTextStyle:{fontSize:9}, min:-100, max:0,
+       axisLabel:{fontSize:9}, splitLine:{lineStyle:{opacity:.25}}}
+    ],
+    series:[
+      {name:"S&P 500 收盤價", type:"line", smooth:true, showSymbol:false,
+       xAxisIndex:0, yAxisIndex:0,
+       data:dates.map((d,i)=>[toMs(d), close[i]]),
+       lineStyle:{color:"#334155", width:1.6}, itemStyle:{color:"#334155"}},
+      {name:"Williams %R", type:"line", smooth:false, showSymbol:false, connectNulls:false,
+       xAxisIndex:1, yAxisIndex:1,
+       data:dates.map((d,i)=>[toMs(d), wr[i]]),
+       lineStyle:{color:"#8b5cf6", width:1.2}, itemStyle:{color:"#8b5cf6"},
+       markLine:{symbol:"none",silent:true,
+         lineStyle:{type:"dashed",opacity:.7}, label:{fontSize:9},
+         data:[
+           {yAxis:obLevel, lineStyle:{color:"#fb7185",opacity:.6}, label:{formatter:"超買 "+obLevel,position:"insideStartTop",color:"#fb7185",fontSize:9}},
+           {yAxis:osLevel, lineStyle:{color:"#34d399",opacity:.6}, label:{formatter:"超賣 "+osLevel,position:"insideStartBottom",color:"#34d399",fontSize:9}}
+         ]},
+       markArea:{silent:true,
+         data:[
+           [{yAxis:obLevel, itemStyle:{color:"#fb7185", opacity:.06}}, {yAxis:0}],
+           [{yAxis:-100, itemStyle:{color:"#34d399", opacity:.06}}, {yAxis:osLevel}]
+         ]}}
+    ]
+  }, true);
+  if(el._ro) window.removeEventListener("resize", el._ro);
+  el._ro=()=>ch.resize();
+  window.addEventListener("resize", el._ro);
+}
+
+function renderWilliamsR(d){
+  const box=$("#williamsRBlock");
+  if(!box) return;
+  const ser=d.series||{};
+  const allD=ser.dates||[];
+  const wins=["1m","3m","6m","1y","3y","max"].filter(w=>w==="max" || (WILLIAMSR_WIN_N[w]||0) < allD.length);
+  const win=wins.includes(WILLIAMSR_WIN) ? WILLIAMSR_WIN : "3m";
+  const btns=wins.map(w=>
+    '<button class="btn'+(w===win?" active":"")+'" data-wrw="'+w+'">'+
+      (WILLIAMSR_WIN_LABEL[w]||w)+'</button>').join("");
+
+  const cp=d.close_last, wr=d.wr_last, sig=d.signal, ob=d.ob_level??-20, os=d.os_level??-80;
+  const sigColor = sig==="超買" ? "var(--red)" : (sig==="超賣" ? "var(--green)" : "var(--ink2)");
+  const cardStyle='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:120px;margin-right:12px';
+
+  box.innerHTML=
+    '<section>'+
+      '<div class="sec-head"><h2>S&amp;P 500 Williams %R('+(d.period||14)+'日)</h2>'+
+        '<span class="tag">短線超買超賣振盪指標</span>'+
+        '<span class="hint">%R = (N日最高高點−收盤)÷(N日最高高點−N日最低低點)×−100;越接近0越超買,越接近−100越超賣</span></div>'+
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">S&amp;P 500 現價</div>'+
+          '<div class="cap-big" style="color:var(--ink)">'+(cp!=null?cp.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"—")+'</div>'+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">Williams %R</div>'+
+          '<div class="cap-big" style="color:#8b5cf6">'+(wr!=null?wr.toFixed(2):"—")+'</div>'+
+        '</div>'+
+        '<div style="'+cardStyle+'">'+
+          '<div class="cap-lab">目前訊號</div>'+
+          '<div class="cap-big" style="color:'+sigColor+'">'+esc(sig||"—")+'</div>'+
+        '</div>'+
+      '</div>'+
+      (wins.length>1?'<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+btns+'</div>':'')+
+      '<div id="williamsRChart" class="cap-chart" style="height:280px"></div>'+
+      '<div class="legend" style="margin-top:10px">資料來源:Yahoo Finance ^GSPC(S&amp;P 500)日線。'+
+        '<b class="neg">≥'+ob+' 超買</b>(短線過熱,拉回機率升溫) · <b class="pos">≤'+os+' 超賣</b>(短線過冷,反彈機率升溫)。'+
+        '視窗 '+esc(WILLIAMSR_WIN_LABEL[win]||win)+'，資料日 '+esc(d.as_of||"")+'。單一短線振盪指標,不建議單獨作為進出場依據,適合搭配趨勢/位階類指標一起看。</div>'+
+    '</section>';
+
+  const allC=ser.close||[], allW=ser.wr||[];
+  const n=win==="max" ? allD.length : Math.min(WILLIAMSR_WIN_N[win]||allD.length, allD.length);
+  const dates=allD.slice(-n), close=allC.slice(-n), wrSeries=allW.slice(-n);
+  if(dates.length>=2){
+    drawWilliamsRChart("williamsRChart", dates, close, wrSeries, ob, os);
+  }else{
+    const c=$("#williamsRChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
+  }
+
+  box.querySelectorAll("[data-wrw]").forEach(b=>b.onclick=()=>{ WILLIAMSR_WIN=b.dataset.wrw; renderWilliamsR(WILLIAMSR_DATA); });
+}
+
+async function loadWilliamsR(){
+  const box=$("#williamsRBlock");
+  if(!box) return;
+  if(WILLIAMSR_DATA){ renderWilliamsR(WILLIAMSR_DATA); return; }
+  box.innerHTML='<div class="dim" style="padding:8px">載入 Williams %R …</div>';
+  try{
+    const res=await fetch("data/williams_r.json?t="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    WILLIAMSR_DATA=await res.json();
+    if(WILLIAMSR_DATA.default_window) WILLIAMSR_WIN=WILLIAMSR_DATA.default_window;
+    renderWilliamsR(WILLIAMSR_DATA);
+  }catch(e){
+    if(box) box.innerHTML=
+      '<section><div class="sec-head"><h2>S&amp;P 500 Williams %R</h2></div>'+
+      '<div class="legend">⚠️ williams_r.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_williams_r。</div></section>';
   }
 }
 

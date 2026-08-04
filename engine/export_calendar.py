@@ -141,7 +141,7 @@ def _nasdaq_earn(day):
 def build_earnings_us(now_tpe, end_tpe):
     nd = now_tpe.date(); ed = end_tpe.date()
     universe = {s for s, _ in US_BIG}; zhmap = dict(US_BIG)
-    found = {}            # sym -> (date, 時段)
+    found = {}            # sym -> (date, 時段, 資料來源)
     nasdaq_ok = False
     d = nd
     while d <= ed:
@@ -153,7 +153,7 @@ def build_earnings_us(now_tpe, end_tpe):
                 if s in universe and s not in found:
                     t = r.get("time") or ""
                     sess = "盤前" if "pre-market" in t else ("盤後" if "after-hours" in t else "")
-                    found[s] = (d, sess)
+                    found[s] = (d, sess, "Nasdaq")
         d += datetime.timedelta(days=1)
     # 備援:Nasdaq 全擋時用 yfinance .calendar 補日期(無時段)
     if not nasdaq_ok:
@@ -168,14 +168,14 @@ def build_earnings_us(now_tpe, end_tpe):
                     cand = [x.date() if hasattr(x, "date") else x for x in (eds or [])]
                     cand = [x for x in cand if isinstance(x, datetime.date) and nd <= x <= ed]
                     if cand:
-                        found[sym] = (min(cand), "")
+                        found[sym] = (min(cand), "", "Yahoo Finance（Nasdaq 無資料時備援）")
                 except Exception:
                     continue
         except Exception:
             pass
     out = [{"sym": s, "name": zhmap.get(s, s), "date": dt.strftime("%Y-%m-%d"),
-            "region": "US", "estimated": True, "session": sess}
-           for s, (dt, sess) in found.items()]
+            "region": "US", "estimated": True, "session": sess, "source": source}
+           for s, (dt, sess, source) in found.items()]
     out.sort(key=lambda e: (e["date"], e.get("session") or "z"))
     return out
 
@@ -343,7 +343,7 @@ def build():
         "earnings_us": eus,
         "earnings_tw": etw,
         "us_data": us_data,
-        "note": "時間為台北時間。美股總經為內建官方排程(以官方公布為準);財報日多為預估、可能變動。美股實際數據來源 FRED。",
+        "note": "時間為台北時間。美股總經為內建官方排程(以官方公布為準);美股財報日期/盤前盤後來源 Nasdaq Earnings Calendar（部分無時段或改以 Yahoo Finance 備援），均可能變動。美股實際數據來源 FRED。",
     }
     os.makedirs(DATA_DIR, exist_ok=True)
     with io.open(os.path.join(DATA_DIR, "calendar.json"), "w", encoding="utf-8") as f:

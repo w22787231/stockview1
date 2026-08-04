@@ -1500,10 +1500,12 @@ function renderMacroTabBody(){
   if(MACRO_TAB==="williamsr"){
     body.innerHTML = '<div id="williamsRBlock"><div class="loading-screen">載入 Williams %R …</div></div>'+
       '<div id="sp500FwdPeWilliamsBlock"><div class="loading-screen">載入 S&amp;P 500 Forward P/E …</div></div>'+
-      '<div id="ndxForwardPeBlock"><div class="loading-screen">載入 NDX Forward P/E …</div></div>';
+      '<div id="ndxForwardPeBlock"><div class="loading-screen">載入 NDX Forward P/E …</div></div>'+
+      '<div id="soxxForwardPeBlock"><div class="loading-screen">載入 SOXX Forward P/E …</div></div>';
     loadWilliamsR();
     loadSp500FwdPeWilliams();
     loadNdxForwardPe();
+    loadSoxxForwardPe();
     return;
   }
 
@@ -7100,6 +7102,80 @@ async function loadNdxForwardPe(){
     renderNdxForwardPe(NDX_FORWARD_PE_DATA);
   }catch(e){
     box.innerHTML='<section style="margin-top:26px"><div class="sec-head"><h2>Nasdaq-100 Forward P/E × QQQ</h2></div><div class="legend">⚠️ ndx_forward_pe.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_ndx_forward_pe。</div></section>';
+  }
+}
+
+// ── SOXX Forward P/E × SOXX：即期資料每日累積，不回填非 point-in-time 的歷史估值 ──
+let SOXX_FORWARD_PE_DATA=null, SOXX_FORWARD_PE_WIN="max";
+const SOXX_FORWARD_PE_LABEL={"1y":"1年","3y":"3年","5y":"5年","max":"全部"};
+const SOXX_FORWARD_PE_MONTHS={"1y":12,"3y":36,"5y":60};
+
+function drawSoxxForwardPeChart(id, dates, pe, soxx){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const old=echarts.getInstanceByDom(el); if(old) old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s+"T00:00:00").getTime();
+  ch.setOption({
+    animation:false,
+    grid:{left:54,right:58,top:34,bottom:32},
+    legend:{top:0,textStyle:{fontSize:11},data:["SOXX 前瞻本益比","SOXX 收盤價"]},
+    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:2})},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,formatter:v=>{const d=new Date(v);return d.getMonth()===0?d.getFullYear()+"年":(d.getMonth()+1)+"月";}},splitLine:{show:false}},
+    yAxis:[
+      {type:"value",name:"Forward P/E (x)",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10,formatter:v=>v.toFixed(0)+"x"},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",name:"SOXX",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10,formatter:v=>"$"+v.toFixed(0)},splitLine:{show:false}}
+    ],
+    series:[
+      {name:"SOXX 前瞻本益比",type:"line",showSymbol:false,smooth:false,data:dates.map((d,i)=>[toMs(d),pe[i]]),lineStyle:{color:"#7c3aed",width:2},itemStyle:{color:"#7c3aed"},markLine:{symbol:"none",silent:true,lineStyle:{type:"dashed",color:"#64748b",opacity:.55},label:{fontSize:9},data:[{type:"average",name:"區間均值",label:{formatter:p=>"均值 "+Number(p.value).toFixed(1)+"x"}}]},areaStyle:{color:"rgba(124,58,237,.06)"}},
+      {name:"SOXX 收盤價",type:"line",yAxisIndex:1,showSymbol:false,smooth:true,data:dates.map((d,i)=>[toMs(d),soxx[i]]),lineStyle:{color:"#e8923a",width:1.6},itemStyle:{color:"#e8923a"}}
+    ]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro);
+}
+
+function renderSoxxForwardPe(d){
+  const box=$("#soxxForwardPeBlock"); if(!box) return;
+  const ser=d.series||{}, allD=ser.dates||[], allP=ser.forward_pe||[], allS=ser.soxx||[];
+  const wins=(d.windows||["1y","3y","5y","max"]).filter(w=>w==="max" || (SOXX_FORWARD_PE_MONTHS[w]||0)<allD.length);
+  const win=wins.includes(SOXX_FORWARD_PE_WIN)?SOXX_FORWARD_PE_WIN:(d.default_window||"max");
+  const n=win==="max"?allD.length:Math.min(SOXX_FORWARD_PE_MONTHS[win]||allD.length,allD.length);
+  const dates=allD.slice(-n), pe=allP.slice(-n), soxx=allS.slice(-n);
+  const valid=pe.filter(v=>v!=null), current=valid[valid.length-1];
+  const lo=valid.length?Math.min.apply(null,valid):null, hi=valid.length?Math.max.apply(null,valid):null;
+  const windowPct=current==null?null:100*valid.filter(v=>v<=current).length/valid.length;
+  const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:132px;margin-right:12px';
+  const buttons=wins.map(w=>'<button class="btn'+(w===win?' active':'')+'" data-spfw="'+w+'">'+(SOXX_FORWARD_PE_LABEL[w]||w)+'</button>').join('');
+  box.innerHTML='<section style="margin-top:26px">'+
+    '<div class="sec-head"><h2>SOXX Forward P/E × SOXX</h2><span class="tag">半導體估值位階</span><span class="hint">依 ETF 成分股權重彙整</span></div>'+
+    '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+      '<div style="'+card+'"><div class="cap-lab">SOXX 前瞻本益比</div><div class="cap-big" style="color:#7c3aed">'+(current!=null?current.toFixed(2)+'x':'—')+'</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">歷史區間（'+esc(SOXX_FORWARD_PE_LABEL[win]||win)+'）</div><div class="cap-big" style="font-size:17px">'+(valid.length?lo.toFixed(1)+'–'+hi.toFixed(1)+'x':'—')+'</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">百分位（'+esc(SOXX_FORWARD_PE_LABEL[win]||win)+'）</div><div class="cap-big" style="color:'+(windowPct>=75?'var(--red)':windowPct<=25?'var(--green)':'var(--ink)')+'">'+(windowPct!=null?windowPct.toFixed(0)+'%':'—')+'</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">SOXX 對齊收盤價</div><div class="cap-big" style="color:#e8923a">'+(soxx.length?'$'+Number(soxx[soxx.length-1]).toFixed(2):'—')+'</div></div>'+
+    '</div>'+
+    '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+buttons+'</div>'+
+    '<div id="soxxForwardPeChart" class="cap-chart" style="height:330px"></div>'+
+    '<div class="legend" style="margin-top:10px">資料來源:'+esc(d.source||'ETF Metrics／Yahoo Finance')+'。'+esc(d.history_method||'每日成功抓取後累積。')+' 歷史樣本自 '+esc(allD[0]||'')+' 起；百分位以所選期間內「低於或等於目前值」的觀測比例計算。資料日 '+esc(d.as_of||'')+'。</div>'+
+    '</section>';
+  if(dates.length>=2) drawSoxxForwardPeChart("soxxForwardPeChart",dates,pe,soxx);
+  else {const chart=$("#soxxForwardPeChart");if(chart) chart.innerHTML='<div class="legend" style="padding:12px 0">目前僅 '+dates.length+' 筆觀測；資料會隨每日成功更新累積後繪出完整走勢。</div>';}
+  box.querySelectorAll("[data-spfw]").forEach(b=>b.onclick=()=>{SOXX_FORWARD_PE_WIN=b.dataset.spfw;renderSoxxForwardPe(SOXX_FORWARD_PE_DATA);});
+}
+
+async function loadSoxxForwardPe(){
+  const box=$("#soxxForwardPeBlock"); if(!box) return;
+  if(SOXX_FORWARD_PE_DATA){renderSoxxForwardPe(SOXX_FORWARD_PE_DATA);return;}
+  box.innerHTML='<div class="dim" style="padding:8px">載入 SOXX Forward P/E …</div>';
+  try{
+    const res=await fetch("data/soxx_forward_pe.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    SOXX_FORWARD_PE_DATA=await res.json();
+    if(SOXX_FORWARD_PE_DATA.default_window) SOXX_FORWARD_PE_WIN=SOXX_FORWARD_PE_DATA.default_window;
+    renderSoxxForwardPe(SOXX_FORWARD_PE_DATA);
+  }catch(e){
+    box.innerHTML='<section style="margin-top:26px"><div class="sec-head"><h2>SOXX Forward P/E × SOXX</h2></div><div class="legend">⚠️ soxx_forward_pe.json 尚未產生（'+esc(e.message)+'）。</div></section>';
   }
 }
 

@@ -1499,8 +1499,10 @@ function renderMacroTabBody(){
 
   if(MACRO_TAB==="williamsr"){
     body.innerHTML = '<div id="williamsRBlock"><div class="loading-screen">載入 Williams %R …</div></div>'+
+      '<div id="sp500FwdPeWilliamsBlock"><div class="loading-screen">載入 S&amp;P 500 Forward P/E …</div></div>'+
       '<div id="ndxForwardPeBlock"><div class="loading-screen">載入 NDX Forward P/E …</div></div>';
     loadWilliamsR();
+    loadSp500FwdPeWilliams();
     loadNdxForwardPe();
     return;
   }
@@ -2955,7 +2957,6 @@ function renderSentiment(d){
     '<div id="twMarginRatioBlock"></div>'+
     '<div id="aiCapexBlock"></div>'+
     '<div id="ndxM2Block"></div>'+
-    sp500FwdPeBox(d.sp500_fwd_pe)+
     privateMarketsBox()+
     erpBox(d.equity_risk_premium)+
     safeHavenBox(d.safe_haven_demand)+
@@ -2964,7 +2965,6 @@ function renderSentiment(d){
     (d.failed&&d.failed.length?' 抓不到：'+d.failed.map(esc).join("、")+'。':'')+'</div>';
   if(MACRO_RESERVES) drawReserves(MACRO_RESERVES);
   if(MACRO_SOFR) drawSofrIorb(MACRO_SOFR);
-  if(d.sp500_fwd_pe) drawSp500FwdPe(d.sp500_fwd_pe);
   drawPrivateMarketsChart();
   if(d.equity_risk_premium) drawErp(d.equity_risk_premium);
   if(d.safe_haven_demand) drawSafeHaven(d.safe_haven_demand);
@@ -2992,6 +2992,31 @@ function sp500FwdPeBox(v){
       ' · <a href="https://www.macromicro.me/charts/148308/Information-Technology-Sector-Forward-PE-Ratio" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline">科技類股 Forward P/E ↗</a>'+
       ' <span style="color:var(--red);font-size:10px">（MacroMicro）</span></div>'+
     '</div>';
+}
+function renderSp500FwdPeWilliams(v){
+  const box=$("#sp500FwdPeWilliamsBlock");
+  if(!box) return;
+  if(!v || !v.pe || !v.pe.length){
+    box.innerHTML='<div class="legend" style="margin:18px 0">S&amp;P 500 Forward P/E 資料不足。</div>';
+    return;
+  }
+  box.innerHTML=sp500FwdPeBox(v);
+  drawSp500FwdPe(v);
+}
+async function loadSp500FwdPeWilliams(){
+  if(SENT_LAST && SENT_LAST.sp500_fwd_pe){
+    renderSp500FwdPeWilliams(SENT_LAST.sp500_fwd_pe);
+    return;
+  }
+  try{
+    const res=await fetch("data/sentiment.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const d=await res.json();
+    renderSp500FwdPeWilliams(d.sp500_fwd_pe);
+  }catch(e){
+    const box=$("#sp500FwdPeWilliamsBlock");
+    if(box) box.innerHTML='<div class="legend" style="margin:18px 0">⚠️ S&amp;P 500 Forward P/E 載入失敗（'+esc(e.message)+'）。</div>';
+  }
 }
 function drawSp500FwdPe(v){
   window._fwdpe=v;

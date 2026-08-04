@@ -1498,8 +1498,10 @@ function renderMacroTabBody(){
   }
 
   if(MACRO_TAB==="williamsr"){
-    body.innerHTML = '<div id="williamsRBlock"><div class="loading-screen">載入 Williams %R …</div></div>';
+    body.innerHTML = '<div id="williamsRBlock"><div class="loading-screen">載入 Williams %R …</div></div>'+
+      '<div id="ndxForwardPeBlock"><div class="loading-screen">載入 NDX Forward P/E …</div></div>';
     loadWilliamsR();
+    loadNdxForwardPe();
     return;
   }
 
@@ -6998,6 +7000,81 @@ async function loadWilliamsR(){
     if(box) box.innerHTML=
       '<section><div class="sec-head"><h2>S&amp;P 500 Williams %R</h2></div>'+
       '<div class="legend">⚠️ williams_r.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_williams_r。</div></section>';
+  }
+}
+
+// ── Nasdaq-100 Forward P/E × QQQ：長期估值位階 ──
+let NDX_FORWARD_PE_DATA=null;
+let NDX_FORWARD_PE_WIN="10y";
+const NDX_FORWARD_PE_LABEL={"1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
+const NDX_FORWARD_PE_MONTHS={"1y":12,"3y":36,"5y":60,"10y":120};
+
+function drawNdxForwardPeChart(id, dates, pe, qqq){
+  const el=$("#"+id);
+  if(!el || !window.echarts) return;
+  const old=echarts.getInstanceByDom(el); if(old) old.dispose();
+  const ch=echarts.init(el, null, {renderer:"canvas"});
+  const toMs=s=>new Date(s+"T00:00:00").getTime();
+  ch.setOption({
+    animation:false,
+    grid:{left:54,right:58,top:34,bottom:32},
+    legend:{top:0,textStyle:{fontSize:11},data:["NDX 前瞻本益比","QQQ 收盤價"]},
+    tooltip:{trigger:"axis",valueFormatter:v=>v==null?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:2})},
+    xAxis:{type:"time",axisLabel:{fontSize:9,hideOverlap:true,formatter:v=>{const d=new Date(v);return d.getMonth()===0?d.getFullYear()+"年":(d.getMonth()+1)+"月";}},splitLine:{show:false}},
+    yAxis:[
+      {type:"value",name:"Forward P/E (x)",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10,formatter:v=>v.toFixed(0)+"x"},splitLine:{lineStyle:{opacity:.3}}},
+      {type:"value",name:"QQQ",nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10,formatter:v=>"$"+v.toFixed(0)},splitLine:{show:false}}
+    ],
+    series:[
+      {name:"NDX 前瞻本益比",type:"line",showSymbol:false,smooth:false,data:dates.map((d,i)=>[toMs(d),pe[i]]),lineStyle:{color:"#2563eb",width:2},itemStyle:{color:"#2563eb"},markLine:{symbol:"none",silent:true,lineStyle:{type:"dashed",color:"#64748b",opacity:.55},label:{fontSize:9},data:[{type:"average",name:"區間均值",label:{formatter:p=>"均值 "+Number(p.value).toFixed(1)+"x"}}]},areaStyle:{color:"rgba(37,99,235,.06)"}},
+      {name:"QQQ 收盤價",type:"line",yAxisIndex:1,showSymbol:false,smooth:true,data:dates.map((d,i)=>[toMs(d),qqq[i]]),lineStyle:{color:"#e8923a",width:1.6},itemStyle:{color:"#e8923a"}}
+    ]
+  },true);
+  if(el._ro) window.removeEventListener("resize",el._ro);
+  el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro);
+}
+
+function renderNdxForwardPe(d){
+  const box=$("#ndxForwardPeBlock"); if(!box) return;
+  const ser=d.series||{}, allD=ser.dates||[], allP=ser.forward_pe||[], allQ=ser.qqq||[];
+  const wins=(d.windows||["1y","3y","5y","10y","max"]).filter(w=>w==="max" || (NDX_FORWARD_PE_MONTHS[w]||0)<allD.length);
+  const win=wins.includes(NDX_FORWARD_PE_WIN)?NDX_FORWARD_PE_WIN:(d.default_window||"max");
+  const n=win==="max"?allD.length:Math.min(NDX_FORWARD_PE_MONTHS[win]||allD.length,allD.length);
+  const dates=allD.slice(-n), pe=allP.slice(-n), qqq=allQ.slice(-n);
+  const valid=pe.filter(v=>v!=null), current=valid[valid.length-1];
+  const lo=Math.min.apply(null,valid), hi=Math.max.apply(null,valid);
+  const windowPct=current==null?null:100*valid.filter(v=>v<=current).length/valid.length;
+  const card='border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);display:inline-block;min-width:132px;margin-right:12px';
+  const buttons=wins.map(w=>'<button class="btn'+(w===win?' active':'')+'" data-npfw="'+w+'">'+(NDX_FORWARD_PE_LABEL[w]||w)+'</button>').join('');
+  box.innerHTML='<section style="margin-top:26px">'+
+    '<div class="sec-head"><h2>Nasdaq-100 Forward P/E × QQQ</h2><span class="tag">估值位階</span><span class="hint">12 個月前瞻本益比與 QQQ 收盤價（月頻對齊）</span></div>'+
+    '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+      '<div style="'+card+'"><div class="cap-lab">NDX 前瞻本益比</div><div class="cap-big" style="color:#2563eb">'+(current!=null?current.toFixed(2)+'x':'—')+'</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">歷史區間（'+esc(NDX_FORWARD_PE_LABEL[win]||win)+'）</div><div class="cap-big" style="font-size:17px">'+(valid.length?lo.toFixed(1)+'–'+hi.toFixed(1)+'x':'—')+'</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">百分位（'+esc(NDX_FORWARD_PE_LABEL[win]||win)+'）</div><div class="cap-big" style="color:'+(windowPct>=75?'var(--red)':windowPct<=25?'var(--green)':'var(--ink)')+'">'+(windowPct!=null?windowPct.toFixed(0)+'%':'—')+'</div></div>'+
+      '<div style="'+card+'"><div class="cap-lab">QQQ 對齊收盤價</div><div class="cap-big" style="color:#e8923a">'+(qqq.length?'$'+Number(qqq[qqq.length-1]).toFixed(2):'—')+'</div></div>'+
+    '</div>'+
+    '<div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+buttons+'</div>'+
+    '<div id="ndxForwardPeChart" class="cap-chart" style="height:330px"></div>'+
+    '<div class="legend" style="margin-top:10px">資料來源:'+esc(d.source||'History of Market／Yahoo Finance')+'。Forward P/E 為 Bloomberg BEst 市場對未來 12 個月盈餘的共識估值；百分位以所選期間內「低於或等於目前值」的觀測比例計算。資料日 '+esc(d.as_of||'')+'；估值偏高或偏低不代表短期必然反轉。</div>'+
+    '</section>';
+  if(dates.length>=2) drawNdxForwardPeChart("ndxForwardPeChart",dates,pe,qqq);
+  else {const chart=$("#ndxForwardPeChart");if(chart) chart.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';}
+  box.querySelectorAll("[data-npfw]").forEach(b=>b.onclick=()=>{NDX_FORWARD_PE_WIN=b.dataset.npfw;renderNdxForwardPe(NDX_FORWARD_PE_DATA);});
+}
+
+async function loadNdxForwardPe(){
+  const box=$("#ndxForwardPeBlock"); if(!box) return;
+  if(NDX_FORWARD_PE_DATA){renderNdxForwardPe(NDX_FORWARD_PE_DATA);return;}
+  box.innerHTML='<div class="dim" style="padding:8px">載入 NDX Forward P/E …</div>';
+  try{
+    const res=await fetch("data/ndx_forward_pe.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    NDX_FORWARD_PE_DATA=await res.json();
+    if(NDX_FORWARD_PE_DATA.default_window) NDX_FORWARD_PE_WIN=NDX_FORWARD_PE_DATA.default_window;
+    renderNdxForwardPe(NDX_FORWARD_PE_DATA);
+  }catch(e){
+    box.innerHTML='<section style="margin-top:26px"><div class="sec-head"><h2>Nasdaq-100 Forward P/E × QQQ</h2></div><div class="legend">⚠️ ndx_forward_pe.json 尚未產生（'+esc(e.message)+'）。請先在 GitHub Actions 執行 export_ndx_forward_pe。</div></section>';
   }
 }
 

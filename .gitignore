@@ -18,3 +18,6 @@ web/data/spec.json
 engine/._twmr_cache.json
 # Node(僅 CI 測試用 echarts devDependency;lockfile 要提交、node_modules 不提交)
 node_modules/
+
+# 隔離功能開發工作目錄
+.worktrees/

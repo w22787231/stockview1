@@ -1705,6 +1705,84 @@ function drawM1M2(m){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 
+// ── 每日市場判讀 ──
+function _dailyScoreItem(score, words){
+  const items=(score&&score.items)||[];
+  return items.find(it=>words.some(word=>String(it.name||'').includes(word)))||null;
+}
+function _dailyState(item){
+  if(!item || !isFinite(Number(item.score))) return 'unknown';
+  return Number(item.score)<=40 ? 'risk' : (Number(item.score)>=60 ? 'support' : 'neutral');
+}
+function _dailyModule(key,label,item,detail){
+  const available=!!item;
+  const state=_dailyState(item);
+  return {key,label,available,state,
+    status:available?(item.status||'中性'):'資料待補',
+    detail:available?(detail||('評分 '+item.score)):'此資料檔尚未提供可判讀數值'};
+}
+function _dailyIndex(macro,label){
+  return ((macro&&macro.indices)||[]).find(it=>it.label===label)||null;
+}
+function _dailyPct(v){
+  return isFinite(Number(v)) ? (Number(v)>0?'+':'')+Number(v).toFixed(2)+'%' : '—';
+}
+function _dailyThemeFlow(themeFlow){
+  const groups=(themeFlow&&themeFlow.groups)||[];
+  const ranked=groups.filter(g=>g&&g.avg&&isFinite(Number(g.avg.r1))).slice().sort((a,b)=>Number(b.avg.r1)-Number(a.avg.r1));
+  if(!ranked.length) return {available:false,state:'unknown',detail:'主題資金流資料待補',leading:null,trailing:null};
+  const leading=ranked[0], trailing=ranked[ranked.length-1];
+  const split=Number(leading.avg.r1)>0&&Number(trailing.avg.r1)<0;
+  const allUp=ranked.filter(g=>Number(g.avg.r1)>0).length/ranked.length>=0.65;
+  return {available:true,state:split?'rotation':(allUp?'support':'neutral'),
+    detail:'領漲 '+leading.theme+' '+_dailyPct(leading.avg.r1)+'；領跌 '+trailing.theme+' '+_dailyPct(trailing.avg.r1),leading,trailing};
+}
+function buildDailyRead(input){
+  input=input||{};
+  const score=input.score||{};
+  const tips=_dailyScoreItem(score,['TIPS 實質利率']);
+  const curve=_dailyScoreItem(score,['殖利率曲線']);
+  const hyg=_dailyScoreItem(score,['HYG 高收益債']);
+  const fsi=_dailyScoreItem(score,['金融壓力指數 FSI']);
+  const vix=_dailyScoreItem(score,['VIX 波動率']);
+  const skew=_dailyScoreItem(score,['SKEW 尾部風險']);
+  const breadth=_dailyScoreItem(score,['市場廣度']);
+  const dxy=_dailyIndex(input.macro,'美元指數');
+  const gold=_dailyIndex(input.macro,'黃金');
+  const flow=_dailyThemeFlow(input.themeFlow);
+  const dollarGold={key:'dollar-gold',label:'美元與黃金',available:!!(dxy&&gold),state:'unknown',status:'資料待補',detail:'美元或黃金資料待補'};
+  if(dollarGold.available){
+    const dxyUp=Number(dxy.chg)>0.25, goldUp=Number(gold.chg)>0;
+    dollarGold.state=dxyUp&&goldUp?'risk':(Number(dxy.chg)<-0.25&&Number(gold.chg)<=0?'support':'neutral');
+    dollarGold.status=dxyUp&&goldUp?'避險確認':(dollarGold.state==='support'?'美元轉弱':'方向未確認');
+    dollarGold.detail='DXY '+_dailyPct(dxy.chg)+'；黃金 '+_dailyPct(gold.chg);
+  }
+  const creditItems=[hyg,fsi].filter(Boolean), sentimentItems=[vix,skew].filter(Boolean);
+  const creditState=creditItems.some(it=>_dailyState(it)==='risk')?'risk':(creditItems.some(it=>_dailyState(it)==='support')?'support':'neutral');
+  const sentimentState=sentimentItems.some(it=>_dailyState(it)==='risk')?'risk':(sentimentItems.some(it=>_dailyState(it)==='support')?'support':'neutral');
+  const internalsAvailable=!!breadth||flow.available;
+  const internalsState=_dailyState(breadth)==='risk'?'risk':(flow.state==='rotation'?'rotation':(_dailyState(breadth)==='support'||flow.state==='support'?'support':'neutral'));
+  const modules=[
+    _dailyModule('real-rate','實質利率',tips),
+    _dailyModule('yield-curve','利率曲線',curve),
+    dollarGold,
+    {key:'credit-liquidity',label:'信用與流動性',available:creditItems.length>0,state:creditItems.length?creditState:'unknown',status:creditItems.length?(creditState==='risk'?'信用／壓力示警':creditState==='support'?'信用穩定':'信用中性'):'資料待補',detail:creditItems.length?creditItems.map(it=>it.name+'：'+it.status).join('；'):'HYG／FSI 資料待補'},
+    {key:'sentiment',label:'市場情緒',available:sentimentItems.length>0,state:sentimentItems.length?sentimentState:'unknown',status:sentimentItems.length?(sentimentState==='risk'?'波動／尾部風險升高':sentimentState==='support'?'情緒平穩':'情緒中性'):'資料待補',detail:sentimentItems.length?sentimentItems.map(it=>it.name+'：'+it.status).join('；'):'VIX／SKEW 資料待補'},
+    {key:'internals-flow',label:'股票內部與資金輪動',available:internalsAvailable,state:internalsAvailable?internalsState:'unknown',status:!internalsAvailable?'資料待補':internalsState==='risk'?'廣度轉弱':internalsState==='rotation'?'板塊分化':'內部尚可',detail:(breadth?(breadth.status+'；'):'')+flow.detail},
+  ];
+  const available=modules.filter(m=>m.available);
+  const risk=available.filter(m=>m.state==='risk').length;
+  const support=available.filter(m=>m.state==='support').length;
+  const internals=modules.find(m=>m.key==='internals-flow');
+  const theme=risk>=2?'風險撤退':(support>=3?'風險偏好擴散':(internals&&internals.state==='rotation'?'板塊輪動':'訊號分歧'));
+  const supported=theme==='風險撤退'?risk:(theme==='風險偏好擴散'?support:(theme==='板塊輪動'?1:Math.max(risk,support)));
+  const level=available.length>=5&&supported>=3?'高':(available.length>=3?'中':'低');
+  const actors={leading:flow.leading?flow.leading.theme+' '+_dailyPct(flow.leading.avg.r1):'資料待補',trailing:flow.trailing?flow.trailing.theme+' '+_dailyPct(flow.trailing.avg.r1):'資料待補',macro:tips?(tips.name+'：'+tips.status):'實質利率資料待補'};
+  const falsifiers=theme==='風險撤退'?['HYG 停跌且金融壓力回落','50MA 廣度重回 50% 以上']:theme==='風險偏好擴散'?['HYG 轉弱且 VIX 明顯升溫','50MA 廣度跌破 50%']:theme==='板塊輪動'?['領跌主題擴大為多數產業同步下跌','信用壓力升高且廣度同步轉弱']:['等待信用、情緒與股票內部出現至少兩項同向確認'];
+  const summary=theme==='風險撤退'?'信用、情緒與股票內部至少兩項同步示警，優先控管風險。':theme==='風險偏好擴散'?'多個模組同時支持風險偏好，市場漲勢較具擴散性。':theme==='板塊輪動'?'股票內部尚未全面轉弱，但資金集中在少數主題，屬輪動而非全面進攻。':'關鍵訊號尚未形成多數，維持中性並等待確認。';
+  return {theme,confidence:{supported,available:available.length,level},summary,actors,falsifiers,modules};
+}
+
 // ── 宏觀評分總攬:總體市場各圖各自打 0–100 分(對股市多空) ──
 let MACRO_SCORE_DATA=null;
 function _scoreColor(s){ return s>=60?'#16a34a':(s>=40?'#94a3b8':(s>=20?'#f59e0b':'#e11d48')); }

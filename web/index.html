@@ -1468,6 +1468,7 @@ function renderMacro(d){
   $("#content").innerHTML =
     '<nav class="macro-tabs">'+
       '<button class="ntab'+(MACRO_TAB==="overview"?" on":"")+'" data-mtab="overview">總覽</button>'+
+      '<button class="ntab'+(MACRO_TAB==="dailyread"?" on":"")+'" data-mtab="dailyread">每日判讀</button>'+
       '<button class="ntab'+(MACRO_TAB==="divergence"?" on":"")+'" data-mtab="divergence">個股二階導</button>'+
       '<button class="ntab'+(MACRO_TAB==="williamsr"?" on":"")+'" data-mtab="williamsr">Williams %R</button>'+
     '</nav>'+
@@ -1484,6 +1485,12 @@ function renderMacroTabBody(){
   const d = MACRO_DATA;
   const body = document.getElementById("macroTabBody");
   if(!body || !d) return;
+
+  if(MACRO_TAB==="dailyread"){
+    body.innerHTML='<div id="dailyReadBlock"><div class="loading-screen">載入每日判讀 …</div></div>';
+    loadDailyRead();
+    return;
+  }
 
   if(MACRO_TAB==="divergence"){
     body.innerHTML =
@@ -1781,6 +1788,21 @@ function buildDailyRead(input){
   const falsifiers=theme==='風險撤退'?['HYG 停跌且金融壓力回落','50MA 廣度重回 50% 以上']:theme==='風險偏好擴散'?['HYG 轉弱且 VIX 明顯升溫','50MA 廣度跌破 50%']:theme==='板塊輪動'?['領跌主題擴大為多數產業同步下跌','信用壓力升高且廣度同步轉弱']:['等待信用、情緒與股票內部出現至少兩項同向確認'];
   const summary=theme==='風險撤退'?'信用、情緒與股票內部至少兩項同步示警，優先控管風險。':theme==='風險偏好擴散'?'多個模組同時支持風險偏好，市場漲勢較具擴散性。':theme==='板塊輪動'?'股票內部尚未全面轉弱，但資金集中在少數主題，屬輪動而非全面進攻。':'關鍵訊號尚未形成多數，維持中性並等待確認。';
   return {theme,confidence:{supported,available:available.length,level},summary,actors,falsifiers,modules};
+}
+async function loadDailyRead(){
+  const box=$("#dailyReadBlock"); if(!box) return;
+  const names=['macro','sentiment','macro_score','us_theme_flow'];
+  try{
+    const results=await Promise.allSettled(names.map(name=>fetch('data/'+name+'.json?t='+Date.now(),{cache:'no-store'}).then(res=>{
+      if(!res.ok) throw new Error(name+' '+res.status);
+      return res.json();
+    })));
+    const loaded={};
+    names.forEach((name,i)=>{ loaded[name]=results[i].status==='fulfilled'?results[i].value:null; });
+    renderDailyRead(buildDailyRead({macro:loaded.macro,sentiment:loaded.sentiment,score:loaded.macro_score,themeFlow:loaded.us_theme_flow}));
+  }catch(e){
+    box.innerHTML='<section><div class="sec-head"><h2>每日判讀</h2></div><div class="legend">⚠️ 每日判讀載入失敗：'+esc(e.message)+'</div></section>';
+  }
 }
 
 // ── 宏觀評分總攬:總體市場各圖各自打 0–100 分(對股市多空) ──

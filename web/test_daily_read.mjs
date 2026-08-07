@@ -65,3 +65,7 @@ assert.equal(empty.modules.filter(m => !m.available).length, 6, "缺資料時不
 assert.equal(empty.confidence.available, 0, "缺資料不得計入確信度");
 
 console.log("✅ test_daily_read 通過：分類、推翻訊號、六項固定列與缺資料容錯");
+
+assert.ok(html.includes('data-mtab="dailyread"'), "缺每日判讀分頁按鈕");
+assert.ok(html.includes('id="dailyReadBlock"'), "缺每日判讀容器");
+assert.ok(html.includes('Promise.allSettled'), "每日判讀應容忍個別資料檔失敗");

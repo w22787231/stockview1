@@ -11,7 +11,9 @@ assert.ok(start >= 0, "缺每日市場判讀的純函式區塊");
 assert.ok(end > start, "每日市場判讀區塊必須位於宏觀評分前");
 
 const source = html.slice(start, end);
-const api = new Function(source + "\nreturn { buildDailyRead };")();
+let boxHtml = "";
+const box = { set innerHTML(value){ boxHtml=value; }, get innerHTML(){ return boxHtml; } };
+const api = new Function("const $ = () => BOX; const esc = value => String(value == null ? '' : value); const BOX = arguments[0];\n" + source + "\nreturn { buildDailyRead, renderDailyRead };")(box);
 
 const riskInputs = {
   score: { items: [
@@ -69,3 +71,8 @@ console.log("✅ test_daily_read 通過：分類、推翻訊號、六項固定�
 assert.ok(html.includes('data-mtab="dailyread"'), "缺每日判讀分頁按鈕");
 assert.ok(html.includes('id="dailyReadBlock"'), "缺每日判讀容器");
 assert.ok(html.includes('Promise.allSettled'), "每日判讀應容忍個別資料檔失敗");
+
+api.renderDailyRead(rotation);
+assert.ok(boxHtml.includes("市場主題"), "缺市場主題列");
+assert.ok(boxHtml.includes("推翻訊號"), "缺推翻訊號");
+assert.equal((boxHtml.match(/data-daily-module=/g)||[]).length, 6, "應固定渲染六項檢查表");

@@ -114,6 +114,30 @@
   .macro-tabs .ntab{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 14px;font-size:13.5px;font-weight:650;cursor:pointer;color:var(--ink)}
   .macro-tabs .ntab:hover{background:#f3f6fb}
   .macro-tabs .ntab.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+  .daily-read{display:flex;flex-direction:column;gap:14px}
+  .daily-read-hero{border:1px solid var(--line);border-radius:12px;padding:15px 17px;background:var(--panel);box-shadow:var(--shadow)}
+  .daily-read-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .daily-read-title{font-size:20px;font-weight:800;letter-spacing:-.3px}
+  .daily-read-light{border-radius:999px;padding:3px 9px;font-size:12px;font-weight:750}
+  .daily-read-light.risk{background:#fff0f1;color:var(--red)}
+  .daily-read-light.support{background:#edf9f0;color:var(--green)}
+  .daily-read-light.rotation{background:#fff7e7;color:#b7791f}
+  .daily-read-light.neutral{background:#f0f3f7;color:var(--ink2)}
+  .daily-read-summary{font-size:14px;line-height:1.65;color:var(--ink);margin:9px 0 0}
+  .daily-read-meta{font-size:12px;color:var(--ink2);margin-top:7px}
+  .daily-read-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .daily-read-info-box{border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:var(--panel)}
+  .daily-read-info-box h3{font-size:12px;color:var(--ink2);margin:0 0 6px}
+  .daily-read-info-box p{font-size:13px;line-height:1.55;margin:0;color:var(--ink)}
+  .daily-read-info-box ul{margin:0;padding-left:18px;font-size:13px;line-height:1.65;color:var(--ink)}
+  .daily-read-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .daily-read-module{border:1px solid var(--line);border-left:4px solid var(--ink3);border-radius:10px;padding:11px 13px;background:var(--panel)}
+  .daily-read-module.risk{border-left-color:var(--red)} .daily-read-module.support{border-left-color:var(--green)}
+  .daily-read-module.rotation{border-left-color:#d99618} .daily-read-module.unknown{opacity:.68}
+  .daily-read-module-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .daily-read-module-label{font-size:14px;font-weight:780}.daily-read-module-status{font-size:12px;font-weight:700;color:var(--ink2);text-align:right}
+  .daily-read-module-detail{font-size:12px;line-height:1.55;color:var(--ink2);margin-top:5px}
+  @media(max-width:680px){.macro-tabs{overflow-x:auto;padding-bottom:2px}.macro-tabs .ntab{white-space:nowrap}.daily-read-info,.daily-read-grid{grid-template-columns:1fr}.daily-read-title{font-size:18px}}
   .news-list{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden}
   .news-row{display:block;background:var(--panel);padding:10px 14px;text-decoration:none;color:inherit;transition:background .12s}
   .news-row:hover{background:#f3f6fb}
@@ -1803,6 +1827,36 @@ async function loadDailyRead(){
   }catch(e){
     box.innerHTML='<section><div class="sec-head"><h2>每日判讀</h2></div><div class="legend">⚠️ 每日判讀載入失敗：'+esc(e.message)+'</div></section>';
   }
+}
+function _dailyThemeClass(theme){
+  return theme==='風險撤退'?'risk':(theme==='風險偏好擴散'?'support':(theme==='板塊輪動'?'rotation':'neutral'));
+}
+function renderDailyRead(vm){
+  const box=$("#dailyReadBlock"); if(!box || !vm) return;
+  const tone=_dailyThemeClass(vm.theme);
+  const confidence=(vm.confidence&&vm.confidence.available)?(vm.confidence.supported+'/'+vm.confidence.available+' · '+vm.confidence.level+'確信度'):'資料待補';
+  const actors=vm.actors||{};
+  const falsifiers=(vm.falsifiers||[]).map(v=>'<li>'+esc(v)+'</li>').join('');
+  const modules=(vm.modules||[]).map(m=>
+    '<article class="daily-read-module '+esc(m.state||'unknown')+'" data-daily-module="'+esc(m.key)+'">'+
+      '<div class="daily-read-module-top"><span class="daily-read-module-label">'+esc(m.label)+'</span><span class="daily-read-module-status">'+esc(m.status)+'</span></div>'+
+      '<div class="daily-read-module-detail">'+esc(m.detail)+'</div>'+
+    '</article>'
+  ).join('');
+  box.innerHTML=
+    '<section class="daily-read">'+
+      '<div class="daily-read-hero">'+
+        '<div class="daily-read-top"><div class="daily-read-title">市場主題：'+esc(vm.theme)+'</div><span class="daily-read-light '+tone+'">'+esc(confidence)+'</span></div>'+
+        '<p class="daily-read-summary">'+esc(vm.summary)+'</p>'+
+        '<div class="daily-read-meta">此頁以已發布快照自動彙整；確信度＝支持此主題的模組數／有效模組數。</div>'+
+      '</div>'+
+      '<div class="daily-read-info">'+
+        '<div class="daily-read-info-box"><h3>今日主角</h3><p>領漲：'+esc(actors.leading||'資料待補')+'<br>領跌：'+esc(actors.trailing||'資料待補')+'<br>宏觀：'+esc(actors.macro||'資料待補')+'</p></div>'+
+        '<div class="daily-read-info-box"><h3>推翻訊號</h3><ul>'+falsifiers+'</ul></div>'+
+      '</div>'+
+      '<section><div class="sec-head"><h2>六項市場檢查表</h2><span class="tag">結論的可追溯證據</span></div><div class="daily-read-grid">'+modules+'</div></section>'+
+      '<div class="legend">口徑：資料包含日、週、月頻率；本頁僅供盤後市場結構判讀，非即時交易訊號。資料缺失的列不會納入確信度。</div>'+
+    '</section>';
 }
 
 // ── 宏觀評分總攬:總體市場各圖各自打 0–100 分(對股市多空) ──

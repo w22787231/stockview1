@@ -46,4 +46,15 @@ eq(D.judgment([100] * 20 + [85], "move")["score"], 2,
 eq(D.judgment([0, 0, 0, 0, 0, -1.0], "relative")["score"], -2,
    "五日相對 SPY 報酬達負一百分點應為內部轉弱")
 
+# Exporter 的量化判讀只允許 -2..+2；資料不足則明確保留 None。
+for kind, values in [
+    ("tips", []),
+    ("tips", [2.0, 2.25, 2.40, 2.55, 2.70, 2.95]),
+    ("relative", [0, 0, 0, 0, 0, 1.0]),
+    ("vix", [100] * 20 + [125]),
+    ("move", [100] * 20 + [85]),
+]:
+    score = D.judgment(values, kind)["score"]
+    assert score is None or -2 <= score <= 2, "judgment score 超出 -2..+2：%r" % score
+
 print("✅ test_daily_checklist 通過：交易日差、相對強弱、bps 與比值口徑")

@@ -1820,7 +1820,7 @@ function buildDailyRead(input){
   const level=available.length>=5&&supported>=3?'高':(available.length>=3?'中':'低');
   const actors={leading:flow.leading?flow.leading.theme+' '+_dailyPct(flow.leading.avg.r1):'資料待補',trailing:flow.trailing?flow.trailing.theme+' '+_dailyPct(flow.trailing.avg.r1):'資料待補',macro:tips?(tips.name+'：'+tips.status):'實質利率資料待補'};
   const quantifiedRows=((input.checklist&&input.checklist.groups)||[]).flatMap(group=>(group.rows||[]).filter(row=>row&&row.available&&row.score!=null));
-  const evidence=quantifiedRows.slice().sort((a,b)=>Math.abs(Number(b.score))-Math.abs(Number(a.score))).slice(0,3);
+  const evidence=quantifiedRows.map((row,index)=>({row,index})).sort((a,b)=>Math.abs(Number(b.row.score))-Math.abs(Number(a.row.score))||a.index-b.index).slice(0,3).map(item=>item.row);
   const falsifiers=theme==='風險撤退'?['HYG 停跌且金融壓力回落','50MA 廣度重回 50% 以上']:theme==='風險偏好擴散'?['HYG 轉弱且 VIX 明顯升溫','50MA 廣度跌破 50%']:theme==='板塊輪動'?['領跌主題擴大為多數產業同步下跌','信用壓力升高且廣度同步轉弱']:['等待信用、情緒與股票內部出現至少兩項同向確認'];
   const summary=theme==='風險撤退'?'信用、情緒與股票內部至少兩項同步示警，優先控管風險。':theme==='風險偏好擴散'?'多個模組同時支持風險偏好，市場漲勢較具擴散性。':theme==='板塊輪動'?'股票內部尚未全面轉弱，但資金集中在少數主題，屬輪動而非全面進攻。':'關鍵訊號尚未形成多數，維持中性並等待確認。';
   return {theme,confidence:{supported,available:available.length,level},summary,actors,falsifiers,modules,evidence,evidenceTotal:quantifiedRows.length,checklist:input.checklist||null};
@@ -1885,7 +1885,7 @@ function renderDailyRead(vm){
   const tone=_dailyThemeClass(vm.theme);
   const confidence=vm.evidenceTotal?'旁證 '+(vm.evidence||[]).length+'/'+vm.evidenceTotal:'資料待補';
   const actors=vm.actors||{};
-  const evidence=(vm.evidence||[]).map(row=>esc(row.label)+'：'+esc(row.signal||row.note||'資料待補')).join('<br>');
+  const evidence=(vm.evidence||[]).map(row=>esc(row.label)+'：'+esc(row.signal||row.note||'資料待補')+'（'+esc(_dailyValue(row.changes&&row.changes.today,row.change_unit||row.unit))+'）').join('<br>');
   const falsifiers=(vm.falsifiers||[]).map(v=>'<li>'+esc(v)+'</li>').join('');
   const modules=(vm.modules||[]).map(m=>
     '<article class="daily-read-module '+esc(m.state||'unknown')+'" data-daily-module="'+esc(m.key)+'">'+

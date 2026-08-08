@@ -71,6 +71,11 @@ console.log("✅ test_daily_read 通過：分類、推翻訊號、六項固定�
 assert.ok(html.includes('data-mtab="dailyread"'), "缺每日判讀分頁按鈕");
 assert.ok(html.includes('id="dailyReadBlock"'), "缺每日判讀容器");
 assert.ok(html.includes('Promise.allSettled'), "每日判讀應容忍個別資料檔失敗");
+assert.ok(html.includes("'daily_checklist'"), "每日判讀應載入 daily_checklist.json");
+assert.ok(html.includes('daily-checklist-table'), "每日判讀應渲染可掃讀的資料表");
+assert.ok(html.includes('daily-chart-rates'), "每日判讀應有利率結構圖容器");
+assert.ok(html.includes('daily-chart-risk'), "每日判讀應有波動與信用壓力圖容器");
+assert.ok(html.includes('daily-chart-internals'), "每日判讀應有股票內部圖容器");
 
 api.renderDailyRead(rotation);
 assert.ok(boxHtml.includes("市場主題"), "缺市場主題列");

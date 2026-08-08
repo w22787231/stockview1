@@ -137,7 +137,17 @@
   .daily-read-module-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
   .daily-read-module-label{font-size:14px;font-weight:780}.daily-read-module-status{font-size:12px;font-weight:700;color:var(--ink2);text-align:right}
   .daily-read-module-detail{font-size:12px;line-height:1.55;color:var(--ink2);margin-top:5px}
-  @media(max-width:680px){.macro-tabs{overflow-x:auto;padding-bottom:2px}.macro-tabs .ntab{white-space:nowrap}.daily-read-info,.daily-read-grid{grid-template-columns:1fr}.daily-read-title{font-size:18px}}
+  .daily-checklist-wrap{border:1px solid var(--line);border-radius:11px;overflow:auto;background:var(--panel)}
+  .daily-checklist-table{width:100%;border-collapse:collapse;min-width:860px;font-size:12px}
+  .daily-checklist-table th{position:sticky;top:0;background:#f5f8fc;color:var(--ink2);font-weight:750;text-align:right;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .daily-checklist-table th:first-child,.daily-checklist-table th:nth-child(2),.daily-checklist-table td:first-child,.daily-checklist-table td:nth-child(2){text-align:left}
+  .daily-checklist-table td{padding:8px 10px;border-bottom:1px solid #edf0f4;text-align:right;white-space:nowrap;color:var(--ink2)}
+  .daily-checklist-table tr:last-child td{border-bottom:0}.daily-checklist-table .daily-group td{background:#f7f9fc;color:var(--ink);font-weight:800;text-align:left;padding:7px 10px}
+  .daily-checklist-table .up{color:var(--green);font-weight:700}.daily-checklist-table .down{color:var(--red);font-weight:700}.daily-checklist-table .daily-variable{font-weight:750;color:var(--ink)}
+  .daily-chart-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.daily-chart-card{min-width:0;border:1px solid var(--line);border-radius:11px;padding:10px;background:var(--panel)}
+  .daily-chart-title{font-size:13px;font-weight:780;color:var(--ink);margin:0 0 6px}.daily-chart{height:240px;width:100%}
+  @media(max-width:980px){.daily-chart-grid{grid-template-columns:1fr}.daily-chart{height:225px}}
+  @media(max-width:680px){.macro-tabs{overflow-x:auto;padding-bottom:2px}.macro-tabs .ntab{white-space:nowrap}.daily-read-info,.daily-read-grid{grid-template-columns:1fr}.daily-read-title{font-size:18px}.daily-checklist-table{font-size:11px}.daily-chart-card{padding:9px}}
   .news-list{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden}
   .news-row{display:block;background:var(--panel);padding:10px 14px;text-decoration:none;color:inherit;transition:background .12s}
   .news-row:hover{background:#f3f6fb}
@@ -1811,11 +1821,11 @@ function buildDailyRead(input){
   const actors={leading:flow.leading?flow.leading.theme+' '+_dailyPct(flow.leading.avg.r1):'資料待補',trailing:flow.trailing?flow.trailing.theme+' '+_dailyPct(flow.trailing.avg.r1):'資料待補',macro:tips?(tips.name+'：'+tips.status):'實質利率資料待補'};
   const falsifiers=theme==='風險撤退'?['HYG 停跌且金融壓力回落','50MA 廣度重回 50% 以上']:theme==='風險偏好擴散'?['HYG 轉弱且 VIX 明顯升溫','50MA 廣度跌破 50%']:theme==='板塊輪動'?['領跌主題擴大為多數產業同步下跌','信用壓力升高且廣度同步轉弱']:['等待信用、情緒與股票內部出現至少兩項同向確認'];
   const summary=theme==='風險撤退'?'信用、情緒與股票內部至少兩項同步示警，優先控管風險。':theme==='風險偏好擴散'?'多個模組同時支持風險偏好，市場漲勢較具擴散性。':theme==='板塊輪動'?'股票內部尚未全面轉弱，但資金集中在少數主題，屬輪動而非全面進攻。':'關鍵訊號尚未形成多數，維持中性並等待確認。';
-  return {theme,confidence:{supported,available:available.length,level},summary,actors,falsifiers,modules};
+  return {theme,confidence:{supported,available:available.length,level},summary,actors,falsifiers,modules,checklist:input.checklist||null};
 }
 async function loadDailyRead(){
   const box=$("#dailyReadBlock"); if(!box) return;
-  const names=['macro','sentiment','macro_score','us_theme_flow'];
+  const names=['macro','sentiment','macro_score','us_theme_flow','daily_checklist'];
   try{
     const results=await Promise.allSettled(names.map(name=>fetch('data/'+name+'.json?t='+Date.now(),{cache:'no-store'}).then(res=>{
       if(!res.ok) throw new Error(name+' '+res.status);
@@ -1823,13 +1833,47 @@ async function loadDailyRead(){
     })));
     const loaded={};
     names.forEach((name,i)=>{ loaded[name]=results[i].status==='fulfilled'?results[i].value:null; });
-    renderDailyRead(buildDailyRead({macro:loaded.macro,sentiment:loaded.sentiment,score:loaded.macro_score,themeFlow:loaded.us_theme_flow}));
+    renderDailyRead(buildDailyRead({macro:loaded.macro,sentiment:loaded.sentiment,score:loaded.macro_score,themeFlow:loaded.us_theme_flow,checklist:loaded.daily_checklist}));
   }catch(e){
     box.innerHTML='<section><div class="sec-head"><h2>每日判讀</h2></div><div class="legend">⚠️ 每日判讀載入失敗：'+esc(e.message)+'</div></section>';
   }
 }
 function _dailyThemeClass(theme){
   return theme==='風險撤退'?'risk':(theme==='風險偏好擴散'?'support':(theme==='板塊輪動'?'rotation':'neutral'));
+}
+function _dailyValue(value,unit){
+  if(value==null || !Number.isFinite(Number(value))) return '資料待補';
+  const n=Number(value), sign=n>0?'+':'';
+  return unit==='bps'?sign+n.toFixed(1)+'bp':sign+n.toFixed(2)+(unit||'');
+}
+function _dailyCurrent(row){
+  return !row || row.last==null ? '資料待補' : Number(row.last).toFixed(2)+(row.unit||'');
+}
+function _dailyChecklistTable(data){
+  const groups=(data&&data.groups)||[];
+  if(!groups.length) return '<div class="legend">詳細檢查資料尚未產生；六項市場判讀仍會使用既有資料快照。</div>';
+  const body=groups.map(g=>'<tr class="daily-group"><td colspan="8">'+esc(g.title)+'</td></tr>'+(g.rows||[]).map(row=>{
+    const c=row.changes||{}, unit=row.change_unit||row.unit;
+    const cls=v=>v==null?'':(Number(v)>0?'up':(Number(v)<0?'down':''));
+    return '<tr><td class="daily-variable">'+esc(row.label)+'</td><td>'+esc(_dailyCurrent(row))+'<br><small>'+esc(row.as_of||'—')+'</small></td>'+['today','d1','d5','d20'].map(key=>'<td class="'+cls(c[key])+'">'+esc(_dailyValue(c[key],unit))+'</td>').join('')+'<td>'+esc(row.available?'可用':'資料待補')+'</td><td><small>'+esc(row.source||'')+'</small></td></tr>';
+  }).join('')).join('');
+  return '<div class="daily-checklist-wrap"><table class="daily-checklist-table"><thead><tr><th>變數</th><th>現值・資料日</th><th>今日</th><th>1D</th><th>5D</th><th>20D</th><th>狀態</th><th>資料來源</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+function renderDailyChart(id,block,indexed){
+  const el=$('#'+id); if(!el || !window.echarts || !block || !block.series) return;
+  const old=echarts.getInstanceByDom(el); if(old) old.dispose();
+  const colors=['#2563eb','#dc2626','#059669','#9333ea','#d97706'];
+  const list=Object.entries(block.series).filter(([,s])=>s&&s.dates&&s.values&&s.values.length);
+  if(!list.length){el.innerHTML='<div class="legend">資料待補</div>';return;}
+  const series=list.map(([name,s],i)=>{const base=indexed?s.values.find(v=>v!=null&&v!==0):null;return {name,type:'line',showSymbol:false,lineStyle:{width:1.7},itemStyle:{color:colors[i%colors.length]},data:s.dates.map((d,j)=>[new Date(d+'T00:00:00').getTime(),s.values[j]==null?null:(base?Number(s.values[j])/base*100:Number(s.values[j]))])};});
+  const ch=echarts.init(el,null,{renderer:'canvas'});
+  ch.setOption({animation:false,color:colors,grid:{left:45,right:12,top:28,bottom:28},legend:{top:0,textStyle:{fontSize:10},itemWidth:14,itemHeight:7},tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':Number(v).toFixed(2)},xAxis:{type:'time',axisLabel:{fontSize:9}},yAxis:{type:'value',scale:true,axisLabel:{fontSize:9,formatter:v=>Number(v).toFixed(1)}},series});
+}
+function renderDailyCharts(data){
+  if(!data || !data.charts) return;
+  renderDailyChart('daily-chart-rates',data.charts.rates,false);
+  renderDailyChart('daily-chart-risk',data.charts.risk,false);
+  renderDailyChart('daily-chart-internals',data.charts.internals,true);
 }
 function renderDailyRead(vm){
   const box=$("#dailyReadBlock"); if(!box || !vm) return;
@@ -1855,8 +1899,15 @@ function renderDailyRead(vm){
         '<div class="daily-read-info-box"><h3>推翻訊號</h3><ul>'+falsifiers+'</ul></div>'+
       '</div>'+
       '<section><div class="sec-head"><h2>六項市場檢查表</h2><span class="tag">結論的可追溯證據</span></div><div class="daily-read-grid">'+modules+'</div></section>'+
+      '<section><div class="sec-head"><h2>每日資料檢查表</h2><span class="tag">變化以已發布交易日計算</span></div>'+_dailyChecklistTable(vm.checklist)+'</section>'+
+      '<section><div class="sec-head"><h2>結構圖表</h2><span class="tag">約兩年交易日</span></div><div class="daily-chart-grid">'+
+        '<article class="daily-chart-card"><h3 class="daily-chart-title">利率結構</h3><div id="daily-chart-rates" class="daily-chart"></div></article>'+
+        '<article class="daily-chart-card"><h3 class="daily-chart-title">波動與信用壓力</h3><div id="daily-chart-risk" class="daily-chart"></div></article>'+
+        '<article class="daily-chart-card"><h3 class="daily-chart-title">股票內部（起點＝100）</h3><div id="daily-chart-internals" class="daily-chart"></div></article>'+
+      '</div></section>'+
       '<div class="legend">口徑：資料包含日、週、月頻率；本頁僅供盤後市場結構判讀，非即時交易訊號。資料缺失的列不會納入確信度。</div>'+
     '</section>';
+  if(vm.checklist && typeof window!=='undefined' && window.echarts) setTimeout(()=>renderDailyCharts(vm.checklist),0);
 }
 
 // ── 宏觀評分總攬:總體市場各圖各自打 0–100 分(對股市多空) ──

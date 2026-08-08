@@ -51,6 +51,11 @@ const rotationInputs = {
     { theme: "能源", avg: { r1: 1.9, r5: 4.2, r20: 8.1 } },
     { theme: "AI雲端", avg: { r1: -1.7, r5: -3.4, r20: -7.5 } },
   ]},
+  checklist: { groups: [
+    { title: "估值壓力", rows: [
+      { label: "10年 TIPS 實質利率", available: true, last: 2.1, unit: "%", changes: { today: 0.1 }, level: "高 98%", signal: "↑ 加速", note: "高位再升，壓制估值", score: -2, source: "FRED" },
+    ]},
+  ]},
 };
 
 const risk = api.buildDailyRead(riskInputs);
@@ -61,6 +66,8 @@ const rotation = api.buildDailyRead(rotationInputs);
 assert.equal(rotation.theme, "板塊輪動", "內部健康但產業漲跌分化應判為板塊輪動");
 assert.equal(rotation.modules.length, 6, "檢查表必須固定六項");
 assert.ok(rotation.confidence.available >= 5, "有資料的模組必須納入確信度分母");
+assert.equal(rotation.evidence.length, 1, "僅收集有分數的檢查表列作為頁首旁證");
+assert.equal(rotation.evidence[0].label, "10年 TIPS 實質利率", "旁證應保留原始列名稱");
 
 const empty = api.buildDailyRead({});
 assert.equal(empty.modules.filter(m => !m.available).length, 6, "缺資料時不得虛構任何訊號");
@@ -76,8 +83,16 @@ assert.ok(html.includes('daily-checklist-table'), "每日判讀應渲染可掃�
 assert.ok(html.includes('daily-chart-rates'), "每日判讀應有利率結構圖容器");
 assert.ok(html.includes('daily-chart-risk'), "每日判讀應有波動與信用壓力圖容器");
 assert.ok(html.includes('daily-chart-internals'), "每日判讀應有股票內部圖容器");
+assert.ok(html.includes('<th>水平</th>'), "量化表應顯示歷史水平欄位");
+assert.ok(html.includes('<th>判讀結論</th>'), "量化表應顯示獨立判讀結論欄位");
+assert.ok(html.includes('<th>註記</th>'), "量化表應顯示白話註記欄位");
+assert.ok(!html.includes('市場總分'), "頁面不得顯示市場總分");
 
 api.renderDailyRead(rotation);
 assert.ok(boxHtml.includes("市場主題"), "缺市場主題列");
 assert.ok(boxHtml.includes("推翻訊號"), "缺推翻訊號");
 assert.equal((boxHtml.match(/data-daily-module=/g)||[]).length, 6, "應固定渲染六項檢查表");
+assert.ok(boxHtml.includes("高 98%"), "量化表應渲染水平");
+assert.ok(boxHtml.includes("↑ 加速"), "量化表應渲染判讀結論");
+assert.ok(boxHtml.includes("高位再升，壓制估值"), "量化表應渲染註記");
+assert.ok(boxHtml.includes("旁證 1/1"), "頁首應顯示旁證數");

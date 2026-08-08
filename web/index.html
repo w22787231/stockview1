@@ -1819,9 +1819,11 @@ function buildDailyRead(input){
   const supported=theme==='風險撤退'?risk:(theme==='風險偏好擴散'?support:(theme==='板塊輪動'?1:Math.max(risk,support)));
   const level=available.length>=5&&supported>=3?'高':(available.length>=3?'中':'低');
   const actors={leading:flow.leading?flow.leading.theme+' '+_dailyPct(flow.leading.avg.r1):'資料待補',trailing:flow.trailing?flow.trailing.theme+' '+_dailyPct(flow.trailing.avg.r1):'資料待補',macro:tips?(tips.name+'：'+tips.status):'實質利率資料待補'};
+  const quantifiedRows=((input.checklist&&input.checklist.groups)||[]).flatMap(group=>(group.rows||[]).filter(row=>row&&row.available&&row.score!=null));
+  const evidence=quantifiedRows.slice().sort((a,b)=>Math.abs(Number(b.score))-Math.abs(Number(a.score))).slice(0,3);
   const falsifiers=theme==='風險撤退'?['HYG 停跌且金融壓力回落','50MA 廣度重回 50% 以上']:theme==='風險偏好擴散'?['HYG 轉弱且 VIX 明顯升溫','50MA 廣度跌破 50%']:theme==='板塊輪動'?['領跌主題擴大為多數產業同步下跌','信用壓力升高且廣度同步轉弱']:['等待信用、情緒與股票內部出現至少兩項同向確認'];
   const summary=theme==='風險撤退'?'信用、情緒與股票內部至少兩項同步示警，優先控管風險。':theme==='風險偏好擴散'?'多個模組同時支持風險偏好，市場漲勢較具擴散性。':theme==='板塊輪動'?'股票內部尚未全面轉弱，但資金集中在少數主題，屬輪動而非全面進攻。':'關鍵訊號尚未形成多數，維持中性並等待確認。';
-  return {theme,confidence:{supported,available:available.length,level},summary,actors,falsifiers,modules,checklist:input.checklist||null};
+  return {theme,confidence:{supported,available:available.length,level},summary,actors,falsifiers,modules,evidence,evidenceTotal:quantifiedRows.length,checklist:input.checklist||null};
 }
 async function loadDailyRead(){
   const box=$("#dailyReadBlock"); if(!box) return;
@@ -1849,15 +1851,18 @@ function _dailyValue(value,unit){
 function _dailyCurrent(row){
   return !row || row.last==null ? '資料待補' : Number(row.last).toFixed(2)+(row.unit||'');
 }
+function _dailySignalClass(score){
+  return score == null ? '' : (score < 0 ? 'down' : (score > 0 ? 'up' : ''));
+}
 function _dailyChecklistTable(data){
   const groups=(data&&data.groups)||[];
   if(!groups.length) return '<div class="legend">詳細檢查資料尚未產生；六項市場判讀仍會使用既有資料快照。</div>';
-  const body=groups.map(g=>'<tr class="daily-group"><td colspan="8">'+esc(g.title)+'</td></tr>'+(g.rows||[]).map(row=>{
+  const body=groups.map(g=>'<tr class="daily-group"><td colspan="11">'+esc(g.title)+'</td></tr>'+(g.rows||[]).map(row=>{
     const c=row.changes||{}, unit=row.change_unit||row.unit;
     const cls=v=>v==null?'':(Number(v)>0?'up':(Number(v)<0?'down':''));
-    return '<tr><td class="daily-variable">'+esc(row.label)+'</td><td>'+esc(_dailyCurrent(row))+'<br><small>'+esc(row.as_of||'—')+'</small></td>'+['today','d1','d5','d20'].map(key=>'<td class="'+cls(c[key])+'">'+esc(_dailyValue(c[key],unit))+'</td>').join('')+'<td>'+esc(row.available?'可用':'資料待補')+'</td><td><small>'+esc(row.source||'')+'</small></td></tr>';
+    return '<tr><td class="daily-variable">'+esc(row.label)+'</td><td>'+esc(_dailyCurrent(row))+'<br><small>'+esc(row.as_of||'—')+'</small></td>'+['today','d1','d5','d20'].map(key=>'<td class="'+cls(c[key])+'">'+esc(_dailyValue(c[key],unit))+'</td>').join('')+'<td>'+esc(row.level||'資料待補')+'</td><td class="'+_dailySignalClass(row.score)+'">'+esc(row.signal||'資料待補')+'</td><td><small>'+esc(row.note||'')+'</small></td><td>'+esc(row.available?'可用':'資料待補')+'</td><td><small>'+esc(row.source||'')+'</small></td></tr>';
   }).join('')).join('');
-  return '<div class="daily-checklist-wrap"><table class="daily-checklist-table"><thead><tr><th>變數</th><th>現值・資料日</th><th>今日</th><th>1D</th><th>5D</th><th>20D</th><th>狀態</th><th>資料來源</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+  return '<div class="daily-checklist-wrap"><table class="daily-checklist-table"><thead><tr><th>變數</th><th>現值・資料日</th><th>今日</th><th>1D</th><th>5D</th><th>20D</th><th>水平</th><th>判讀結論</th><th>註記</th><th>狀態</th><th>資料來源</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 function renderDailyChart(id,block,indexed){
   const el=$('#'+id); if(!el || !window.echarts || !block || !block.series) return;
@@ -1878,8 +1883,9 @@ function renderDailyCharts(data){
 function renderDailyRead(vm){
   const box=$("#dailyReadBlock"); if(!box || !vm) return;
   const tone=_dailyThemeClass(vm.theme);
-  const confidence=(vm.confidence&&vm.confidence.available)?(vm.confidence.supported+'/'+vm.confidence.available+' · '+vm.confidence.level+'確信度'):'資料待補';
+  const confidence=vm.evidenceTotal?'旁證 '+(vm.evidence||[]).length+'/'+vm.evidenceTotal:'資料待補';
   const actors=vm.actors||{};
+  const evidence=(vm.evidence||[]).map(row=>esc(row.label)+'：'+esc(row.signal||row.note||'資料待補')).join('<br>');
   const falsifiers=(vm.falsifiers||[]).map(v=>'<li>'+esc(v)+'</li>').join('');
   const modules=(vm.modules||[]).map(m=>
     '<article class="daily-read-module '+esc(m.state||'unknown')+'" data-daily-module="'+esc(m.key)+'">'+
@@ -1892,10 +1898,10 @@ function renderDailyRead(vm){
       '<div class="daily-read-hero">'+
         '<div class="daily-read-top"><div class="daily-read-title">市場主題：'+esc(vm.theme)+'</div><span class="daily-read-light '+tone+'">'+esc(confidence)+'</span></div>'+
         '<p class="daily-read-summary">'+esc(vm.summary)+'</p>'+
-        '<div class="daily-read-meta">此頁以已發布快照自動彙整；確信度＝支持此主題的模組數／有效模組數。</div>'+
+        '<div class="daily-read-meta">此頁以已發布快照自動彙整；旁證僅列出具量化分數的詳細檢查列。</div>'+
       '</div>'+
       '<div class="daily-read-info">'+
-        '<div class="daily-read-info-box"><h3>今日主角</h3><p>領漲：'+esc(actors.leading||'資料待補')+'<br>領跌：'+esc(actors.trailing||'資料待補')+'<br>宏觀：'+esc(actors.macro||'資料待補')+'</p></div>'+
+        '<div class="daily-read-info-box"><h3>今日主角</h3><p>領漲：'+esc(actors.leading||'資料待補')+'<br>領跌：'+esc(actors.trailing||'資料待補')+'<br>宏觀：'+esc(actors.macro||'資料待補')+'<br>旁證：'+(evidence||'資料待補')+'</p></div>'+
         '<div class="daily-read-info-box"><h3>推翻訊號</h3><ul>'+falsifiers+'</ul></div>'+
       '</div>'+
       '<section><div class="sec-head"><h2>六項市場檢查表</h2><span class="tag">結論的可追溯證據</span></div><div class="daily-read-grid">'+modules+'</div></section>'+

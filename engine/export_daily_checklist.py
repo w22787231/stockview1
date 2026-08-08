@@ -134,6 +134,28 @@ def row(key, label, series, unit, source, frequency="日", change_unit="pt", kin
     return dict(result, **judgment(values, kind))
 
 
+def ratio_series(numerator, denominator):
+    """依共同交易日對齊兩個序列，回傳分子／分母比值。"""
+    if numerator is None or denominator is None:
+        return pd.Series(dtype=float)
+    aligned = pd.concat([numerator.rename("numerator"), denominator.rename("denominator")], axis=1).dropna()
+    aligned = aligned[aligned["denominator"] != 0]
+    return (aligned["numerator"] / aligned["denominator"]).round(3)
+
+
+def vix9d_row(vix9d, vix):
+    """VIX9D 列以短端期限結構倒掛覆蓋自身波動判讀。"""
+    result = row("vix9d", "VIX9D", vix9d, "pt", "Yahoo Finance ^VIX9D", kind="vix")
+    term = ratio_series(vix9d, vix)
+    latest = None if term.empty else round(float(term.iloc[-1]), 3)
+    result["term_structure_ratio"] = latest
+    if latest is None:
+        return result
+    if latest > 1:
+        return dict(result, score=-2, signal="避險升溫", note="VIX9D/VIX %.3f > 1，短期避險升溫" % latest)
+    return dict(result, note="%s；VIX9D/VIX %.3f" % (result["note"], latest))
+
+
 def chart_series(series, keep=520):
     """前端圖表用的日期和值；來源缺失時仍回傳空序列。"""
     if series is None:
@@ -182,7 +204,7 @@ def build():
             row("bei10", "10Y BEI", bei, "%", "FRED T10YIE", change_unit="bps", kind="bei"),
             row("hy_oas", "HY OAS", hy, "%", "FRED BAMLH0A0HYM2", change_unit="bps", kind="oas"),
             row("ig_oas", "IG OAS", ig, "%", "FRED BAMLC0A0CM", change_unit="bps", kind="oas")]},
-        {"title": "信用／波動", "rows": [row("move", "MOVE", col("^MOVE"), "pt", "Yahoo Finance ^MOVE", kind="move"), row("vix", "VIX", col("^VIX"), "pt", "Yahoo Finance ^VIX", kind="vix"), row("vix3m", "VIX3M", col("^VIX3M"), "pt", "Yahoo Finance ^VIX3M", kind="vix"), row("vix9d", "VIX9D", col("^VIX9D"), "pt", "Yahoo Finance ^VIX9D", kind="vix")]},
+        {"title": "信用／波動", "rows": [row("move", "MOVE", col("^MOVE"), "pt", "Yahoo Finance ^MOVE", kind="move"), row("vix", "VIX", col("^VIX"), "pt", "Yahoo Finance ^VIX", kind="vix"), row("vix3m", "VIX3M", col("^VIX3M"), "pt", "Yahoo Finance ^VIX3M", kind="vix"), vix9d_row(col("^VIX9D"), col("^VIX"))]},
     ]
     spy = col("SPY")
     rel = [relative_row(sym, col(sym), spy) for sym in ("RSP", "IWM", "KRE")]
@@ -190,7 +212,7 @@ def build():
     return {"generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "groups": groups,
             "charts": {
                 "rates": {"title": "利率結構", "series": {"2Y 名目": chart_series(y2), "10Y 名目": chart_series(y10), "30Y 名目": chart_series(y30), "10Y TIPS": chart_series(tips), "10Y BEI": chart_series(bei)}},
-                "risk": {"title": "波動與信用壓力", "series": {"MOVE": chart_series(col("^MOVE")), "VIX": chart_series(col("^VIX")), "VIX9D": chart_series(col("^VIX9D")), "HY OAS": chart_series(hy)}},
+                "risk": {"title": "波動與信用壓力", "series": {"MOVE": chart_series(col("^MOVE")), "VIX": chart_series(col("^VIX")), "VIX9D": chart_series(col("^VIX9D")), "VIX9D/VIX": chart_series(ratio_series(col("^VIX9D"), col("^VIX"))), "HY OAS": chart_series(hy)}},
                 "internals": {"title": "股票內部相對強弱", "series": {"SPY": chart_series(spy), "RSP": chart_series(col("RSP")), "IWM": chart_series(col("IWM")), "KRE": chart_series(col("KRE"))}},
             }}
 

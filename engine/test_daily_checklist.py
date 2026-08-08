@@ -30,8 +30,14 @@ eq(D.ratio(None, 20.0), None, "缺資料不可產生比值")
 eq(D.percentile(list(range(1, 26))), 100, "最新值應為歷史高位")
 eq(D.judgment([2.0, 2.25, 2.40, 2.55, 2.70, 2.95], "tips")["score"], -2,
    "TIPS 五日大幅上升應為估值壓力")
-eq(D.judgment([100, 101, 99, 100, 101], "relative")["signal"], "橫盤",
-   "相對強弱小幅變化應為橫盤")
+eq(D.judgment([100, 101, 99, 100, 101], "relative")["score"], None,
+   "相對強弱不足五日報酬觀測時不得產生分數")
+eq(D.judgment([100, 101, 99, 100, 101], "relative")["signal"], "資料待補",
+   "相對強弱不足五日報酬觀測時應標示資料待補")
+eq(D.judgment([0, 0, 0, 0, 0, 0.5], "relative")["score"], 0,
+   "五日相對 SPY 報酬未達正負一百分點應為橫盤")
+eq(D.judgment([0, 0, 0, 0, 0, 0.5], "relative")["signal"], "橫盤",
+   "五日相對 SPY 報酬未達正負一百分點應標示橫盤")
 eq(D.judgment([], "vix")["score"], None, "缺資料不得產生分數")
 eq(D.judgment([100] * 20 + [125], "vix")["score"], -2,
    "VIX 相對前二十日均值上升二成應為避險升溫")

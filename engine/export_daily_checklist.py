@@ -63,8 +63,6 @@ def judgment(values, kind):
         return {"score": 0, "level": level, "signal": "橫盤", "note": "%s 相對20日均值變化有限" % kind.upper()}
 
     if delta5 is None:
-        if kind == "relative":
-            return {"score": 0, "level": level, "signal": "橫盤", "note": "相對 SPY 變化有限"}
         return {"score": None, "level": level, "signal": "資料待補", "note": "資料不足"}
 
     thresholds = {"tips": 0.15, "bei": 0.12, "yield": 0.15, "oas": 0.20, "relative": 1.0}

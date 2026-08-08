@@ -10,6 +10,7 @@ import assert from "node:assert";
 const here = new URL(".", import.meta.url);
 const indexHtml = readFileSync(new URL("index.html", here), "utf8");
 const pullPy = readFileSync(new URL("../engine/pull_live_data.py", here), "utf8");
+const workflow = readFileSync(new URL("../.github/workflows/export-and-deploy.yml", here), "utf8");
 
 // 1) 前端實際會抓的 data/*.json(去重)
 const fetched = [...new Set(
@@ -41,5 +42,10 @@ assert.strictEqual(missing.length, 0,
 // 反向健檢:tips 必須同時在前端與 pull 清單(本次回歸的具體案例)
 assert.ok(fetched.includes("tips"), "index.html 應 fetch data/tips.json");
 assert.ok(covered.has("tips"), "pull_live_data.py 應涵蓋 tips(否則 web_only 部署會掉 tips.json)");
+
+// 每日判讀的資料一旦加入，完整部署必須匯出、web_only 必須能沿用、部署後也要驗證。
+assert.ok(topNames.includes("daily_checklist"), "pull_live_data.py 應涵蓋 daily_checklist");
+assert.match(workflow, /python export_daily_checklist\.py/, "工作流程應匯出 daily_checklist.json");
+assert.match(workflow, /for f in[^\n]*daily_checklist/, "部署後驗證應涵蓋 daily_checklist.json");
 
 console.log("✅ test_data_pull_sync 通過:前端所有 data/*.json 都在 web_only 部署範圍內");

@@ -54,6 +54,9 @@ const rotationInputs = {
   checklist: { groups: [
     { title: "估值壓力", rows: [
       { label: "10年 TIPS 實質利率", available: true, last: 2.1, unit: "%", changes: { today: 0.1 }, level: "高 98%", signal: "↑ 加速", note: "高位再升，壓制估值", score: -2, source: "FRED" },
+      { label: "殖利率曲線", available: true, last: -0.3, unit: "%", changes: { today: 0.1 }, level: "低 20%", signal: "↓ 惡化", note: "曲線倒掛加深", score: -9, source: "FRED" },
+      { label: "高收益債", available: true, last: 0.4, unit: "%", changes: { today: -0.1 }, level: "中 50%", signal: "↑ 改善", note: "信用利差收斂", score: 5, source: "FRED" },
+      { label: "波動率", available: true, last: 18, unit: "", changes: { today: 1.2 }, level: "高 80%", signal: "↑ 升溫", note: "波動壓力增加", score: 3, source: "CBOE" },
     ]},
   ]},
 };
@@ -66,8 +69,8 @@ const rotation = api.buildDailyRead(rotationInputs);
 assert.equal(rotation.theme, "板塊輪動", "內部健康但產業漲跌分化應判為板塊輪動");
 assert.equal(rotation.modules.length, 6, "檢查表必須固定六項");
 assert.ok(rotation.confidence.available >= 5, "有資料的模組必須納入確信度分母");
-assert.equal(rotation.evidence.length, 1, "僅收集有分數的檢查表列作為頁首旁證");
-assert.equal(rotation.evidence[0].label, "10年 TIPS 實質利率", "旁證應保留原始列名稱");
+assert.equal(rotation.evidenceTotal, 4, "四筆量化列都應計入旁證總數");
+assert.deepEqual(rotation.evidence.map(row => row.label), ["殖利率曲線", "高收益債", "波動率"], "旁證只取絕對分數最高三筆，並依絕對分數降冪排序");
 
 const empty = api.buildDailyRead({});
 assert.equal(empty.modules.filter(m => !m.available).length, 6, "缺資料時不得虛構任何訊號");
@@ -95,4 +98,4 @@ assert.equal((boxHtml.match(/data-daily-module=/g)||[]).length, 6, "應固定渲
 assert.ok(boxHtml.includes("高 98%"), "量化表應渲染水平");
 assert.ok(boxHtml.includes("↑ 加速"), "量化表應渲染判讀結論");
 assert.ok(boxHtml.includes("高位再升，壓制估值"), "量化表應渲染註記");
-assert.ok(boxHtml.includes("旁證 1/1"), "頁首應顯示旁證數");
+assert.ok(boxHtml.includes("旁證 3/4"), "頁首應顯示已取前三筆與完整旁證數");

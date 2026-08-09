@@ -23,6 +23,14 @@ def change(values, periods):
     return round(valid[-1] - valid[-1 - periods], 2)
 
 
+def percent_change(values, periods):
+    """使用有效觀測值計算期間百分比變化；匯率判讀不可混用絕對匯率點數。"""
+    valid = [float(v) for v in values if v is not None and not pd.isna(v)]
+    if len(valid) <= periods or valid[-1 - periods] == 0:
+        return None
+    return round((valid[-1] / valid[-1 - periods] - 1) * 100, 2)
+
+
 def percentile(values):
     """最新有效值在至少二十筆有效歷史觀測中的百分位。"""
     valid = [float(v) for v in values if v is not None and not pd.isna(v)]
@@ -47,7 +55,12 @@ def judgment(values, kind):
 
     level = _level(valid)
     # relative 傳入的是已算好的 5D 相對 SPY 報酬序列；其他類型才是原始數值序列。
-    delta5 = valid[-1] if kind == "relative" and len(valid) >= 6 else change(valid, 5)
+    if kind == "relative" and len(valid) >= 6:
+        delta5 = valid[-1]
+    elif kind == "fx_jpy":
+        delta5 = percent_change(valid, 5)
+    else:
+        delta5 = change(valid, 5)
     if kind in ("vix", "move"):
         if len(valid) < 21:
             return {"score": None, "level": level, "signal": "資料待補", "note": "資料不足"}
@@ -65,20 +78,20 @@ def judgment(values, kind):
     if delta5 is None:
         return {"score": None, "level": level, "signal": "資料待補", "note": "資料不足"}
 
-    thresholds = {"tips": 0.15, "bei": 0.12, "yield": 0.15, "oas": 0.20, "relative": 1.0}
+    thresholds = {"tips": 0.15, "bei": 0.12, "yield": 0.15, "oas": 0.20, "relative": 1.0, "fx_jpy": 1.0}
     threshold = thresholds.get(kind)
     if threshold is None:
         return {"score": None, "level": level, "signal": "資料待補", "note": "未知判讀類型"}
-    negative_notes = {"tips": "估值壓力", "bei": "通膨升溫", "yield": "利率壓力", "oas": "信用利差擴大", "relative": "內部轉弱"}
-    positive_notes = {"tips": "估值壓力緩解", "bei": "通膨降溫", "yield": "利率壓力緩解", "oas": "信用利差收斂", "relative": "內部轉強"}
+    negative_notes = {"tips": "估值壓力", "bei": "通膨升溫", "yield": "利率壓力", "oas": "信用利差擴大", "relative": "內部轉弱", "fx_jpy": "日圓走弱"}
+    positive_notes = {"tips": "估值壓力緩解", "bei": "通膨降溫", "yield": "利率壓力緩解", "oas": "信用利差收斂", "relative": "內部轉強", "fx_jpy": "日圓走強／避險升溫"}
     if delta5 >= threshold:
-        signal = "↑ 加速" if kind != "relative" else "↑ 轉強"
-        score = 2 if kind == "relative" else -2
-        note = positive_notes[kind] if kind == "relative" else negative_notes[kind]
+        signal = "↑ 轉強" if kind == "relative" else "↑ 加速"
+        score = 2 if kind in ("relative", "fx_jpy") else -2
+        note = positive_notes[kind] if kind in ("relative", "fx_jpy") else negative_notes[kind]
     elif delta5 <= -threshold:
         signal = "↓ 緩解" if kind != "relative" else "↓ 轉弱"
-        score = -2 if kind == "relative" else 2
-        note = negative_notes[kind] if kind == "relative" else positive_notes[kind]
+        score = -2 if kind in ("relative", "fx_jpy") else 2
+        note = negative_notes[kind] if kind in ("relative", "fx_jpy") else positive_notes[kind]
     else:
         score, signal, note = 0, "橫盤", "五日變化有限"
     return {"score": score, "level": level, "signal": signal, "note": note}
@@ -191,9 +204,9 @@ def relative_row(symbol, asset, benchmark):
 
 
 def build():
-    bei, hy, ig, y2, y10, y30, tips = (fred_series(x) for x in (
-        "T10YIE", "BAMLH0A0HYM2", "BAMLC0A0CM", "DGS2", "DGS10", "DGS30", "DFII10"))
-    prices = P.fetch_yf_close(["^MOVE", "^VIX", "^VIX3M", "^VIX9D", "SPY", "RSP", "IWM", "KRE"], START)
+    bei, hy, ig, y2, y10, y30, tips, jgb10 = (fred_series(x) for x in (
+        "T10YIE", "BAMLH0A0HYM2", "BAMLC0A0CM", "DGS2", "DGS10", "DGS30", "DFII10", "IRLTLT01JPM156N"))
+    prices = P.fetch_yf_close(["^MOVE", "^VIX", "^VIX3M", "^VIX9D", "JPY=X", "SPY", "RSP", "IWM", "KRE"], START)
     col = lambda name: P._col(prices, name)
     groups = [
         {"title": "利率／通膨", "rows": [
@@ -205,6 +218,9 @@ def build():
             row("hy_oas", "HY OAS", hy, "%", "FRED BAMLH0A0HYM2", change_unit="bps", kind="oas"),
             row("ig_oas", "IG OAS", ig, "%", "FRED BAMLC0A0CM", change_unit="bps", kind="oas")]},
         {"title": "信用／波動", "rows": [row("move", "MOVE", col("^MOVE"), "pt", "Yahoo Finance ^MOVE", kind="move"), row("vix", "VIX", col("^VIX"), "pt", "Yahoo Finance ^VIX", kind="vix"), row("vix3m", "VIX3M", col("^VIX3M"), "pt", "Yahoo Finance ^VIX3M", kind="vix"), vix9d_row(col("^VIX9D"), col("^VIX"))]},
+        {"title": "日本匯率／利率", "rows": [
+            row("usd_jpy", "USD/JPY（日圓）", col("JPY=X"), "", "Yahoo Finance JPY=X", kind="fx_jpy"),
+            row("jgb10", "日本 10Y 公債殖利率", jgb10, "%", "FRED IRLTLT01JPM156N（OECD，月頻）", frequency="月", change_unit="bps", kind="yield")]},
     ]
     spy = col("SPY")
     rel = [relative_row(sym, col(sym), spy) for sym in ("RSP", "IWM", "KRE")]
@@ -214,6 +230,7 @@ def build():
                 "rates": {"title": "利率結構", "series": {"2Y 名目": chart_series(y2), "10Y 名目": chart_series(y10), "30Y 名目": chart_series(y30), "10Y TIPS": chart_series(tips), "10Y BEI": chart_series(bei)}},
                 "risk": {"title": "波動與信用壓力", "series": {"MOVE": chart_series(col("^MOVE")), "VIX": chart_series(col("^VIX")), "VIX9D": chart_series(col("^VIX9D")), "VIX9D/VIX": chart_series(ratio_series(col("^VIX9D"), col("^VIX"))), "HY OAS": chart_series(hy)}},
                 "internals": {"title": "股票內部相對強弱", "series": {"SPY": chart_series(spy), "RSP": chart_series(col("RSP")), "IWM": chart_series(col("IWM")), "KRE": chart_series(col("KRE"))}},
+                "japan": {"title": "日本匯率與長債", "dual_axis": True, "series": {"USD/JPY": chart_series(col("JPY=X")), "日本 10Y 殖利率（月頻）": chart_series(jgb10)}},
             }}
 
 

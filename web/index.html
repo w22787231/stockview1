@@ -1870,15 +1870,17 @@ function renderDailyChart(id,block,indexed){
   const colors=['#2563eb','#dc2626','#059669','#9333ea','#d97706'];
   const list=Object.entries(block.series).filter(([,s])=>s&&s.dates&&s.values&&s.values.length);
   if(!list.length){el.innerHTML='<div class="legend">資料待補</div>';return;}
-  const series=list.map(([name,s],i)=>{const base=indexed?s.values.find(v=>v!=null&&v!==0):null;return {name,type:'line',showSymbol:false,lineStyle:{width:1.7},itemStyle:{color:colors[i%colors.length]},data:s.dates.map((d,j)=>[new Date(d+'T00:00:00').getTime(),s.values[j]==null?null:(base?Number(s.values[j])/base*100:Number(s.values[j]))])};});
+  const dual=!!block.dual_axis;
+  const series=list.map(([name,s],i)=>{const base=indexed?s.values.find(v=>v!=null&&v!==0):null;return {name,type:'line',yAxisIndex:dual&&i===1?1:0,showSymbol:false,lineStyle:{width:1.7},itemStyle:{color:colors[i%colors.length]},data:s.dates.map((d,j)=>[new Date(d+'T00:00:00').getTime(),s.values[j]==null?null:(base?Number(s.values[j])/base*100:Number(s.values[j]))])};});
   const ch=echarts.init(el,null,{renderer:'canvas'});
-  ch.setOption({animation:false,color:colors,grid:{left:45,right:12,top:28,bottom:28},legend:{top:0,textStyle:{fontSize:10},itemWidth:14,itemHeight:7},tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':Number(v).toFixed(2)},xAxis:{type:'time',axisLabel:{fontSize:9}},yAxis:{type:'value',scale:true,axisLabel:{fontSize:9,formatter:v=>Number(v).toFixed(1)}},series});
+  ch.setOption({animation:false,color:colors,grid:{left:45,right:dual?45:12,top:28,bottom:28},legend:{top:0,textStyle:{fontSize:10},itemWidth:14,itemHeight:7},tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':Number(v).toFixed(2)},xAxis:{type:'time',axisLabel:{fontSize:9}},yAxis:dual?[{type:'value',scale:true,axisLabel:{fontSize:9,formatter:v=>Number(v).toFixed(1)}},{type:'value',scale:true,axisLabel:{fontSize:9,formatter:v=>Number(v).toFixed(1)}}]:{type:'value',scale:true,axisLabel:{fontSize:9,formatter:v=>Number(v).toFixed(1)}},series});
 }
 function renderDailyCharts(data){
   if(!data || !data.charts) return;
   renderDailyChart('daily-chart-rates',data.charts.rates,false);
   renderDailyChart('daily-chart-risk',data.charts.risk,false);
   renderDailyChart('daily-chart-internals',data.charts.internals,true);
+  renderDailyChart('daily-chart-japan',data.charts.japan,false);
 }
 function renderDailyRead(vm){
   const box=$("#dailyReadBlock"); if(!box || !vm) return;
@@ -1910,6 +1912,7 @@ function renderDailyRead(vm){
         '<article class="daily-chart-card"><h3 class="daily-chart-title">利率結構</h3><div id="daily-chart-rates" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><h3 class="daily-chart-title">波動與信用壓力</h3><div id="daily-chart-risk" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><h3 class="daily-chart-title">股票內部（起點＝100）</h3><div id="daily-chart-internals" class="daily-chart"></div></article>'+
+        '<article class="daily-chart-card"><h3 class="daily-chart-title">日本：USD/JPY 與 10Y 公債殖利率</h3><div id="daily-chart-japan" class="daily-chart"></div></article>'+
       '</div></section>'+
       '<div class="legend">口徑：資料包含日、週、月頻率；本頁僅供盤後市場結構判讀，非即時交易訊號。資料缺失的列不會納入確信度。</div>'+
     '</section>';

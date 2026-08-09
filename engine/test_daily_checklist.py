@@ -18,6 +18,7 @@ def eq(actual, expected, label):
 # 交易日中間缺值必須跳過，取上一筆有效觀測值，而不是把缺值當 0。
 eq(D.change([1.0, None, 1.3, 1.5], 1), 0.2, "1D 應使用上一筆有效交易日")
 eq(D.change([1.0, None, 1.3, 1.5], 5), None, "20D 前資料不足必須為 None")
+eq(D.percent_change([150.0, 153.0], 1), 2.0, "匯率判讀必須使用百分比變化，而不是絕對點數")
 
 # 相對強弱 = 資產報酬 - SPY 報酬，單位為百分點。
 eq(D.relative_return([100, 110], [100, 105], 1), 5.0, "RSP/SPY 相對報酬計算錯誤")
@@ -56,6 +57,10 @@ eq(D.judgment([100] * 20 + [85], "move")["score"], 2,
    "MOVE 相對前二十日均值下降一成五應為壓力緩解")
 eq(D.judgment([0, 0, 0, 0, 0, -1.0], "relative")["score"], -2,
    "五日相對 SPY 報酬達負一百分點應為內部轉弱")
+eq(D.judgment([150, 150, 150, 150, 150, 152], "fx_jpy")["score"], 2,
+   "USD/JPY 五日升逾一百分點應標示日圓走弱")
+eq(D.judgment([150, 150, 150, 150, 150, 148], "fx_jpy")["score"], -2,
+   "USD/JPY 五日跌逾一百分點應標示日圓走強")
 
 # Exporter 的量化判讀只允許 -2..+2；資料不足則明確保留 None。
 for kind, values in [
@@ -83,6 +88,7 @@ fixture_prices = pd.DataFrame({
     "^VIX": [18.0] * 25,
     "^VIX3M": [19.0] * 25,
     "^VIX9D": [20.0] * 25,
+    "JPY=X": [150.0 + 0.1 * i for i in range(25)],
     "SPY": [100.0 + i for i in range(25)],
     "RSP": [100.0 + 2 * i for i in range(25)],
     "IWM": [100.0 + 2 * i for i in range(25)],
@@ -96,11 +102,13 @@ try:
 finally:
     D.fred_series, D.P.fetch_yf_close = old_fred, old_yf
 built_rows = [row for group in built["groups"] for row in group["rows"]]
-eq(len(built_rows), 14, "build 必須產生14個量化檢查列")
+eq(len(built_rows), 16, "build 必須產生16個量化檢查列")
 for built_row in built_rows:
     assert {"score", "level", "signal", "note"} <= set(built_row), "每列必須有完整量化判讀欄位"
 vix9d_built = next(row for row in built_rows if row["key"] == "vix9d")
 eq(vix9d_built["score"], -2, "build 必須把VIX9D/VIX期限結構納入生產判讀")
 eq(built["charts"]["risk"]["series"]["VIX9D/VIX"]["values"][-1], 1.111, "build 必須輸出已對齊的VIX9D/VIX比值序列")
+assert built["charts"]["japan"]["series"]["USD/JPY"]["values"], "build 必須輸出 USD/JPY 圖表序列"
+assert built["charts"]["japan"]["series"]["日本 10Y 殖利率（月頻）"]["values"], "build 必須輸出日本10Y殖利率圖表序列"
 
 print("✅ test_daily_checklist 通過：交易日差、相對強弱、bps 與比值口徑")

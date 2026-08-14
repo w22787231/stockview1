@@ -59,8 +59,12 @@ eq(D.judgment([0, 0, 0, 0, 0, -1.0], "relative")["score"], -2,
    "五日相對 SPY 報酬達負一百分點應為內部轉弱")
 eq(D.judgment([150, 150, 150, 150, 150, 152], "fx_jpy")["score"], 2,
    "USD/JPY 五日升逾一百分點應標示日圓走弱")
+eq(D.judgment([150, 150, 150, 150, 150, 152], "fx_jpy")["note"], "日圓走弱／風險偏好",
+   "USD/JPY 上升不可誤標為日圓走強")
 eq(D.judgment([150, 150, 150, 150, 150, 148], "fx_jpy")["score"], -2,
    "USD/JPY 五日跌逾一百分點應標示日圓走強")
+eq(D.judgment([150, 150, 150, 150, 150, 148], "fx_jpy")["note"], "日圓走強／避險升溫",
+   "USD/JPY 下跌必須標示日圓走強與避險升溫")
 
 # Exporter 的量化判讀只允許 -2..+2；資料不足則明確保留 None。
 for kind, values in [

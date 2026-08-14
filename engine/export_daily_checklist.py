@@ -82,16 +82,24 @@ def judgment(values, kind):
     threshold = thresholds.get(kind)
     if threshold is None:
         return {"score": None, "level": level, "signal": "資料待補", "note": "未知判讀類型"}
-    negative_notes = {"tips": "估值壓力", "bei": "通膨升溫", "yield": "利率壓力", "oas": "信用利差擴大", "relative": "內部轉弱", "fx_jpy": "日圓走弱"}
-    positive_notes = {"tips": "估值壓力緩解", "bei": "通膨降溫", "yield": "利率壓力緩解", "oas": "信用利差收斂", "relative": "內部轉強", "fx_jpy": "日圓走強／避險升溫"}
+    # USD/JPY 上升 = 日圓走弱；下降 = 日圓走強。這一方向不能沿用一般「數值上升即利空」規則。
+    if kind == "fx_jpy":
+        if delta5 >= threshold:
+            return {"score": 2, "level": level, "signal": "↑ 加速", "note": "日圓走弱／風險偏好"}
+        if delta5 <= -threshold:
+            return {"score": -2, "level": level, "signal": "↓ 避險", "note": "日圓走強／避險升溫"}
+        return {"score": 0, "level": level, "signal": "橫盤", "note": "五日變化有限"}
+
+    negative_notes = {"tips": "估值壓力", "bei": "通膨升溫", "yield": "利率壓力", "oas": "信用利差擴大", "relative": "內部轉弱"}
+    positive_notes = {"tips": "估值壓力緩解", "bei": "通膨降溫", "yield": "利率壓力緩解", "oas": "信用利差收斂", "relative": "內部轉強"}
     if delta5 >= threshold:
         signal = "↑ 轉強" if kind == "relative" else "↑ 加速"
-        score = 2 if kind in ("relative", "fx_jpy") else -2
-        note = positive_notes[kind] if kind in ("relative", "fx_jpy") else negative_notes[kind]
+        score = 2 if kind == "relative" else -2
+        note = positive_notes[kind] if kind == "relative" else negative_notes[kind]
     elif delta5 <= -threshold:
         signal = "↓ 緩解" if kind != "relative" else "↓ 轉弱"
-        score = -2 if kind in ("relative", "fx_jpy") else 2
-        note = negative_notes[kind] if kind in ("relative", "fx_jpy") else positive_notes[kind]
+        score = -2 if kind == "relative" else 2
+        note = negative_notes[kind] if kind == "relative" else positive_notes[kind]
     else:
         score, signal, note = 0, "橫盤", "五日變化有限"
     return {"score": score, "level": level, "signal": signal, "note": note}

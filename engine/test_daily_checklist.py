@@ -29,6 +29,13 @@ eq(D.to_bps(0.12), 12.0, "殖利率 0.12% 應轉 12bps")
 eq(D.ratio(18.0, 20.0), 0.9, "VIX9D/VIX 比值計算錯誤")
 eq(D.ratio(None, 20.0), None, "缺資料不可產生比值")
 
+# 黃金相關性只能用共同交易日；實質利率採日變動、黃金採日報酬，避免把水準直接相關化。
+corr_dates = pd.date_range("2026-01-01", periods=25, freq="B")
+real_fixture = pd.Series([1.0 + 0.01 * i for i in range(25)], index=corr_dates)
+gold_fixture = pd.Series([2000.0 + 2 * i for i in range(25)], index=corr_dates)
+gold_corr = D.real_gold_correlation(real_fixture, gold_fixture)
+assert len(gold_corr.dropna()) == 5, "20日黃金相關在25個交易日中應有5筆有效值"
+
 # VIX9D/VIX > 1 代表短期期限結構倒掛；即使 VIX9D 自身20日均值橫盤仍須示警。
 vix_dates = pd.date_range("2026-01-01", periods=21, freq="B")
 vix9d_flat = pd.Series([20.0] * 21, index=vix_dates)
@@ -92,6 +99,7 @@ fixture_prices = pd.DataFrame({
     "^VIX": [18.0] * 25,
     "^VIX3M": [19.0] * 25,
     "^VIX9D": [20.0] * 25,
+    "GC=F": [2000.0 + 2 * i for i in range(25)],
     "JPY=X": [150.0 + 0.1 * i for i in range(25)],
     "SPY": [100.0 + i for i in range(25)],
     "RSP": [100.0 + 2 * i for i in range(25)],
@@ -114,5 +122,7 @@ eq(vix9d_built["score"], -2, "build 必須把VIX9D/VIX期限結構納入生產�
 eq(built["charts"]["risk"]["series"]["VIX9D/VIX"]["values"][-1], 1.111, "build 必須輸出已對齊的VIX9D/VIX比值序列")
 assert built["charts"]["japan"]["series"]["USD/JPY"]["values"], "build 必須輸出 USD/JPY 圖表序列"
 assert built["charts"]["japan"]["series"]["日本 10Y 殖利率（月頻）"]["values"], "build 必須輸出日本10Y殖利率圖表序列"
+assert built["charts"]["real_gold"]["series"]["黃金期貨"]["values"], "build 必須輸出黃金圖表序列"
+assert len(built["charts"]["real_gold"]["series"]["20日相關"]["values"]) == 5, "20日相關應略過前20個無法計算的交易日"
 
 print("✅ test_daily_checklist 通過：交易日差、相對強弱、bps 與比值口徑")

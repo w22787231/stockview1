@@ -186,6 +186,16 @@ def chart_series(series, keep=520):
             "values": [round(float(v), 3) for v in s.values]}
 
 
+def real_gold_correlation(real_yield, gold, window=20):
+    """10Y 實質利率日變動與黃金日報酬的滾動相關。僅使用共同交易日，避免錯位配對。"""
+    if real_yield is None or gold is None:
+        return pd.Series(dtype=float)
+    aligned = pd.concat([real_yield.rename("real_yield"), gold.rename("gold")], axis=1).dropna()
+    if len(aligned) < window + 1:
+        return pd.Series(dtype=float)
+    return aligned["real_yield"].diff().rolling(window).corr(aligned["gold"].pct_change())
+
+
 def relative_row(symbol, asset, benchmark):
     if asset is None or benchmark is None:
         values, as_of = [], None
@@ -214,8 +224,9 @@ def relative_row(symbol, asset, benchmark):
 def build():
     bei, hy, ig, y2, y10, y30, tips, jgb10 = (fred_series(x) for x in (
         "T10YIE", "BAMLH0A0HYM2", "BAMLC0A0CM", "DGS2", "DGS10", "DGS30", "DFII10", "IRLTLT01JPM156N"))
-    prices = P.fetch_yf_close(["^MOVE", "^VIX", "^VIX3M", "^VIX9D", "JPY=X", "SPY", "RSP", "IWM", "KRE"], START)
+    prices = P.fetch_yf_close(["^MOVE", "^VIX", "^VIX3M", "^VIX9D", "GC=F", "JPY=X", "SPY", "RSP", "IWM", "KRE"], START)
     col = lambda name: P._col(prices, name)
+    real_gold_corr = real_gold_correlation(tips, col("GC=F"))
     groups = [
         {"title": "利率／通膨", "rows": [
             row("y2", "2Y 名目利率", y2, "%", "FRED DGS2", change_unit="bps", kind="yield"),
@@ -237,6 +248,7 @@ def build():
             "charts": {
                 "rates": {"title": "利率結構", "series": {"2Y 名目": chart_series(y2), "10Y 名目": chart_series(y10), "30Y 名目": chart_series(y30), "10Y TIPS": chart_series(tips), "10Y BEI": chart_series(bei)}},
                 "risk": {"title": "波動與信用壓力", "series": {"MOVE": chart_series(col("^MOVE")), "VIX": chart_series(col("^VIX")), "VIX9D": chart_series(col("^VIX9D")), "VIX9D/VIX": chart_series(ratio_series(col("^VIX9D"), col("^VIX"))), "HY OAS": chart_series(hy)}},
+                "real_gold": {"title": "實際利率與黃金", "corr_window": 20, "series": {"10Y 實質利率": chart_series(tips), "黃金期貨": chart_series(col("GC=F")), "20日相關": chart_series(real_gold_corr)}},
                 "internals": {"title": "股票內部相對強弱", "series": {"SPY": chart_series(spy), "RSP": chart_series(col("RSP")), "IWM": chart_series(col("IWM")), "KRE": chart_series(col("KRE"))}},
                 "japan": {"title": "日本匯率與長債", "dual_axis": True, "series": {"USD/JPY": chart_series(col("JPY=X")), "日本 10Y 殖利率（月頻）": chart_series(jgb10)}},
             }}

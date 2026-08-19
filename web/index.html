@@ -1877,28 +1877,28 @@ function renderDailyChart(id,block,indexed){
 }
 function renderDailyRealGoldChart(id,block){
   const el=$('#'+id); if(!el || !window.echarts || !block || !block.series) return;
-  const real=block.series['10Y 實質利率']||{}, gold=block.series['黃金期貨']||{}, corr=block.series['20日相關']||{};
+  const real=block.series['10Y 實質利率']||{}, gold=block.series['黃金期貨']||{};
+  const corrWindows=block.corr_windows||[5,10,20];
   if(!(real.dates||[]).length || !(gold.dates||[]).length){el.innerHTML='<div class="legend">資料待補</div>';return;}
   const old=echarts.getInstanceByDom(el); if(old) old.dispose();
   const ch=echarts.init(el,null,{renderer:'canvas'}), toMs=d=>new Date(d+'T00:00:00').getTime();
   const xfmt=v=>{const d=new Date(v),m=d.getMonth();return m===0?d.getFullYear()+'年':(m+1)+'月';};
-  const corrLabel=(block.corr_window||20)+'日相關';
+  const corrLine=(window,color,width,opacity)=>{const s=block.series[window+'日相關']||{};return {name:window+'日相關',type:'line',smooth:true,showSymbol:false,connectNulls:false,xAxisIndex:1,yAxisIndex:2,data:(s.dates||[]).map((d,i)=>[toMs(d),s.values[i]]),lineStyle:{color,width,opacity},itemStyle:{color},areaStyle:window===20?{color,opacity:.06}:undefined,markLine:window===20?{symbol:'none',silent:true,lineStyle:{color:'#8b949e',type:'dashed',opacity:.6},label:{show:false},data:[{yAxis:0}]}:undefined};};
   ch.setOption({
     animation:false,
     grid:[{left:55,right:66,top:34,height:220},{left:55,right:66,top:305,height:82}],
-    legend:{top:0,textStyle:{fontSize:11},data:['10Y 實質利率','黃金期貨']},
+    legend:{top:0,textStyle:{fontSize:11},data:['10Y 實質利率','黃金期貨',...corrWindows.map(w=>w+'日相關')]},
     tooltip:{trigger:'axis',axisPointer:{link:[{xAxisIndex:'all'}]}},axisPointer:{link:[{xAxisIndex:'all'}]},
     xAxis:[{type:'time',gridIndex:0,axisLabel:{show:false},axisTick:{show:false}},{type:'time',gridIndex:1,axisLabel:{fontSize:9,hideOverlap:true,formatter:xfmt}}],
     yAxis:[
       {type:'value',gridIndex:0,name:'實際利率%',nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:10,formatter:v=>Number(v).toFixed(1)},splitLine:{lineStyle:{opacity:.3}}},
       {type:'value',gridIndex:0,name:'黃金 USD/oz',nameTextStyle:{fontSize:10},scale:true,position:'right',axisLabel:{fontSize:9},splitLine:{show:false}},
-      {type:'value',gridIndex:1,name:corrLabel,min:-1,max:1,interval:1,axisLabel:{fontSize:9},splitLine:{lineStyle:{opacity:.25}}}
+      {type:'value',gridIndex:1,name:'相關係數',min:-1,max:1,interval:1,axisLabel:{fontSize:9},splitLine:{lineStyle:{opacity:.25}}}
     ],
-    visualMap:{show:false,type:'continuous',seriesIndex:2,dimension:1,min:-1,max:1,inRange:{color:['#e11d48','#8b949e','#16a34a']}},
     series:[
       {name:'10Y 實質利率',type:'line',smooth:true,showSymbol:false,xAxisIndex:0,yAxisIndex:0,data:real.dates.map((d,i)=>[toMs(d),real.values[i]]),lineStyle:{color:'#e8923a',width:2},itemStyle:{color:'#e8923a'},areaStyle:{color:'#e8923a',opacity:.05}},
       {name:'黃金期貨',type:'line',smooth:true,showSymbol:false,xAxisIndex:0,yAxisIndex:1,data:gold.dates.map((d,i)=>[toMs(d),gold.values[i]]),lineStyle:{color:'#c98a00',width:1.8},itemStyle:{color:'#c98a00'}},
-      {name:corrLabel,type:'line',smooth:true,showSymbol:false,connectNulls:false,xAxisIndex:1,yAxisIndex:2,data:corr.dates.map((d,i)=>[toMs(d),corr.values[i]]),lineStyle:{width:1.5},areaStyle:{opacity:.10},markLine:{symbol:'none',silent:true,lineStyle:{color:'#8b949e',type:'dashed',opacity:.6},label:{show:false},data:[{yAxis:0}]}}
+      ...corrWindows.map(w=>corrLine(w,w===20?'#2563eb':w===10?'#7c3aed':'#94a3b8',w===20?2.2:w===10?1.5:1,.95))
     ]
   },true);
   if(el._ro) window.removeEventListener('resize',el._ro); el._ro=()=>ch.resize(); window.addEventListener('resize',el._ro);
@@ -1939,7 +1939,7 @@ function renderDailyRead(vm){
       '<section><div class="sec-head"><h2>每日資料檢查表</h2><span class="tag">變化以已發布交易日計算</span></div>'+_dailyChecklistTable(vm.checklist)+'</section>'+
       '<section><div class="sec-head"><h2>結構圖表</h2><span class="tag">約兩年交易日</span></div><div class="daily-chart-grid">'+
         '<article class="daily-chart-card"><h3 class="daily-chart-title">利率結構</h3><div id="daily-chart-rates" class="daily-chart"></div></article>'+
-        '<article class="daily-chart-card"><h3 class="daily-chart-title">實際利率 × 黃金</h3><div id="daily-chart-real-gold" class="daily-chart daily-real-gold-chart"></div><div class="legend">主圖：10Y TIPS 實際利率與黃金期貨（雙軸）。下圖：實際利率日變動與黃金日報酬的 20 日滾動相關。</div></article>'+
+        '<article class="daily-chart-card"><h3 class="daily-chart-title">實際利率 × 黃金</h3><div id="daily-chart-real-gold" class="daily-chart daily-real-gold-chart"></div><div class="legend">主圖：10Y TIPS 實際利率與黃金期貨（雙軸）。下圖：實際利率日變動與黃金日報酬的 5、10、20 日滾動相關；20 日為主判讀。</div></article>'+
         '<article class="daily-chart-card"><h3 class="daily-chart-title">波動與信用壓力</h3><div id="daily-chart-risk" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><h3 class="daily-chart-title">股票內部（起點＝100）</h3><div id="daily-chart-internals" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><h3 class="daily-chart-title">日本：USD/JPY 與 10Y 公債殖利率</h3><div id="daily-chart-japan" class="daily-chart"></div></article>'+

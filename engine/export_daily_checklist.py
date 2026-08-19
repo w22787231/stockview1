@@ -226,7 +226,9 @@ def build():
         "T10YIE", "BAMLH0A0HYM2", "BAMLC0A0CM", "DGS2", "DGS10", "DGS30", "DFII10", "IRLTLT01JPM156N"))
     prices = P.fetch_yf_close(["^MOVE", "^VIX", "^VIX3M", "^VIX9D", "GC=F", "JPY=X", "SPY", "RSP", "IWM", "KRE"], START)
     col = lambda name: P._col(prices, name)
-    real_gold_corr = real_gold_correlation(tips, col("GC=F"))
+    real_gold_corr5 = real_gold_correlation(tips, col("GC=F"), window=5)
+    real_gold_corr10 = real_gold_correlation(tips, col("GC=F"), window=10)
+    real_gold_corr20 = real_gold_correlation(tips, col("GC=F"), window=20)
     groups = [
         {"title": "利率／通膨", "rows": [
             row("y2", "2Y 名目利率", y2, "%", "FRED DGS2", change_unit="bps", kind="yield"),
@@ -248,7 +250,7 @@ def build():
             "charts": {
                 "rates": {"title": "利率結構", "series": {"2Y 名目": chart_series(y2), "10Y 名目": chart_series(y10), "30Y 名目": chart_series(y30), "10Y TIPS": chart_series(tips), "10Y BEI": chart_series(bei)}},
                 "risk": {"title": "波動與信用壓力", "series": {"MOVE": chart_series(col("^MOVE")), "VIX": chart_series(col("^VIX")), "VIX9D": chart_series(col("^VIX9D")), "VIX9D/VIX": chart_series(ratio_series(col("^VIX9D"), col("^VIX"))), "HY OAS": chart_series(hy)}},
-                "real_gold": {"title": "實際利率與黃金", "corr_window": 20, "series": {"10Y 實質利率": chart_series(tips), "黃金期貨": chart_series(col("GC=F")), "20日相關": chart_series(real_gold_corr)}},
+                "real_gold": {"title": "實際利率與黃金", "corr_windows": [5, 10, 20], "series": {"10Y 實質利率": chart_series(tips), "黃金期貨": chart_series(col("GC=F")), "5日相關": chart_series(real_gold_corr5), "10日相關": chart_series(real_gold_corr10), "20日相關": chart_series(real_gold_corr20)}},
                 "internals": {"title": "股票內部相對強弱", "series": {"SPY": chart_series(spy), "RSP": chart_series(col("RSP")), "IWM": chart_series(col("IWM")), "KRE": chart_series(col("KRE"))}},
                 "japan": {"title": "日本匯率與長債", "dual_axis": True, "series": {"USD/JPY": chart_series(col("JPY=X")), "日本 10Y 殖利率（月頻）": chart_series(jgb10)}},
             }}

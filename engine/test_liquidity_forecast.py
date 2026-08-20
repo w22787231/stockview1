@@ -39,4 +39,35 @@ assert result["tga"]["values"][-1] == 615000
 assert result["reserves"]["values"][-1] == 2830000
 assert result["tga"]["as_of"] == "2026-04-22"
 assert F.build_levels({"WTREGEN": pd.Series(dtype=float)})["status"] == "insufficient_data"
+
+# 會在解析 Treasury 官方季末現金假設時失敗：若月份轉季末、單位換算或官方標記錯誤，
+# 這個可直接由公告文字推導的資料契約必須失敗。
+treasury_html = (
+    "During the October–December 2026 quarter, Treasury assumes an "
+    "end-of-December cash balance of $850 billion."
+)
+expected_target = [{
+    "date": "2026-12-31", "value": 850000, "source_type": "official", "confidence": "high"
+}]
+assert F.parse_treasury_tga_targets(treasury_html) == expected_target
+
+# 會在未確認 FIMA 序列、用零填補或略過空序列時失敗：空資料必須明確降級。
+assert F.factor_status(pd.Series(dtype=float)) == "missing"
+assert F.factor_status(pd.Series([1.0], index=pd.to_datetime(["2026-08-19"]))) == "available"
+
+# 會在抓取錯誤的 FIMA 代號（例如 WLFN，它其實是流通中的聯準會鈔票）時失敗。
+factor_fixture = {
+    "WTREGEN": sample["WTREGEN"], "WRESBAL": sample["WRESBAL"],
+    "WALCL": sample_series()["WALCL"], "RRPONTSYD": sample_series()["RRPONTSYD"],
+    "CURRCIR": sample_series()["CURRCIR"], "WLRRAFOIAL": sample_series()["WLFN"],
+}
+factors = F.fetch_factor_series(lambda series_id: factor_fixture.get(series_id, pd.Series(dtype=float)))
+assert set(factors) == set(factor_fixture)
+assert factors["WLRRAFOIAL"].iloc[-1] == factor_fixture["WLRRAFOIAL"].iloc[-1]
+
+# 會在「最新融資文件 → Financing Estimates → 官方公告」鏈結斷裂時失敗。
+listing_html = '<a href="/news/press-releases/sb0000">Financing Estimates: Test</a>'
+def fake_http_get(url):
+    return treasury_html if url.endswith("sb0000") else listing_html
+assert F.fetch_treasury_tga_targets(fake_http_get) == expected_target
 print("liquidity levels tests passed")

@@ -4,7 +4,10 @@ import datetime as dt
 import io
 import json
 import os
+import re
 import urllib.request
+from html.parser import HTMLParser
+from urllib.parse import urljoin
 
 import numpy as np
 import pandas as pd
@@ -12,6 +15,134 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "data", "liquidity_forecast.json")
 START = "2018-01-01"
+TREASURY_REFUNDING_LATEST_URL = (
+    "https://home.treasury.gov/policy-issues/financing-the-government/"
+    "quarterly-refunding/most-recent-quarterly-refunding-documents"
+)
+
+# All FRED series below are quoted in millions of U.S. dollars except the daily
+# ON RRP series, which is in billions and is scaled only by the forecast layer.
+# WLRRAFOIAL is the H.4.1 foreign-official RRP account (the verifiable FIMA
+# proxy); WLFN is deliberately not used because it is Federal Reserve notes.
+FACTOR_SPECS = {
+    "tga": {"series": "WTREGEN", "sign": -1, "source": "FRED WTREGEN"},
+    "walcl": {"series": "WALCL", "sign": 1, "source": "FRED WALCL"},
+    "rrp": {"series": "RRPONTSYD", "sign": -1, "scale": 1000, "source": "FRED RRPONTSYD"},
+    "currency": {"series": "CURRCIR", "sign": -1, "source": "FRED CURRCIR"},
+    "fima_other": {
+        "series": "WLRRAFOIAL", "sign": -1,
+        "source": "FRED WLRRAFOIAL (H.4.1 foreign official RRP)",
+    },
+}
+FACTOR_SERIES_IDS = ("WTREGEN", "WRESBAL", "WALCL", "RRPONTSYD", "CURRCIR", "WLRRAFOIAL")
+
+
+class _FinancingEstimateLinkParser(HTMLParser):
+    """Find the current Treasury Financing Estimates link without a third-party parser."""
+
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.href = None
+        self._current_href = None
+        self._text = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a" and self.href is None:
+            self._current_href = dict(attrs).get("href")
+            self._text = []
+
+    def handle_data(self, data):
+        if self._current_href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag != "a" or self._current_href is None:
+            return
+        if "financing estimates" in "".join(self._text).lower():
+            self.href = self._current_href
+        self._current_href = None
+        self._text = []
+
+
+def _read_url_text(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "stockview1/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return response.read().decode("utf-8")
+
+
+def _month_end(year, month_name):
+    month = dt.datetime.strptime(month_name, "%B").month
+    if month == 12:
+        return dt.date(year + 1, 1, 1) - dt.timedelta(days=1)
+    return dt.date(year, month + 1, 1) - dt.timedelta(days=1)
+
+
+def parse_treasury_tga_targets(html):
+    """Extract Treasury's official quarterly end-of-quarter cash assumptions."""
+    pattern = re.compile(
+        r"During\s+(?:the\s+)?([A-Z][a-z]+)\s*(?:–|-)\s*([A-Z][a-z]+)\s+(\d{4})\s+quarter"
+        r".*?end-of-([A-Z][a-z]+)\s+cash\s+balance\s+of\s+\$([0-9,.]+)\s+"
+        r"(billion|trillion)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    targets = []
+    for _start_month, _end_month, year, target_month, amount, unit in pattern.findall(html):
+        value = float(amount.replace(",", ""))
+        multiplier = 1000000 if unit.lower() == "trillion" else 1000
+        date = _month_end(int(year), target_month.title()).isoformat()
+        targets.append({
+            "date": date,
+            "value": round(value * multiplier, 3),
+            "source_type": "official",
+            "confidence": "high",
+        })
+    return sorted(targets, key=lambda target: target["date"])
+
+
+def _financing_estimates_url(listing_html):
+    parser = _FinancingEstimateLinkParser()
+    parser.feed(listing_html)
+    return parser.href
+
+
+def fetch_treasury_tga_targets(http_get=_read_url_text):
+    """Fetch targets only from Treasury's latest Financing Estimates announcement.
+
+    A failed document discovery or download returns no targets, so callers must
+    use their model fallback rather than presenting an unverified number as
+    official.
+    """
+    try:
+        href = _financing_estimates_url(http_get(TREASURY_REFUNDING_LATEST_URL))
+        if not href:
+            return []
+        return parse_treasury_tga_targets(http_get(urljoin(TREASURY_REFUNDING_LATEST_URL, href)))
+    except Exception as exc:
+        print("[liquidity-levels] Treasury TGA targets failed: %s" % exc)
+        return []
+
+
+def factor_status(series):
+    """Return a truthful availability status; missing values are never zero-filled."""
+    if not isinstance(series, pd.Series) or series.dropna().empty:
+        return "missing"
+    return "available"
+
+
+def fetch_factor_series(series_reader=None):
+    """Retrieve all Task 2 source series while retaining explicit empty failures."""
+    series_reader = series_reader or fred_series
+    series_map = {}
+    for series_id in FACTOR_SERIES_IDS:
+        try:
+            series = series_reader(series_id)
+        except Exception as exc:
+            print("[liquidity-levels] factor %s failed: %s" % (series_id, exc))
+            series = pd.Series(dtype=float)
+        if not isinstance(series, pd.Series):
+            series = pd.Series(dtype=float)
+        series_map[series_id] = series.dropna().astype(float).sort_index()
+    return series_map
 
 
 def fred_series(series_id, start=START):

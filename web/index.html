@@ -2109,41 +2109,68 @@ async function loadChicagoFci(){
   }
 }
 
-// ── Fed 淨流動性(WALCL−TGA−RRP)+ S&P500 疊圖 ──
+// ── 期末美元流動性三線預估：TGA、準備金、完整淨流動性 ──
 let LIQUIDITY_LEVELS=null, LIQUIDITY_LEVELS_WIN="1m";
 async function loadLiquidityForecast(){
   const box=$("#liquidityForecastBlock"); if(!box) return;
-  box.innerHTML='<div class="dim" style="padding:8px">載入 TGA 與準備金水位 …</div>';
+  box.innerHTML='<div class="dim" style="padding:8px">載入期末美元流動性預估 …</div>';
   try{
     const res=await fetch("data/liquidity_forecast.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(res.status);
     LIQUIDITY_LEVELS=await res.json(); renderLiquidityForecast(LIQUIDITY_LEVELS);
-  }catch(e){box.innerHTML='<section><div class="sec-head"><h2>TGA 與銀行準備金水位</h2></div><div class="legend">資料待補（'+esc(e.message)+'）。</div></section>';}
+  }catch(e){box.innerHTML='<section><div class="sec-head"><h2>期末美元流動性預估</h2></div><div class="legend">資料待補（'+esc(e.message)+'）。</div></section>';}
 }
-function _liqFmt(v){return v==null?'—':'$'+(Number(v)/1000000).toFixed(2)+'兆';}
-function _liqWindow(block,win){
-  const days=win==='1m'?31:93, latest=new Date(block.dates.at(-1)+'T00:00:00').getTime(), start=latest-days*86400000;
-  const rows=block.dates.map((date,i)=>({date,value:block.values[i]})).filter(row=>new Date(row.date+'T00:00:00').getTime()>=start);
-  return rows.length?rows:[{date:block.dates.at(-1),value:block.values.at(-1)}];
+function _liqFmt(v){return v==null||!Number.isFinite(Number(v))?'—':'$'+(Number(v)/1000).toFixed(0)+'B';}
+function _liqChange(v){
+  if(v==null||!Number.isFinite(Number(v))) return '變化資料待補';
+  const n=Number(v); return (n>0?'+':'')+_liqFmt(n)+' 相對最新實際值';
+}
+function _liqForecastWindow(points,win){
+  const days=win==='1m'?31:(win==='3m'?93:184);
+  const first=(points||[])[0]; if(!first) return [];
+  const start=new Date(first.date+'T00:00:00').getTime();
+  return points.filter(point=>new Date(point.date+'T00:00:00').getTime()<=start+days*86400000);
+}
+function _liqDirection(id,change){
+  if(change==null||!Number.isFinite(Number(change))) return '資料待補';
+  if(Number(change)===0) return '持平';
+  const inject=id==='walcl' ? Number(change)>0 : Number(change)<0;
+  return inject?'放水':'抽水';
 }
 function renderLiquidityForecast(data){
   const box=$("#liquidityForecastBlock"); if(!box) return;
-  if(!data||data.status!=="ok"){box.innerHTML='<section><div class="sec-head"><h2>TGA 與銀行準備金水位</h2></div><div class="legend">資料待補：必要官方資料不足或更新延遲。</div></section>';return;}
+  if(!data||data.status!=="ok"){box.innerHTML='<section><div class="sec-head"><h2>期末美元流動性預估</h2></div><div class="legend">資料待補：必要官方資料不足或更新延遲。</div></section>';return;}
   const win=LIQUIDITY_LEVELS_WIN, button=w=>'<button class="ntab'+(win===w?' on':'')+'" data-liq-win="'+w+'">'+w.toUpperCase()+'</button>';
-  const card=(title,block)=>'<div class="card" style="padding:12px"><b>'+title+'</b><div style="font-size:18px;margin:5px 0;color:#1f6feb">'+_liqFmt(block.latest)+'</div><div class="dim">最新官方資料日 '+esc(block.as_of)+'</div></div>';
-  box.innerHTML='<section><div class="sec-head"><h2>TGA 與銀行準備金水位</h2><span class="tag">官方實際資料</span></div>'+updStamp(data.generated_at)+
-    '<div class="daily-read-grid">'+card('財政部一般帳戶 TGA',data.tga)+card('銀行準備金',data.reserves)+'</div>'+
-    '<div style="margin:10px 0;display:flex;gap:6px">'+button('1m')+button('3m')+'</div><div id="liquidityForecastChart" class="cap-chart" style="height:390px"></div>'+
-    '<div class="ex">此處只呈現 FRED 已發布的原始帳戶水位；1M／3M 是回看區間，不是預測期間，也沒有累加或情境推算。TGA：WTREGEN；銀行準備金：WRESBAL。兩者皆為週資料。</div></section>';
+  const card=(title,block,color)=>{
+    const point=(block.forecast||[])[0]||{};
+    return '<div class="card" style="padding:12px;border-top:3px solid '+color+'"><b>'+title+'</b><div style="font-size:18px;margin:5px 0;color:'+color+'">'+_liqFmt(point.value)+'</div><div class="dim">目標日 '+esc(point.date||'—')+' · '+esc(point.source_type==='official'?'官方':'模型')+' · '+esc(point.confidence||'low')+' 信心</div><div class="dim">'+_liqChange(point.change)+' · 資料日 '+esc(point.as_of||'—')+'</div></div>';
+  };
+  const factors=(data.factors||[]).map(factor=>{
+    const point=_liqForecastWindow(factor.forecast||[],win)[0]||(factor.forecast||[])[0]||{};
+    const direction=_liqDirection(factor.id,point.change);
+    const color=direction==='放水'?'#16a34a':(direction==='抽水'?'#e11d48':'#8b949e');
+    return '<article class="card" data-liquidity-factor="'+esc(factor.id)+'" style="padding:11px;border-left:3px solid '+color+'">'+
+      '<b>'+esc(factor.name||factor.id)+'</b><div style="font-size:16px;margin:5px 0;color:'+color+'">'+_liqChange(point.change)+'</div>'+
+      '<div class="dim">'+esc(direction)+' · 目標日 '+esc(point.date||'—')+' · '+esc(point.confidence||'low')+' 信心</div></article>';
+  }).join('');
+  box.innerHTML='<section><div class="sec-head"><h2>期末美元流動性預估</h2><span class="tag">期末水位，非逐日累加</span></div>'+updStamp(data.generated_at)+
+    '<div class="daily-read-grid">'+card('TGA 期末預估',data.tga,'#d97706')+card('銀行準備金期末預估',data.reserves,'#0d9488')+card('完整淨流動性期末預估',data.full_liquidity,'#1f6feb')+'</div>'+
+    '<div style="margin:10px 0;display:flex;gap:6px">'+button('1m')+button('3m')+button('6m')+'</div><div id="liquidityForecastChart" class="cap-chart" style="height:390px"></div>'+
+    '<div class="cap-sub2" style="margin-top:12px">六項期末因子變化（各自獨立顯示，未另行總和）</div><div class="daily-read-grid" style="margin-top:8px">'+factors+'</div>'+
+    '<div class="ex">實線為已發布的實際水位；虛線／菱形為未來月末或季末節點。1M／3M／6M 只切換未來預估範圍。TGA 官方目標優先，其餘未發布期間為模型估計。</div></section>';
   box.querySelectorAll('[data-liq-win]').forEach(b=>b.onclick=()=>{LIQUIDITY_LEVELS_WIN=b.dataset.liqWin;renderLiquidityForecast(data);});
   drawLiquidityForecast(data);
 }
 function drawLiquidityForecast(data){
   const el=document.getElementById('liquidityForecastChart');if(!el||!window.echarts)return;
   const win=LIQUIDITY_LEVELS_WIN,toMs=d=>new Date(d+'T00:00:00').getTime(),old=echarts.getInstanceByDom(el);if(old)old.dispose();
-  const line=(name,block,color,yAxis)=>({name,type:'line',smooth:true,showSymbol:false,yAxisIndex:yAxis,data:_liqWindow(block,win).map(row=>[toMs(row.date),row.value]),lineStyle:{color,width:2.2},itemStyle:{color}});
-  const series=[line('TGA',data.tga,'#d97706',0),line('銀行準備金',data.reserves,'#0d9488',1)];
-  const ch=echarts.init(el,null,{renderer:'canvas'});ch.setOption({animation:false,grid:{left:62,right:62,top:38,bottom:30},legend:{top:0,textStyle:{fontSize:10},itemWidth:13,itemHeight:7},tooltip:{trigger:'axis'},xAxis:{type:'time',axisLabel:{fontSize:9}},yAxis:[{type:'value',name:'TGA 兆$',scale:true,axisLabel:{fontSize:9,formatter:v=>'$'+(v/1000000).toFixed(1)}},{type:'value',name:'準備金 兆$',position:'right',scale:true,axisLabel:{fontSize:9,formatter:v=>'$'+(v/1000000).toFixed(1)}}],series},true);if(el._ro)window.removeEventListener('resize',el._ro);el._ro=()=>ch.resize();window.addEventListener('resize',el._ro);
+  const terminalLine=(name,block,color,axis)=>{
+    const actual=(block.actual||[]).slice(-13).filter(point=>point.value!=null).map(point=>({value:[toMs(point.date),point.value],source_type:'actual',as_of:point.as_of||point.date}));
+    const forecast=_liqForecastWindow(block.forecast||[],win).map(point=>({value:[toMs(point.date),point.value],source_type:point.source_type,confidence:point.confidence,as_of:point.as_of,lineStyle:{type:'dashed',color,width:2.2},symbol:point.source_type==='official'?'diamond':'circle'}));
+    return {name,type:'line',smooth:false,showSymbol:true,symbolSize:6,yAxisIndex:axis,connectNulls:false,data:actual.concat(forecast),lineStyle:{color,width:2.2},itemStyle:{color}};
+  };
+  const series=[terminalLine('TGA 期末預估',data.tga,'#d97706',0),terminalLine('銀行準備金期末預估',data.reserves,'#0d9488',1),terminalLine('完整淨流動性期末預估',data.full_liquidity,'#1f6feb',1)];
+  const ch=echarts.init(el,null,{renderer:'canvas'});ch.setOption({animation:false,grid:{left:62,right:62,top:38,bottom:30},legend:{top:0,textStyle:{fontSize:10},itemWidth:13,itemHeight:7},tooltip:{trigger:'axis',formatter:items=>items.map(item=>{const point=item.data||{};const note=point.source_type==='actual'?'實際':(point.source_type==='official'?'官方預估':'模型預估');return item.marker+item.seriesName+'：'+_liqFmt(item.value&&item.value[1])+'<br/><span style="color:#8b949e">'+note+' · 資料日 '+esc(point.as_of||'—')+(point.confidence?' · '+esc(point.confidence)+' 信心':'')+'</span>';}).join('<br/>')},xAxis:{type:'time',axisLabel:{fontSize:9}},yAxis:[{type:'value',name:'TGA (B$)',scale:true,axisLabel:{fontSize:9,formatter:v=>'$'+(v/1000).toFixed(0)+'B'}},{type:'value',name:'準備金／淨流動性 (B$)',position:'right',scale:true,axisLabel:{fontSize:9,formatter:v=>'$'+(v/1000).toFixed(0)+'B'}}],series},true);if(el._ro)window.removeEventListener('resize',el._ro);el._ro=()=>ch.resize();window.addEventListener('resize',el._ro);
 }
 let NETLIQ_DATA=null, NETLIQ_WIN="3y";
 const NETLIQ_RANGES=[["1y",52,"1Y"],["2y",104,"2Y"],["3y",156,"3Y"],["5y",260,"5Y"],["all",Infinity,"ALL"]];

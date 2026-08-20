@@ -28,13 +28,12 @@ api.renderDailyRealGoldChart('daily-chart-real-gold',block);
 
 assert.ok(option,'應建立圖表設定');
 assert.strictEqual(option.grid.length,2,'主圖與相關性子圖應各有一個 grid');
-assert.strictEqual(option.series.length,5,'應有實際利率、黃金與三種相關性資料');
+assert.strictEqual(option.series.length,3,'應只保留實際利率、黃金與20日相關性');
 assert.strictEqual(option.yAxis.length,3,'主圖需雙軸，子圖需相關性軸');
 assert.strictEqual(option.series[1].yAxisIndex,1,'黃金應使用主圖右側軸');
-assert.strictEqual(option.series[2].name,'5日相關','應顯示5日早期警示線');
-assert.strictEqual(option.series[3].name,'10日相關','應顯示10日短期確認線');
-assert.strictEqual(option.series[4].name,'20日相關','應顯示20日主判讀線');
-assert.ok(option.series.slice(2).every(s=>s.xAxisIndex===1&&s.yAxisIndex===2),'所有相關性應在下方子圖');
+assert.strictEqual(option.series[2].name,'20日相關','應只顯示20日主判讀線');
+assert.ok(option.series.slice(2).every(s=>s.xAxisIndex===1&&s.yAxisIndex===2),'相關性應在下方子圖');
+assert.deepStrictEqual(option.series[2].markLine.data.map(x=>x.yAxis).sort((a,b)=>a-b),[-.6,-.35,0],'應有 -0.60、-0.35 與 0 的判讀虛線');
 assert.strictEqual(option.yAxis[2].min,-1,'相關性下限應為 -1');
 assert.strictEqual(option.yAxis[2].max,1,'相關性上限應為 1');
 console.log('daily real-gold chart test passed');

@@ -1564,6 +1564,7 @@ function renderMacroTabBody(){
     '</section>'+
     '<div id="fedYieldBlock"></div>'+
     '<div id="netLiqBlock"></div>'+
+    '<div id="liquidityForecastBlock"></div>'+
     '<div id="onRpBlock"></div>'+
     '<div id="onRpLiquidityBlock"></div>'+
     '<div id="m1m2Block"></div>'+
@@ -1586,6 +1587,7 @@ function renderMacroTabBody(){
   loadFedYield();
   loadUsThemeFlow();
   loadNetLiq();
+  loadLiquidityForecast();
   loadOnRp();
   loadOnRpLiquidity();
   if(MACRO_M1M2){                                   // 台灣 M1B/M2 年增率:放在 ON RP 下方
@@ -2108,6 +2110,37 @@ async function loadChicagoFci(){
 }
 
 // ── Fed 淨流動性(WALCL−TGA−RRP)+ S&P500 疊圖 ──
+let LIQUIDITY_FORECAST=null, LIQUIDITY_FORECAST_WIN="1m";
+async function loadLiquidityForecast(){
+  const box=$("#liquidityForecastBlock"); if(!box) return;
+  box.innerHTML='<div class="dim" style="padding:8px">載入 TGA 與準備金預估 …</div>';
+  try{
+    const res=await fetch("data/liquidity_forecast.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    LIQUIDITY_FORECAST=await res.json(); renderLiquidityForecast(LIQUIDITY_FORECAST);
+  }catch(e){box.innerHTML='<section><div class="sec-head"><h2>TGA 與銀行準備金預估</h2></div><div class="legend">資料待補（'+esc(e.message)+'）。</div></section>';}
+}
+function _liqFmt(v){return v==null?'—':'$'+(Number(v)/1000000).toFixed(2)+'兆';}
+function renderLiquidityForecast(data){
+  const box=$("#liquidityForecastBlock"); if(!box) return;
+  if(!data||data.status!=="ok"){box.innerHTML='<section><div class="sec-head"><h2>TGA 與銀行準備金預估</h2></div><div class="legend">資料待補：必要官方資料不足或更新延遲。</div></section>';return;}
+  const win=LIQUIDITY_FORECAST_WIN, button=w=>'<button class="ntab'+(win===w?' on':'')+'" data-liq-win="'+w+'">'+w.toUpperCase()+'</button>';
+  const card=(title,block,asOf)=>{const s=block.summary[win];return '<div class="card" style="padding:12px"><b>'+title+'</b><div style="font-size:18px;margin:5px 0;color:#1f6feb">'+_liqFmt(block.actual.values.at(-1))+'</div><div class="dim">實際資料日 '+esc(asOf)+' · '+win.toUpperCase()+' 基準 '+_liqFmt(s.value)+'（'+_liqFmt(s.change)+'）</div></div>';};
+  box.innerHTML='<section><div class="sec-head"><h2>TGA 與銀行準備金預估</h2><span class="tag">模型情境・非官方預測</span></div>'+updStamp(data.generated_at)+
+    '<div class="daily-read-grid">'+card('財政部一般帳戶 TGA',data.tga,data.as_of.WTREGEN)+card('銀行準備金',data.reserves,data.as_of.WRESBAL)+'</div>'+
+    '<div style="margin:10px 0;display:flex;gap:6px">'+button('1m')+button('3m')+'</div><div id="liquidityForecastChart" class="cap-chart" style="height:390px"></div>'+
+    '<div class="ex">實線＝已發布資料；虛線＝模型情境。TGA 以近三年同日曆窗口變動估計；準備金依 WALCL − TGA − RRP 的近期流動性關係推導。綠色＝較寬鬆、紅色＝較緊縮。</div></section>';
+  box.querySelectorAll('[data-liq-win]').forEach(b=>b.onclick=()=>{LIQUIDITY_FORECAST_WIN=b.dataset.liqWin;renderLiquidityForecast(data);});
+  drawLiquidityForecast(data);
+}
+function drawLiquidityForecast(data){
+  const el=document.getElementById('liquidityForecastChart');if(!el||!window.echarts)return;
+  const win=LIQUIDITY_FORECAST_WIN,toMs=d=>new Date(d+'T00:00:00').getTime(),old=echarts.getInstanceByDom(el);if(old)old.dispose();
+  const line=(name,block,color,dashed,yAxis)=>({name,type:'line',smooth:true,showSymbol:false,yAxisIndex:yAxis,data:block.dates.map((d,i)=>[toMs(d),block.values[i]]),lineStyle:{color,width:dashed?1.5:2.2,type:dashed?'dashed':'solid'},itemStyle:{color}});
+  const series=[];
+  [['TGA',data.tga,0,'#d97706'],['準備金',data.reserves,1,'#0d9488']].forEach(([name,block,axis,color])=>{series.push(line(name+' 實際',block.actual,color,false,axis));series.push(line(name+' 基準',block.base[win],color,true,axis));series.push(line(name+' 寬鬆',block.loose[win],'#16a34a',true,axis));series.push(line(name+' 緊縮',block.tight[win],'#dc2626',true,axis));});
+  const ch=echarts.init(el,null,{renderer:'canvas'});ch.setOption({animation:false,grid:{left:62,right:62,top:38,bottom:30},legend:{top:0,textStyle:{fontSize:10},itemWidth:13,itemHeight:7},tooltip:{trigger:'axis'},xAxis:{type:'time',axisLabel:{fontSize:9}},yAxis:[{type:'value',name:'TGA 兆$',scale:true,axisLabel:{fontSize:9,formatter:v=>'$'+(v/1000000).toFixed(1)}},{type:'value',name:'準備金 兆$',position:'right',scale:true,axisLabel:{fontSize:9,formatter:v=>'$'+(v/1000000).toFixed(1)}}],series},true);if(el._ro)window.removeEventListener('resize',el._ro);el._ro=()=>ch.resize();window.addEventListener('resize',el._ro);
+}
 let NETLIQ_DATA=null, NETLIQ_WIN="3y";
 const NETLIQ_RANGES=[["1y",52,"1Y"],["2y",104,"2Y"],["3y",156,"3Y"],["5y",260,"5Y"],["all",Infinity,"ALL"]];
 async function loadNetLiq(){

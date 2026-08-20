@@ -7,7 +7,7 @@ import os
 import re
 import urllib.request
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 
 import numpy as np
 import pandas as pd
@@ -145,12 +145,32 @@ def fetch_factor_series(series_reader=None):
     return series_map
 
 
+def parse_fred_api_observations(series_id, payload):
+    """將 FRED 官方 API JSON 轉為時間序列，缺值不以零取代。"""
+    data = json.loads(payload)
+    rows = data.get("observations") or []
+    dates = [row.get("date") for row in rows]
+    values = pd.to_numeric([row.get("value") for row in rows], errors="coerce")
+    return pd.Series(values, index=pd.to_datetime(dates), dtype=float).dropna().sort_index()
+
+
 def fred_series(series_id, start=START):
-    """讀取 FRED 官方 CSV，回傳原始觀測值與日期。"""
+    """優先讀取具金鑰的 FRED 官方 API；公開 CSV 僅作短逾時備援。"""
+    api_key = os.environ.get("FRED_API_KEY")
+    if api_key:
+        api_url = "https://api.stlouisfed.org/fred/series/observations?" + urlencode({
+            "series_id": series_id, "api_key": api_key, "file_type": "json", "observation_start": start,
+        })
+        try:
+            req = urllib.request.Request(api_url, headers={"User-Agent": "stockview1/1.0"})
+            with urllib.request.urlopen(req, timeout=15) as response:
+                return parse_fred_api_observations(series_id, response.read().decode("utf-8"))
+        except Exception as exc:
+            print("[liquidity-levels] FRED API %s failed, try CSV fallback: %s" % (series_id, exc))
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=%s&cosd=%s" % (series_id, start)
     req = urllib.request.Request(url, headers={"User-Agent": "stockview1/1.0"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             df = pd.read_csv(io.StringIO(response.read().decode("utf-8")))
         date_col = "DATE" if "DATE" in df.columns else "observation_date"
         if date_col not in df.columns or series_id not in df.columns:

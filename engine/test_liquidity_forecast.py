@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
+import json
 import export_liquidity_forecast as F
 
 
@@ -86,6 +87,16 @@ live_contract = F.build_from_fred(
 assert live_contract["status"] == "ok"
 assert all(key in live_contract for key in ("tga", "reserves", "full_liquidity", "factors"))
 assert all("confidence" in point for point in live_contract["tga"]["forecast"])
+
+# GitHub Actions 已提供 FRED_API_KEY 時，資料引擎必須使用官方 API 回應，
+# 不能只能依賴在 runner 上可能逾時的公開 CSV 端點。
+fred_api_payload = json.dumps({"observations": [
+    {"date": "2026-08-12", "value": "963950"},
+    {"date": "2026-08-19", "value": "."},
+]})
+fred_api_series = F.parse_fred_api_observations("WTREGEN", fred_api_payload)
+assert fred_api_series.index[-1].strftime("%Y-%m-%d") == "2026-08-12"
+assert fred_api_series.iloc[-1] == 963950.0
 
 # 會在把 TGA、ON RRP、流通貨幣或 FIMA/其他負債漏扣、重複扣除或方向相反時失敗。
 # 預期值是依資產負債表公式手算：10,000 - 5,000 - (-2,000) - 3,000 - 1,000 = 3,000。

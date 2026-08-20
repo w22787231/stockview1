@@ -35,6 +35,7 @@ assert terminal_factors["tga"]["forecast"][-1]["value"] == 850000
 assert terminal_factors["tga"]["forecast"][-1]["source_type"] == "official"
 assert all(key in terminal_factors["walcl"]["forecast"][-1]
            for key in ("value", "change", "source_type", "confidence"))
+assert all("confidence" in point for point in terminal["tga"]["forecast"])
 assert set(terminal) >= {"tga", "reserves", "full_liquidity", "factors", "targets"}
 
 result = F.build_levels(sample, "2026-08-20T00:00:00Z")
@@ -75,6 +76,16 @@ listing_html = '<a href="/news/press-releases/sb0000">Financing Estimates: Test<
 def fake_http_get(url):
     return treasury_html if url.endswith("sb0000") else listing_html
 assert F.fetch_treasury_tga_targets(fake_http_get) == expected_target
+
+# 匯出入口必須整合所有六項 FRED 因子和 Treasury 官方目標，不能再退回舊版兩線資料。
+live_contract = F.build_from_fred(
+    lambda series_id: factor_fixture.get(series_id, pd.Series(dtype=float)),
+    fake_http_get,
+    "2026-08-20T00:00:00Z",
+)
+assert live_contract["status"] == "ok"
+assert all(key in live_contract for key in ("tga", "reserves", "full_liquidity", "factors"))
+assert all("confidence" in point for point in live_contract["tga"]["forecast"])
 
 # 會在把 TGA、ON RRP、流通貨幣或 FIMA/其他負債漏扣、重複扣除或方向相反時失敗。
 # 預期值是依資產負債表公式手算：10,000 - 5,000 - (-2,000) - 3,000 - 1,000 = 3,000。

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""輸出 TGA 與銀行準備金的官方歷史水位；不做預測或累加。"""
+"""輸出期末 TGA、銀行準備金與完整淨流動性預估。"""
 import datetime as dt
 import io
 import json
@@ -448,12 +448,25 @@ def build_levels(series_map, generated_at=None):
     }
 
 
-def build_from_fred():
-    return build_levels({key: fred_series(key) for key in ("WTREGEN", "WRESBAL")})
+def build_from_fred(series_reader=None, http_get=_read_url_text, generated_at=None):
+    """Fetch every required source and emit the terminal-forecast contract.
+
+    Injectable readers keep the live integration independently testable without
+    making tests depend on FRED or Treasury network availability.
+    """
+    return build_terminal_forecast(
+        fetch_factor_series(series_reader),
+        fetch_treasury_tga_targets(http_get),
+        generated_at,
+    )
 
 
 if __name__ == "__main__":
     payload = build_from_fred()
+    if payload["status"] != "ok":
+        # Do not replace the deployed, last-known-good payload with a partial
+        # response.  The workflow will retain the live JSON instead.
+        raise SystemExit("[liquidity-levels] insufficient source data; preserve live payload")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))

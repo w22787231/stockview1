@@ -523,9 +523,10 @@ jobs:
         run: |
           cd engine
           python export_liquidity_forecast.py || true
-          if [ ! -s ../data/liquidity_forecast.json ]; then
+          if ! python -c "import json; d=json.load(open('../data/liquidity_forecast.json',encoding='utf-8')); assert d.get('status') == 'ok'; assert all(k in d for k in ('tga','reserves','full_liquidity','factors')); assert all('confidence' in p for p in d['tga']['forecast'])"; then
             curl -fsS "https://stockview1.pages.dev/data/liquidity_forecast.json" -o ../data/liquidity_forecast.json || true
           fi
+          python -c "import json; d=json.load(open('../data/liquidity_forecast.json',encoding='utf-8')); assert d.get('status') == 'ok'; assert all(k in d for k in ('tga','reserves','full_liquidity','factors')); assert all('confidence' in p for p in d['tga']['forecast'])"
       - name: Preserve lite pools' per-stock detail from live
         # us5000/tw_all 的 Buy 股詳情由各自 workflow 產生;主流程全快照須沿用,否則搜尋/點擊壞。
         if: ${{ github.event.inputs.web_only != 'true' }}

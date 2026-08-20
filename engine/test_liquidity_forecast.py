@@ -16,7 +16,7 @@ def sample_series():
         "WALCL": pd.Series([7000000 + i * 3000 for i in range(len(weekly))], index=weekly),
         "RRPONTSYD": pd.Series([200000 + i * 500 for i in range(len(weekly))], index=weekly),
         "CURRCIR": pd.Series([2300000 + i * 750 for i in range(len(weekly))], index=weekly),
-        "WLFN": pd.Series([250000 + i * 250 for i in range(len(weekly))], index=weekly),
+        "WLRRAFOIAL": pd.Series([250000 + i * 250 for i in range(len(weekly))], index=weekly),
     }
 
 
@@ -30,6 +30,11 @@ assert len(terminal["factors"]) == 6
 assert {factor["id"] for factor in terminal["factors"]} == {
     "tga", "walcl", "rrp", "currency", "fima_other", "treasury_events"
 }
+terminal_factors = {factor["id"]: factor for factor in terminal["factors"]}
+assert terminal_factors["tga"]["forecast"][-1]["value"] == 850000
+assert terminal_factors["tga"]["forecast"][-1]["source_type"] == "official"
+assert all(key in terminal_factors["walcl"]["forecast"][-1]
+           for key in ("value", "change", "source_type", "confidence"))
 assert set(terminal) >= {"tga", "reserves", "full_liquidity", "factors", "targets"}
 
 result = F.build_levels(sample, "2026-08-20T00:00:00Z")
@@ -59,7 +64,7 @@ assert F.factor_status(pd.Series([1.0], index=pd.to_datetime(["2026-08-19"]))) =
 factor_fixture = {
     "WTREGEN": sample["WTREGEN"], "WRESBAL": sample["WRESBAL"],
     "WALCL": sample_series()["WALCL"], "RRPONTSYD": sample_series()["RRPONTSYD"],
-    "CURRCIR": sample_series()["CURRCIR"], "WLRRAFOIAL": sample_series()["WLFN"],
+    "CURRCIR": sample_series()["CURRCIR"], "WLRRAFOIAL": sample_series()["WLRRAFOIAL"],
 }
 factors = F.fetch_factor_series(lambda series_id: factor_fixture.get(series_id, pd.Series(dtype=float)))
 assert set(factors) == set(factor_fixture)
@@ -70,4 +75,40 @@ listing_html = '<a href="/news/press-releases/sb0000">Financing Estimates: Test<
 def fake_http_get(url):
     return treasury_html if url.endswith("sb0000") else listing_html
 assert F.fetch_treasury_tga_targets(fake_http_get) == expected_target
+
+# 會在把 TGA、ON RRP、流通貨幣或 FIMA/其他負債漏扣、重複扣除或方向相反時失敗。
+# 預期值是依資產負債表公式手算：10,000 - 5,000 - (-2,000) - 3,000 - 1,000 = 3,000。
+components = {"walcl": 10000, "tga": 5000, "rrp": -2000, "currency": 3000, "fima_other": 1000}
+assert F.reserve_change(components) == 3000
+assert F.full_liquidity_change(components) == 3000
+assert F.reserve_change({**components, "tga": 10000}) == -2000
+
+# 會在把準備金與完整淨流動性相加，或把 TGA 在任一水位重複計入時失敗。
+levels = {"walcl": 10000, "tga": 5000, "rrp": 2000, "currency": 3000, "fima_other": 1000}
+assert F.full_liquidity_value(levels) == -1000
+
+component_series = {
+    "WTREGEN": pd.Series([100], index=pd.to_datetime(["2026-08-19"])),
+    "WRESBAL": pd.Series([500], index=pd.to_datetime(["2026-08-19"])),
+    "WALCL": pd.Series([10000], index=pd.to_datetime(["2026-08-19"])),
+    "RRPONTSYD": pd.Series([2], index=pd.to_datetime(["2026-08-19"])),
+    "CURRCIR": pd.Series([3000], index=pd.to_datetime(["2026-08-19"])),
+    "WLRRAFOIAL": pd.Series([1000], index=pd.to_datetime(["2026-08-19"])),
+}
+component_targets = [{
+    "date": "2026-08-31", "value": 200, "source_type": "official",
+    "confidence": "high", "as_of": "2026-08-19",
+}]
+component_forecasts = F.forecast_components(component_series, component_targets)
+assert component_forecasts[0]["change"] == {
+    "walcl": 0, "tga": 100, "rrp": 0, "currency": 0, "fima_other": 0,
+}
+reserve_forecasts = F.forecast_reserves(component_series, component_forecasts)
+liquidity_forecasts = F.forecast_full_liquidity(component_forecasts)
+assert reserve_forecasts[0]["value"] == 400
+assert reserve_forecasts[0]["change"] == -100
+assert liquidity_forecasts[0]["value"] == 3800
+assert liquidity_forecasts[0]["change"] == -100
+assert reserve_forecasts[0]["source_type"] == "model"
+assert liquidity_forecasts[0]["source_type"] == "model"
 print("liquidity levels tests passed")

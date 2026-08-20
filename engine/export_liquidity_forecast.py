@@ -203,8 +203,191 @@ def _forecast_point(date, value, source_type, as_of):
             "as_of": as_of}
 
 
+def reserve_change(delta):
+    """Return the reserve-balance change implied by each liability change once."""
+    return (delta["walcl"] - delta["tga"] - delta["rrp"]
+            - delta["currency"] - delta["fima_other"])
+
+
+def full_liquidity_change(delta):
+    """Use the same balance-sheet change equation for the liquidity proxy."""
+    return reserve_change(delta)
+
+
+def full_liquidity_value(levels):
+    """Return the independent full-liquidity level from its five account levels."""
+    return (levels["walcl"] - levels["tga"] - levels["rrp"]
+            - levels["currency"] - levels["fima_other"])
+
+
+def _confidence_min(*values):
+    order = {"high": 2, "medium": 1, "low": 0}
+    return min(values, key=lambda value: order.get(value, -1)) if values else "low"
+
+
+def _factor_level(series_map, factor_id):
+    spec = FACTOR_SPECS[factor_id]
+    series = series_map.get(spec["series"], pd.Series(dtype=float))
+    if factor_status(series) == "missing":
+        return None, None
+    scale = spec.get("scale", 1)
+    return float(series.iloc[-1]) * scale, pd.Timestamp(series.index[-1]).strftime("%Y-%m-%d")
+
+
+def _trend_change(series, target_date, scale=1):
+    """Project a component's level with its available trailing trend.
+
+    One observation has no observable trend, so its conservative projection is
+    unchanged and low confidence rather than an invented cash-flow estimate.
+    """
+    series = series.dropna().astype(float).sort_index()
+    if series.empty:
+        return None, "low"
+    if len(series) < 2:
+        return 0.0, "low"
+    history = series.iloc[-13:]
+    elapsed_days = (history.index[-1] - history.index[0]).days
+    future_days = (pd.Timestamp(target_date) - history.index[-1]).days
+    if elapsed_days <= 0 or future_days <= 0:
+        return 0.0, "medium"
+    daily_changes = np.diff(history.values) / np.diff(history.index.values).astype("timedelta64[D]").astype(float)
+    return float(np.median(daily_changes) * future_days * scale), "medium"
+
+
+def forecast_components(series_map, tga_forecast):
+    """Build one projected set of balance-sheet component levels per target date."""
+    base_levels = {}
+    as_of_dates = []
+    for factor_id, spec in FACTOR_SPECS.items():
+        level, as_of = _factor_level(series_map, factor_id)
+        base_levels[factor_id] = level
+        if as_of:
+            as_of_dates.append(as_of)
+
+    forecasts = []
+    for tga_point in tga_forecast:
+        levels = dict(base_levels)
+        changes = {factor_id: None for factor_id in FACTOR_SPECS}
+        confidence = []
+        tga_level = tga_point.get("value")
+        if base_levels["tga"] is None or tga_level is None:
+            levels["tga"] = None
+            confidence.append("low")
+        else:
+            levels["tga"] = float(tga_level)
+            changes["tga"] = levels["tga"] - base_levels["tga"]
+            confidence.append(tga_point.get("confidence", "low"))
+
+        factor_points = {
+            "tga": {
+                "value": levels["tga"], "change": changes["tga"],
+                "source_type": tga_point.get("source_type", "model"),
+                "confidence": tga_point.get("confidence", "low"),
+            }
+        }
+        for factor_id, spec in FACTOR_SPECS.items():
+            if factor_id == "tga":
+                continue
+            series = series_map.get(spec["series"], pd.Series(dtype=float))
+            change, factor_confidence = _trend_change(series, tga_point["date"], spec.get("scale", 1))
+            if base_levels[factor_id] is None or change is None:
+                levels[factor_id] = None
+                changes[factor_id] = None
+            else:
+                changes[factor_id] = change
+                levels[factor_id] = base_levels[factor_id] + change
+            confidence.append(factor_confidence)
+            factor_points[factor_id] = {
+                "value": levels[factor_id], "change": changes[factor_id],
+                "source_type": "model", "confidence": factor_confidence,
+            }
+
+        forecasts.append({
+            "date": tga_point["date"], "as_of": min(as_of_dates) if as_of_dates else None,
+            "levels": levels, "base_levels": base_levels, "change": changes,
+            "factors": factor_points, "source_type": "model",
+            "confidence": _confidence_min(*confidence),
+        })
+    return forecasts
+
+
+def _derived_forecast_point(component, value, change):
+    return {
+        "date": component["date"],
+        "value": None if value is None else round(float(value), 3),
+        "change": None if change is None else round(float(change), 3),
+        "source_type": "model", "confidence": component["confidence"],
+        "as_of": component["as_of"],
+    }
+
+
+def forecast_reserves(series_map, component_forecasts):
+    """Forecast reserve levels without using the full-liquidity level as an input."""
+    reserves = series_map.get("WRESBAL", pd.Series(dtype=float))
+    if factor_status(reserves) == "missing":
+        return [_derived_forecast_point(component, None, None) for component in component_forecasts]
+    latest = float(reserves.iloc[-1])
+    forecasts = []
+    for component in component_forecasts:
+        changes = component["change"]
+        if any(changes[factor_id] is None for factor_id in FACTOR_SPECS):
+            forecasts.append(_derived_forecast_point(component, None, None))
+            continue
+        change = reserve_change(changes)
+        forecasts.append(_derived_forecast_point(component, latest + change, change))
+    return forecasts
+
+
+def forecast_full_liquidity(component_forecasts):
+    """Forecast the liquidity proxy directly from account levels, never reserves."""
+    forecasts = []
+    for component in component_forecasts:
+        levels = component["levels"]
+        changes = component["change"]
+        if any(levels[factor_id] is None for factor_id in FACTOR_SPECS):
+            forecasts.append(_derived_forecast_point(component, None, None))
+            continue
+        forecasts.append(_derived_forecast_point(
+            component, full_liquidity_value(levels), full_liquidity_change(changes)))
+    return forecasts
+
+
+def forecast_factor_blocks(component_forecasts):
+    """Expose each component forecast without turning factor cards into another sum."""
+    blocks = {factor_id: [] for factor_id in FACTOR_SPECS}
+    for component in component_forecasts:
+        for factor_id, factor in component["factors"].items():
+            blocks[factor_id].append({
+                "date": component["date"], "value": factor["value"],
+                "change": factor["change"], "source_type": factor["source_type"],
+                "confidence": factor["confidence"], "as_of": component["as_of"],
+            })
+    return [
+        {"id": factor_id, "name": name,
+         "forecast": blocks.get(factor_id, [])}
+        if factor_id in blocks else
+        {"id": factor_id, "name": name, "forecast": []}
+        for factor_id, name in FACTOR_CONTRACT
+    ]
+
+
+def _full_liquidity_actual(series_map):
+    """Expose the latest complete balance-sheet proxy using the forecast account set."""
+    levels = {}
+    as_of_dates = []
+    for factor_id in FACTOR_SPECS:
+        level, as_of = _factor_level(series_map, factor_id)
+        if level is None:
+            return []
+        levels[factor_id] = level
+        as_of_dates.append(as_of)
+    as_of = min(as_of_dates)
+    return [{"date": as_of, "value": round(full_liquidity_value(levels), 3),
+             "source_type": "actual", "confidence": "high", "as_of": as_of}]
+
+
 def build_terminal_forecast(series_map, tga_targets, generated_at=None):
-    """Build the stable JSON envelope; forecasting methods are added in later tasks."""
+    """Build independent TGA, reserve and full-liquidity terminal levels."""
     required = ("WTREGEN", "WRESBAL")
     if any(key not in series_map or series_map[key] is None or series_map[key].dropna().empty for key in required):
         return {"status": "insufficient_data", "generated_at": generated_at,
@@ -226,19 +409,27 @@ def build_terminal_forecast(series_map, tga_targets, generated_at=None):
         point["change"] = round(float(value) - tga_latest, 3)
         tga_forecast.append(point)
 
+    component_forecasts = forecast_components(series_map, tga_forecast)
+
     def line(series_key):
         series = series_map.get(series_key, pd.Series(dtype=float))
         return {"actual": _points(series), "forecast": []}
 
     tga = line("WTREGEN")
     tga["forecast"] = tga_forecast
+    reserves = line("WRESBAL")
+    reserves["forecast"] = forecast_reserves(series_map, component_forecasts)
+    full_liquidity = {
+        "actual": _full_liquidity_actual(series_map),
+        "forecast": forecast_full_liquidity(component_forecasts),
+    }
     return {
         "status": "ok",
         "generated_at": generated_at or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "tga": tga,
-        "reserves": line("WRESBAL"),
-        "full_liquidity": line("FULL_LIQUIDITY"),
-        "factors": [{"id": factor_id, "name": name} for factor_id, name in FACTOR_CONTRACT],
+        "reserves": reserves,
+        "full_liquidity": full_liquidity,
+        "factors": forecast_factor_blocks(component_forecasts),
         "targets": tga_forecast,
     }
 

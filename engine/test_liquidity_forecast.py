@@ -27,6 +27,9 @@ assert terminal["status"] == "ok"
 assert terminal["tga"]["forecast"][-1]["value"] == 850000
 assert terminal["tga"]["forecast"][-1]["source_type"] == "official"
 assert len(terminal["factors"]) == 6
+assert {factor["id"] for factor in terminal["factors"]} == {
+    "tga", "walcl", "rrp", "currency", "fima_other", "treasury_events"
+}
 assert set(terminal) >= {"tga", "reserves", "full_liquidity", "factors", "targets"}
 
 result = F.build_levels(sample, "2026-08-20T00:00:00Z")

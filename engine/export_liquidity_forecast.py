@@ -107,7 +107,7 @@ def build_terminal_forecast(series_map, tga_targets, generated_at=None):
         "tga": tga,
         "reserves": line("WRESBAL"),
         "full_liquidity": line("FULL_LIQUIDITY"),
-        "factors": [{"key": key, "name": name} for key, name in FACTOR_CONTRACT],
+        "factors": [{"id": factor_id, "name": name} for factor_id, name in FACTOR_CONTRACT],
         "targets": tga_forecast,
     }
 

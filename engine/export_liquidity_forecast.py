@@ -202,10 +202,51 @@ FACTOR_CONTRACT = (
 )
 
 
-def terminal_dates(_as_of, official_targets):
-    """Return only Treasury-published quarter-end TGA target dates."""
-    return sorted({target["date"] for target in official_targets
-                   if target.get("source_type") == "official"})
+def terminal_dates(as_of, official_targets, months=6):
+    """Return monthly forecast dates plus future Treasury quarter-end anchors."""
+    as_of_timestamp = pd.Timestamp(as_of)
+    monthly_dates = pd.date_range(
+        as_of_timestamp + pd.offsets.MonthEnd(1),
+        periods=months,
+        freq=pd.offsets.MonthEnd(),
+    )
+    dates = {date.strftime("%Y-%m-%d") for date in monthly_dates}
+    dates.update(
+        target["date"] for target in official_targets
+        if target.get("source_type") == "official"
+        and pd.Timestamp(target["date"]) > as_of_timestamp
+    )
+    return sorted(dates)
+
+
+def _seasonal_tga_change(series, target_date):
+    """Estimate a monthly TGA move from historical changes in the same month.
+
+    The median limits the influence of one-off Treasury cash swings.  When the
+    available history does not yet include that calendar month, fall back to
+    the median of all observed month-to-month changes rather than inventing a
+    seasonal value.
+    """
+    series = series.dropna().astype(float).sort_index()
+    monthly = series.resample(pd.offsets.MonthEnd()).last()
+    current_month_end = series.index[-1] + pd.offsets.MonthEnd(0)
+    if series.index[-1].normalize() != current_month_end.normalize():
+        # The latest weekly release is usually a partial current month.  It is
+        # not a completed monthly cash flow and must not pollute that month's
+        # seasonal history.
+        monthly = monthly[monthly.index < current_month_end]
+    changes = monthly.diff().dropna()
+    if changes.empty:
+        return 0.0, "low"
+    cutoff = pd.Timestamp(target_date) - pd.DateOffset(years=5)
+    recent_changes = changes[changes.index >= cutoff]
+    same_month = recent_changes[
+        recent_changes.index.month == pd.Timestamp(target_date).month
+    ]
+    sample = same_month if not same_month.empty else recent_changes
+    if sample.empty:
+        sample = changes
+    return float(sample.median()), "medium"
 
 
 def _points(series):
@@ -255,23 +296,25 @@ def _factor_level(series_map, factor_id):
 
 
 def _trend_change(series, target_date, scale=1):
-    """Project a component's level with its available trailing trend.
-
-    One observation has no observable trend, so its conservative projection is
-    unchanged and low confidence rather than an invented cash-flow estimate.
-    """
+    """Project cumulative component change from monthly seasonal history."""
     series = series.dropna().astype(float).sort_index()
     if series.empty:
         return None, "low"
     if len(series) < 2:
         return 0.0, "low"
-    history = series.iloc[-13:]
-    elapsed_days = (history.index[-1] - history.index[0]).days
-    future_days = (pd.Timestamp(target_date) - history.index[-1]).days
-    if elapsed_days <= 0 or future_days <= 0:
+    latest = pd.Timestamp(series.index[-1])
+    current_month_end = latest + pd.offsets.MonthEnd(0)
+    first_forecast_month = (
+        current_month_end if latest.normalize() < current_month_end.normalize()
+        else latest + pd.offsets.MonthEnd(1)
+    )
+    target_month_end = pd.Timestamp(target_date) + pd.offsets.MonthEnd(0)
+    if target_month_end < first_forecast_month:
         return 0.0, "medium"
-    daily_changes = np.diff(history.values) / np.diff(history.index.values).astype("timedelta64[D]").astype(float)
-    return float(np.median(daily_changes) * future_days * scale), "medium"
+    months = pd.date_range(first_forecast_month, target_month_end,
+                           freq=pd.offsets.MonthEnd())
+    monthly_changes = [_seasonal_tga_change(series, month)[0] for month in months]
+    return float(sum(monthly_changes) * scale), "medium"
 
 
 def forecast_components(series_map, tga_forecast):
@@ -415,18 +458,31 @@ def build_terminal_forecast(series_map, tga_targets, generated_at=None):
                 "factors": [], "targets": []}
 
     as_of = pd.Timestamp(series_map["WTREGEN"].dropna().index[-1]).strftime("%Y-%m-%d")
-    official_targets = {target["date"]: target for target in tga_targets
-                        if target.get("source_type") == "official"}
+    as_of_timestamp = pd.Timestamp(as_of)
+    official_targets = {
+        target["date"]: target for target in tga_targets
+        if target.get("source_type") == "official"
+        and pd.Timestamp(target["date"]) > as_of_timestamp
+    }
     dates = terminal_dates(as_of, tga_targets)
     tga_latest = float(series_map["WTREGEN"].dropna().iloc[-1])
     tga_forecast = []
+    running_value = tga_latest
     for date in dates:
         target = official_targets.get(date)
-        value = target["value"]
-        source_type = "official"
+        if target:
+            value = target["value"]
+            source_type = "official"
+        else:
+            monthly_change, _confidence = _seasonal_tga_change(
+                series_map["WTREGEN"], date
+            )
+            value = running_value + monthly_change
+            source_type = "seasonal_model"
         point = _forecast_point(date, value, source_type, as_of)
         point["change"] = round(float(value) - tga_latest, 3)
         tga_forecast.append(point)
+        running_value = float(value)
 
     component_forecasts = forecast_components(series_map, tga_forecast)
 

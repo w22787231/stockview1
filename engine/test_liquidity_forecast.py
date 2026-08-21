@@ -27,9 +27,29 @@ terminal = F.build_terminal_forecast(sample_series(), [
 assert terminal["status"] == "ok"
 assert terminal["tga"]["forecast"][-1]["value"] == 850000
 assert terminal["tga"]["forecast"][-1]["source_type"] == "official"
-assert [point["date"] for point in terminal["tga"]["forecast"]] == ["2026-12-31"], "TGA 僅畫財政部官方季度末預估點"
-assert [point["date"] for point in terminal["reserves"]["forecast"]] == ["2026-12-31"], "準備金應使用相同季度末公式節點"
-assert [point["date"] for point in terminal["full_liquidity"]["forecast"]] == ["2026-12-31"], "完整淨流動性應使用相同季度末計算點"
+forecast_dates = [point["date"] for point in terminal["tga"]["forecast"]]
+assert forecast_dates == ["2026-04-30", "2026-05-31", "2026-06-30", "2026-07-31", "2026-08-31", "2026-09-30", "2026-12-31"], "TGA 應有每月預估點，並保留官方季度末錨點"
+assert terminal["tga"]["forecast"][0]["source_type"] == "seasonal_model"
+assert terminal["tga"]["forecast"][0]["value"] == 619000, "TGA 每月預估應使用歷史月增減幅"
+assert [point["date"] for point in terminal["reserves"]["forecast"]] == forecast_dates, "準備金應使用相同月度公式節點"
+assert [point["date"] for point in terminal["full_liquidity"]["forecast"]] == forecast_dates, "完整淨流動性應使用相同月度計算點"
+
+# 同一月份的舊資料過多時，TGA 季節模型仍只可採用最近五年，避免舊制度扭曲預測。
+seasonal_dates = pd.date_range("2010-01-31", "2025-12-31", freq="ME")
+seasonal_changes = [900 if date.month == 8 and date.year <= 2020 else (100 if date.month == 8 else 10)
+                    for date in seasonal_dates]
+seasonal_levels = pd.Series(seasonal_changes, index=seasonal_dates).cumsum()
+seasonal_delta, seasonal_confidence = F._seasonal_tga_change(seasonal_levels, "2026-08-31")
+assert seasonal_delta == 100, "TGA 同月份季節性只能使用最近五年歷史"
+assert seasonal_confidence == "medium"
+
+# 準備金公式中的 Fed 資產等項目也要採用月度季節變動，不能以日趨勢外插。
+component_seasonal_dates = pd.date_range("2021-01-31", "2026-07-31", freq="ME")
+component_seasonal_changes = [120 if date.month == 8 else 10 for date in component_seasonal_dates]
+component_seasonal_levels = pd.Series(component_seasonal_changes, index=component_seasonal_dates).cumsum()
+component_delta, component_confidence = F._trend_change(component_seasonal_levels, "2026-08-31")
+assert component_delta == 120, "準備金的底層帳務項目應採歷史同月份月增減"
+assert component_confidence == "medium"
 assert len(terminal["factors"]) == 6
 assert {factor["id"] for factor in terminal["factors"]} == {
     "tga", "walcl", "rrp", "currency", "fima_other", "treasury_events"

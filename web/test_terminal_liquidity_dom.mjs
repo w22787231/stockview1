@@ -20,6 +20,7 @@ assert.match(html, /TGA 期末預估/);
 assert.match(html, /銀行準備金期末預估/);
 assert.match(html, /完整淨流動性期末預估/);
 assert.match(html, /data-liquidity-factor/);
+assert.match(html, /預估月度數字/);
 
 const dailyRead = extract("renderDailyRead");
 assert.match(dailyRead, /id="liquidityForecastBlock"/, "期末流動性區塊必須放在每日判讀分頁");
@@ -78,5 +79,8 @@ assert.ok(CAPTURED_OPTION, "應呼叫 ECharts setOption");
 assert.strictEqual(CAPTURED_OPTION.series.length, 3, "主圖只應有三條線");
 assert.deepStrictEqual(CAPTURED_OPTION.series.map(series => series.name), ["TGA 期末預估","銀行準備金期末預估","完整淨流動性期末預估"]);
 assert.ok(CAPTURED_OPTION.series.every(series => series.data.some(point => point.lineStyle && point.lineStyle.type === "dashed")), "預估節點須為虛線");
+assert.match(BOX_HTML, /預估月度數字/, "每日判讀應列出月度預測數字");
+assert.match(BOX_HTML, /TGA 月增減/, "月度表應列出 TGA 的月增減");
+assert.match(BOX_HTML, /銀行準備金月增減/, "月度表應列出銀行準備金的月增減");
 
 console.log("✅ test_terminal_liquidity_dom 通過：三線、期末卡、六因子卡與 1M/3M/6M 預估範圍");

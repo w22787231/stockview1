@@ -2153,9 +2153,23 @@ function renderLiquidityForecast(data){
       '<b>'+esc(factor.name||factor.id)+'</b><div style="font-size:16px;margin:5px 0;color:'+color+'">'+_liqChange(point.change)+'</div>'+
       '<div class="dim">'+esc(direction)+' · 目標日 '+esc(point.date||'—')+' · '+esc(point.confidence||'low')+' 信心</div></article>';
   }).join('');
+  const tgaPoints=_liqForecastWindow(data.tga&&data.tga.forecast||[],win);
+  const reserveByDate=new Map((data.reserves&&data.reserves.forecast||[]).map(point=>[point.date,point]));
+  const tgaActual=(data.tga&&data.tga.actual||[]).slice(-1)[0]||{};
+  const reserveActual=(data.reserves&&data.reserves.actual||[]).slice(-1)[0]||{};
+  const monthlyRows=tgaPoints.map((tgaPoint,index)=>{
+    const reservePoint=reserveByDate.get(tgaPoint.date)||{};
+    const previousTga=index===0?tgaActual.value:tgaPoints[index-1].value;
+    const previousReserve=index===0?reserveActual.value:(reserveByDate.get(tgaPoints[index-1].date)||{}).value;
+    const tgaDelta=tgaPoint.value==null||previousTga==null?null:Number(tgaPoint.value)-Number(previousTga);
+    const reserveDelta=reservePoint.value==null||previousReserve==null?null:Number(reservePoint.value)-Number(previousReserve);
+    const delta=value=>value==null?'—':(value>0?'+':'')+_liqFmt(value);
+    return '<tr><td>'+esc(tgaPoint.date||'—')+'</td><td>'+_liqFmt(tgaPoint.value)+'</td><td>'+delta(tgaDelta)+'</td><td>'+_liqFmt(reservePoint.value)+'</td><td>'+delta(reserveDelta)+'</td><td>'+esc(tgaPoint.confidence||'low')+'／'+esc(reservePoint.confidence||'low')+'</td></tr>';
+  }).join('')||'<tr><td colspan="6" class="dim">尚無預測月度資料</td></tr>';
   box.innerHTML='<section><div class="sec-head"><h2>期末美元流動性預估</h2><span class="tag">期末水位，非逐日累加</span></div>'+updStamp(data.generated_at)+
     '<div class="daily-read-grid">'+card('TGA 期末預估',data.tga,'#d97706')+card('銀行準備金期末預估',data.reserves,'#0d9488')+card('完整淨流動性期末預估',data.full_liquidity,'#1f6feb')+'</div>'+
     '<div style="margin:10px 0;display:flex;gap:6px">'+button('1m')+button('3m')+button('6m')+'</div><div id="liquidityForecastChart" class="cap-chart" style="height:390px"></div>'+
+    '<div class="cap-sub2" style="margin-top:12px">預估月度數字 <span class="dim">單位：B（十億美元）</span></div><div style="overflow-x:auto"><table class="plain-table" style="min-width:720px"><thead><tr><th>月末</th><th>TGA 期末</th><th>TGA 月增減</th><th>銀行準備金期末</th><th>銀行準備金月增減</th><th>可靠度（TGA／準備金）</th></tr></thead><tbody>'+monthlyRows+'</tbody></table></div>'+
     '<div class="cap-sub2" style="margin-top:12px">六項期末因子變化（各自獨立顯示，未另行總和）</div><div class="daily-read-grid" style="margin-top:8px">'+factors+'</div>'+
     '<div class="ex">實線為已發布的實際水位；虛線／菱形為未來月末或季末節點。1M／3M／6M 只切換未來預估範圍。TGA 官方目標優先，其餘未發布期間為模型估計。</div></section>';
   box.querySelectorAll('[data-liq-win]').forEach(b=>b.onclick=()=>{LIQUIDITY_LEVELS_WIN=b.dataset.liqWin;renderLiquidityForecast(data);});

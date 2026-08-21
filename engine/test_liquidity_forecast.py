@@ -27,6 +27,9 @@ terminal = F.build_terminal_forecast(sample_series(), [
 assert terminal["status"] == "ok"
 assert terminal["tga"]["forecast"][-1]["value"] == 850000
 assert terminal["tga"]["forecast"][-1]["source_type"] == "official"
+assert [point["date"] for point in terminal["tga"]["forecast"]] == ["2026-12-31"], "TGA 僅畫財政部官方季度末預估點"
+assert [point["date"] for point in terminal["reserves"]["forecast"]] == ["2026-12-31"], "準備金應使用相同季度末公式節點"
+assert [point["date"] for point in terminal["full_liquidity"]["forecast"]] == ["2026-12-31"], "完整淨流動性應使用相同季度末計算點"
 assert len(terminal["factors"]) == 6
 assert {factor["id"] for factor in terminal["factors"]} == {
     "tga", "walcl", "rrp", "currency", "fima_other", "treasury_events"

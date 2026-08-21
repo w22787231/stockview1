@@ -202,10 +202,10 @@ FACTOR_CONTRACT = (
 )
 
 
-def terminal_dates(as_of, months=6):
-    """Return the monthly endpoints used by the terminal forecast contract."""
-    end = pd.Timestamp(as_of) + pd.offsets.MonthEnd(1)
-    return [date.strftime("%Y-%m-%d") for date in pd.date_range(end, periods=months, freq="ME")]
+def terminal_dates(_as_of, official_targets):
+    """Return only Treasury-published quarter-end TGA target dates."""
+    return sorted({target["date"] for target in official_targets
+                   if target.get("source_type") == "official"})
 
 
 def _points(series):
@@ -415,16 +415,15 @@ def build_terminal_forecast(series_map, tga_targets, generated_at=None):
                 "factors": [], "targets": []}
 
     as_of = pd.Timestamp(series_map["WTREGEN"].dropna().index[-1]).strftime("%Y-%m-%d")
-    dates = terminal_dates(as_of)
     official_targets = {target["date"]: target for target in tga_targets
                         if target.get("source_type") == "official"}
-    dates = sorted(set(dates) | set(official_targets))
+    dates = terminal_dates(as_of, tga_targets)
     tga_latest = float(series_map["WTREGEN"].dropna().iloc[-1])
     tga_forecast = []
     for date in dates:
         target = official_targets.get(date)
-        value = target["value"] if target else tga_latest
-        source_type = "official" if target else "model"
+        value = target["value"]
+        source_type = "official"
         point = _forecast_point(date, value, source_type, as_of)
         point["change"] = round(float(value) - tga_latest, 3)
         tga_forecast.append(point)

@@ -87,6 +87,10 @@ assert.ok(html.includes('daily-checklist-table'), "每日判讀應渲染可掃�
 assert.ok(html.includes('daily-chart-rates'), "每日判讀應有利率結構圖容器");
 assert.ok(html.includes('daily-chart-risk'), "每日判讀應有波動與信用壓力圖容器");
 assert.ok(html.includes('daily-chart-internals'), "每日判讀應有股票內部圖容器");
+assert.ok(html.includes('daily-chart-credit'), "每日判讀應有信用結構圖容器");
+assert.ok(html.includes('IG 指數殖利率、BBB 利差、HY 指數殖利率'), "信用結構圖必須標示三條新增序列");
+assert.ok(html.includes('data-daily-chart-range'), "每日判讀的圖表必須提供時間範圍按鈕");
+assert.ok(html.includes('1M') && html.includes('3M') && html.includes('6M') && html.includes('1Y') && html.includes('ALL'), "圖表時間按鈕必須包含 1M/3M/6M/1Y/ALL");
 assert.ok(html.includes('<th>水平</th>'), "量化表應顯示歷史水平欄位");
 assert.ok(html.includes('<th>判讀結論</th>'), "量化表應顯示獨立判讀結論欄位");
 assert.ok(html.includes('<th>註記</th>'), "量化表應顯示白話註記欄位");

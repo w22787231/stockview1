@@ -22,7 +22,7 @@ const block={corr_windows:[5,10,20],series:{'10Y 實質利率':{dates,values:rea
 let option=null;
 const chart={_ro:null,innerHTML:""};
 const ECH={getInstanceByDom(){return null;},init(){return{setOption(v){option=v;},resize(){},dispose(){}};}};
-const src=`const {CHART,ECH}=__ctx; const $=s=>s==='#daily-chart-real-gold'?CHART:null; const echarts=ECH; const window={echarts:ECH,addEventListener(){},removeEventListener(){}};${extract('renderDailyRealGoldChart')} return {renderDailyRealGoldChart};`;
+const src=`const {CHART,ECH}=__ctx; const $=s=>s==='#daily-chart-real-gold'?CHART:null; const echarts=ECH; const window={echarts:ECH,addEventListener(){},removeEventListener(){}}; const DAILY_CHART_RANGE_DAYS={"1m":31,"3m":93,"6m":184,"1y":366,all:null}; ${extract('_dailyRangeStart')} ${extract('renderDailyRealGoldChart')} return {renderDailyRealGoldChart};`;
 const api=new Function('__ctx',src)({CHART:chart,ECH});
 api.renderDailyRealGoldChart('daily-chart-real-gold',block);
 
@@ -36,4 +36,6 @@ assert.ok(option.series.slice(2).every(s=>s.xAxisIndex===1&&s.yAxisIndex===2),'�
 assert.deepStrictEqual(option.series[2].markLine.data.map(x=>x.yAxis).sort((a,b)=>a-b),[-.6,-.35,0],'應有 -0.60、-0.35 與 0 的判讀虛線');
 assert.strictEqual(option.yAxis[2].min,-1,'相關性下限應為 -1');
 assert.strictEqual(option.yAxis[2].max,1,'相關性上限應為 1');
+api.renderDailyRealGoldChart('daily-chart-real-gold',block,'1m');
+assert.ok(option.series.every(series=>series.data.length<=32),'1M 按鈕必須把實際利率、黃金與相關性共同裁切到近一個月');
 console.log('daily real-gold chart test passed');

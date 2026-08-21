@@ -250,7 +250,7 @@ def build():
             "charts": {
                 "rates": {"title": "利率結構", "series": {"2Y 名目": chart_series(y2), "10Y 名目": chart_series(y10), "30Y 名目": chart_series(y30), "10Y TIPS": chart_series(tips), "10Y BEI": chart_series(bei)}},
                 "risk": {"title": "波動與信用壓力", "series": {"MOVE": chart_series(col("^MOVE")), "VIX": chart_series(col("^VIX")), "VIX9D": chart_series(col("^VIX9D")), "VIX9D/VIX": chart_series(ratio_series(col("^VIX9D"), col("^VIX"))), "HY OAS": chart_series(hy_oas)}},
-                "credit": {"title": "信用結構", "series": {"IG 指數殖利率": chart_series(ig_yield), "BBB 利差": chart_series(bbb_oas), "HY 指數殖利率": chart_series(hy_yield)}},
+                "credit": {"title": "信用結構", "series": {"IG 指數殖利率": chart_series(ig_yield), "10Y 美債殖利率": chart_series(y10), "HY 指數殖利率": chart_series(hy_yield), "IG 利差（OAS）": chart_series(ig_oas), "BBB 利差（OAS）": chart_series(bbb_oas), "HY 利差（OAS）": chart_series(hy_oas)}},
                 "real_gold": {"title": "實際利率與黃金", "corr_windows": [5, 10, 20], "series": {"10Y 實質利率": chart_series(tips), "黃金期貨": chart_series(col("GC=F")), "5日相關": chart_series(real_gold_corr5), "10日相關": chart_series(real_gold_corr10), "20日相關": chart_series(real_gold_corr20)}},
                 "internals": {"title": "股票內部相對強弱", "series": {"SPY": chart_series(spy), "RSP": chart_series(col("RSP")), "IWM": chart_series(col("IWM")), "KRE": chart_series(col("KRE"))}},
                 "japan": {"title": "日本匯率與長債", "dual_axis": True, "series": {"USD/JPY": chart_series(col("JPY=X")), "日本 10Y 殖利率（月頻）": chart_series(jgb10)}},

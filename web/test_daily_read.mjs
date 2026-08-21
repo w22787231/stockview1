@@ -13,7 +13,7 @@ assert.ok(end > start, "每日市場判讀區塊必須位於宏觀評分前");
 const source = html.slice(start, end);
 let boxHtml = "";
 const box = { set innerHTML(value){ boxHtml=value; }, get innerHTML(){ return boxHtml; } };
-const api = new Function("const $ = () => BOX; const esc = value => String(value == null ? '' : value); const BOX = arguments[0];\n" + source + "\nreturn { buildDailyRead, renderDailyRead };")(box);
+const api = new Function("const $ = () => BOX; const esc = value => String(value == null ? '' : value); const loadLiquidityForecast = () => {}; const BOX = arguments[0];\n" + source + "\nreturn { buildDailyRead, renderDailyRead };")(box);
 
 const riskInputs = {
   score: { items: [

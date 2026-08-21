@@ -21,6 +21,10 @@ assert.match(html, /銀行準備金期末預估/);
 assert.match(html, /完整淨流動性期末預估/);
 assert.match(html, /data-liquidity-factor/);
 
+const dailyRead = extract("renderDailyRead");
+assert.match(dailyRead, /id="liquidityForecastBlock"/, "期末流動性區塊必須放在每日判讀分頁");
+assert.match(dailyRead, /loadLiquidityForecast\(\)/, "每日判讀渲染後必須載入期末流動性資料");
+
 const DATA = {
   status: "ok", generated_at: "2026-08-20T00:00:00Z",
   tga: { actual: [{date:"2026-08-19",value:600000}], forecast: [{date:"2026-08-31",value:650000,change:50000,source_type:"model",confidence:"medium",as_of:"2026-08-19"}] },

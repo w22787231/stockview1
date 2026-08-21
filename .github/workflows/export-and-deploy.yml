@@ -520,6 +520,7 @@ jobs:
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: |
           cd engine
           python export_liquidity_forecast.py || true

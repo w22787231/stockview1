@@ -29,6 +29,23 @@ eq(D.to_bps(0.12), 12.0, "殖利率 0.12% 應轉 12bps")
 eq(D.ratio(18.0, 20.0), 0.9, "VIX9D/VIX 比值計算錯誤")
 eq(D.ratio(None, 20.0), None, "缺資料不可產生比值")
 
+# CFTC 水位必須以未平倉量標準化；不可把淨合約數直接當成跨標的可比較的水位。
+eq(D.cftc_net_oi(120, 20, 200), 50.0, "CFTC 淨持倉水位應以未平倉量標準化")
+eq(D.cftc_net_oi(120, 20, 0), None, "零未平倉量不可產生水位")
+eq(D.cftc_net_oi(None, 20, 200), None, "缺多單資料不可產生水位")
+
+# 同一合約重複日期應取最後一筆，四週變化需以水位差（百分點）而非合約差計算。
+cot_rows = pd.DataFrame({
+    "Market_and_Exchange_Names": ["TEST CONTRACT"] * 6,
+    "Report_Date_as_YYYY-MM-DD": ["2026-01-%02d" % day for day in (6, 13, 20, 27, 31, 31)],
+    "Open_Interest_All": [200, 200, 200, 200, 200, 200],
+    "Asset_Mgr_Positions_Long_All": [120, 120, 120, 120, 120, 140],
+    "Asset_Mgr_Positions_Short_All": [20, 20, 20, 20, 20, 20],
+})
+cot_block = D._cftc_market_block(cot_rows, "TEST CONTRACT", [("機構", "Asset_Mgr_Positions_Long_All", "Asset_Mgr_Positions_Short_All")])
+eq(cot_block["series"]["機構"]["values"][-1], 60.0, "重複日期必須以最後 CFTC 回報計算")
+eq(cot_block["metrics"]["機構"]["change_4w"], 10.0, "四週變化應以水位百分點計算")
+
 # 黃金相關性只能用共同交易日；實質利率採日變動、黃金採日報酬，避免把水準直接相關化。
 corr_dates = pd.date_range("2026-01-01", periods=25, freq="B")
 real_fixture = pd.Series([1.0 + 0.01 * i + 0.002 * (i % 2) for i in range(25)], index=corr_dates)
@@ -111,13 +128,14 @@ fixture_prices = pd.DataFrame({
     "IWM": [100.0 + 2 * i for i in range(25)],
     "KRE": [100.0 + 2 * i for i in range(25)],
 }, index=fixture_dates)
-old_fred, old_yf = D.fred_series, D.P.fetch_yf_close
+old_fred, old_yf, old_cftc = D.fred_series, D.P.fetch_yf_close, D.build_cftc_positioning
 try:
     D.fred_series = lambda _series_id: fixture_fred
     D.P.fetch_yf_close = lambda _symbols, _start: fixture_prices
+    D.build_cftc_positioning = lambda: {"markets": {"sp500": {"series": {"資產管理機構": {"dates": ["2026-03-24"], "values": [20.0]}}, "metrics": {}, "as_of": "2026-03-24", "reason": None}}, "market_labels": {"sp500": "S&P 500"}}
     built = D.build()
 finally:
-    D.fred_series, D.P.fetch_yf_close = old_fred, old_yf
+    D.fred_series, D.P.fetch_yf_close, D.build_cftc_positioning = old_fred, old_yf, old_cftc
 built_rows = [row for group in built["groups"] for row in group["rows"]]
 eq(len(built_rows), 16, "build 必須產生16個量化檢查列")
 for built_row in built_rows:
@@ -136,5 +154,6 @@ assert len(built["charts"]["real_gold"]["series"]["20日相關"]["values"]) == 5
 assert built["charts"]["bitcoin_gold"]["series"]["比特幣（BTC-USD）"]["values"], "build 必須輸出比特幣圖表序列"
 assert built["charts"]["bitcoin_gold"]["series"]["黃金期貨"]["values"], "build 必須輸出比特幣對照黃金序列"
 assert len(built["charts"]["bitcoin_gold"]["series"]["20日相關"]["values"]) == 5, "比特幣與黃金20日相關應略過前20個無法計算的交易日"
+assert built["charts"]["cftc_positioning"]["markets"]["sp500"]["series"]["資產管理機構"]["values"] == [20.0], "build 必須輸出 CFTC 持倉圖資料結構"
 
 print("✅ test_daily_checklist 通過：交易日差、相對強弱、bps 與比值口徑")

@@ -4,7 +4,10 @@ import datetime as dt
 import io
 import json
 import os
+import time
+import urllib.parse
 import urllib.request
+import zipfile
 
 import numpy as np
 import pandas as pd
@@ -186,6 +189,139 @@ def chart_series(series, keep=1400):
             "values": [round(float(v), 3) for v in s.values]}
 
 
+# CFTC 的金融期貨 (TFF) 與商品拆分 (Disaggregated) 使用不同的交易人分類；不可混用。
+CFTC_TFF_MARKETS = {
+    "sp500": ("S&P 500", "E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE"),
+    "nasdaq": ("Nasdaq 100", "NASDAQ MINI - CHICAGO MERCANTILE EXCHANGE"),
+    "ust10": ("10Y 美債", "UST 10Y NOTE - CHICAGO BOARD OF TRADE"),
+    "usd": ("美元指數", "USD INDEX - ICE FUTURES U.S."),
+    "vix": ("VIX", "VIX FUTURES - CBOE FUTURES EXCHANGE"),
+}
+CFTC_GOLD_MARKET = ("黃金", "GOLD - COMMODITY EXCHANGE INC.")
+
+
+def cftc_net_oi(long, short, open_interest):
+    """CFTC 淨多空水位，單位為未平倉量百分比。"""
+    if any(value is None or pd.isna(value) for value in (long, short, open_interest)):
+        return None
+    if float(open_interest) == 0:
+        return None
+    return round(100 * (float(long) - float(short)) / float(open_interest), 2)
+
+
+def cftc_percentile(values, years=3):
+    """用最近 years×52 筆週資料計算最新水位的歷史百分位。"""
+    valid = [float(value) for value in values if value is not None and not pd.isna(value)]
+    lookback = max(1, int(years * 52))
+    valid = valid[-lookback:]
+    if len(valid) < 20:
+        return None
+    return round(100 * sum(value <= valid[-1] for value in valid) / len(valid))
+
+
+def _cftc_year_rows(report, year):
+    """讀取單一 CFTC 年度 ZIP；失敗時回傳空 DataFrame，讓日報表其餘部分繼續生成。"""
+    filename = "fut_fin_txt_%d.zip" % year if report == "tff" else "fut_disagg_txt_%d.zip"
+    url = "https://www.cftc.gov/files/dea/history/%s" % filename
+    last_error = None
+    # CFTC 會對短時間密集的年度檔請求回覆 400；串行節流與一次重試比把資料默默清空可靠。
+    for attempt in range(2):
+        try:
+            time.sleep(0.45 if attempt == 0 else 2.0)
+            request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                raw = response.read()
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                names = archive.namelist()
+                if not names:
+                    return pd.DataFrame()
+                with archive.open(names[0]) as source:
+                    return pd.read_csv(source, low_memory=False)
+        except Exception as exc:
+            last_error = exc
+    print("[daily-checklist] CFTC %s %d 失敗: %s" % (report, year, last_error))
+    return pd.DataFrame()
+
+
+def _cftc_metric(series):
+    values = [] if series is None else series.dropna().astype(float).tolist()
+    latest = values[-1] if values else None
+    delta4 = None if len(values) < 5 else round(latest - values[-5], 2)
+    return {"last": None if latest is None else round(latest, 2), "change_4w": delta4,
+            "percentile_3y": cftc_percentile(values), "as_of": None if series is None or series.empty else series.index[-1].strftime("%Y-%m-%d")}
+
+
+def _cftc_gold_api_rows(now):
+    """黃金只需一個精準合約，改用 CFTC PRE API 避免連抓多個年度商品 ZIP 被來源節流。"""
+    params = {
+        "$select": "market_and_exchange_names,report_date_as_yyyy_mm_dd,open_interest_all,m_money_positions_long_all,m_money_positions_short_all",
+        "$where": "market_and_exchange_names='GOLD - COMMODITY EXCHANGE INC.' AND report_date_as_yyyy_mm_dd >= '%d-01-01T00:00:00.000'" % (now.year - 5),
+        "$order": "report_date_as_yyyy_mm_dd ASC",
+        "$limit": "500",
+    }
+    url = "https://publicreporting.cftc.gov/resource/72hh-3qpy.json?" + urllib.parse.urlencode(params)
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = json.loads(response.read().decode("utf-8"))
+        frame = pd.DataFrame(raw).rename(columns={
+            "market_and_exchange_names": "Market_and_Exchange_Names",
+            "report_date_as_yyyy_mm_dd": "Report_Date_as_YYYY-MM-DD",
+            "open_interest_all": "Open_Interest_All",
+            "m_money_positions_long_all": "M_Money_Positions_Long_All",
+            "m_money_positions_short_all": "M_Money_Positions_Short_All",
+        })
+        for column in ("Open_Interest_All", "M_Money_Positions_Long_All", "M_Money_Positions_Short_All"):
+            if column in frame:
+                frame[column] = pd.to_numeric(frame[column], errors="coerce")
+        return frame
+    except Exception as exc:
+        print("[daily-checklist] CFTC 黃金 API 失敗: %s" % exc)
+        return pd.DataFrame()
+
+
+def _cftc_market_block(rows, market_name, categories):
+    """將單一精準合約名稱的 CFTC rows 正規化為前端圖表契約。"""
+    base = {"series": {}, "metrics": {}, "as_of": None,
+            "note": "持倉日為週二，通常於週五發布；槓桿基金為對沖基金可觀測代理。"}
+    required = {"Market_and_Exchange_Names", "Report_Date_as_YYYY-MM-DD", "Open_Interest_All"}
+    if rows is None or rows.empty or not required.issubset(rows.columns):
+        return dict(base, reason="CFTC 資料欄位不足")
+    selected = rows[rows["Market_and_Exchange_Names"].astype(str).str.strip() == market_name].copy()
+    if selected.empty:
+        return dict(base, reason="找不到指定 CFTC 合約")
+    selected["date"] = pd.to_datetime(selected["Report_Date_as_YYYY-MM-DD"], errors="coerce")
+    selected = selected.dropna(subset=["date"]).sort_values("date").drop_duplicates("date", keep="last")
+    for label, long_col, short_col in categories:
+        if long_col not in selected.columns or short_col not in selected.columns:
+            continue
+        values = [cftc_net_oi(long, short, oi) for long, short, oi in zip(selected[long_col], selected[short_col], selected["Open_Interest_All"])]
+        series = pd.Series(values, index=selected["date"], dtype=float).dropna()
+        base["series"][label] = chart_series(series, keep=2000)
+        base["metrics"][label] = _cftc_metric(series)
+    if not base["series"]:
+        return dict(base, reason="指定合約缺少所需交易人分類欄位")
+    dates = [metric["as_of"] for metric in base["metrics"].values() if metric.get("as_of")]
+    return dict(base, as_of=max(dates) if dates else None, reason=None)
+
+
+def build_cftc_positioning(now=None):
+    """產生六個市場的 CFTC 週度持倉水位；網路失敗仍維持穩定 JSON 形狀。"""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    years = range(now.year - 5, now.year + 1)
+    tff_frames = [_cftc_year_rows("tff", year) for year in years]
+    tff = pd.concat([frame for frame in tff_frames if not frame.empty], ignore_index=True) if any(not frame.empty for frame in tff_frames) else pd.DataFrame()
+    gold = _cftc_gold_api_rows(now)
+    markets = {}
+    tff_categories = [("資產管理機構", "Asset_Mgr_Positions_Long_All", "Asset_Mgr_Positions_Short_All"),
+                      ("槓桿基金", "Lev_Money_Positions_Long_All", "Lev_Money_Positions_Short_All")]
+    for key, (_, contract) in CFTC_TFF_MARKETS.items():
+        markets[key] = _cftc_market_block(tff, contract, tff_categories)
+    markets["gold"] = _cftc_market_block(gold, CFTC_GOLD_MARKET[1], [("Managed Money", "M_Money_Positions_Long_All", "M_Money_Positions_Short_All")])
+    return {"title": "機構／槓桿基金持倉水位（CFTC）", "source": "CFTC Commitments of Traders", "frequency": "週",
+            "markets": markets, "market_labels": {key: label for key, (label, _) in CFTC_TFF_MARKETS.items()} | {"gold": CFTC_GOLD_MARKET[0]}}
+
+
 def real_gold_correlation(real_yield, gold, window=20):
     """10Y 實質利率日變動與黃金日報酬的滾動相關。僅使用共同交易日，避免錯位配對。"""
     if real_yield is None or gold is None:
@@ -240,6 +376,7 @@ def build():
     real_gold_corr10 = real_gold_correlation(tips, col("GC=F"), window=10)
     real_gold_corr20 = real_gold_correlation(tips, col("GC=F"), window=20)
     bitcoin_gold_corr20 = asset_return_correlation(col("BTC-USD"), col("GC=F"), window=20)
+    cftc_positioning = build_cftc_positioning()
     groups = [
         {"title": "利率／通膨", "rows": [
             row("y2", "2Y 名目利率", y2, "%", "FRED DGS2", change_unit="bps", kind="yield"),
@@ -264,6 +401,7 @@ def build():
                 "credit": {"title": "信用結構", "series": {"IG 指數殖利率": chart_series(ig_yield), "10Y 美債殖利率": chart_series(y10), "HY 指數殖利率": chart_series(hy_yield), "IG 利差（OAS）": chart_series(ig_oas), "BBB 利差（OAS）": chart_series(bbb_oas), "HY 利差（OAS）": chart_series(hy_oas)}},
                 "real_gold": {"title": "實際利率與黃金", "corr_windows": [5, 10, 20], "series": {"10Y 實質利率": chart_series(tips), "黃金期貨": chart_series(col("GC=F")), "5日相關": chart_series(real_gold_corr5), "10日相關": chart_series(real_gold_corr10), "20日相關": chart_series(real_gold_corr20)}},
                 "bitcoin_gold": {"title": "比特幣與黃金", "corr_windows": [20], "series": {"比特幣（BTC-USD）": chart_series(col("BTC-USD")), "黃金期貨": chart_series(col("GC=F")), "20日相關": chart_series(bitcoin_gold_corr20)}},
+                "cftc_positioning": cftc_positioning,
                 "internals": {"title": "股票內部相對強弱", "series": {"SPY": chart_series(spy), "RSP": chart_series(col("RSP")), "IWM": chart_series(col("IWM")), "KRE": chart_series(col("KRE"))}},
                 "japan": {"title": "日本匯率與長債", "dual_axis": True, "series": {"USD/JPY": chart_series(col("JPY=X")), "日本 10Y 殖利率（月頻）": chart_series(jgb10)}},
             }}

@@ -90,6 +90,9 @@ assert.ok(html.includes('daily-chart-internals'), "每日判讀應有股票內�
 assert.ok(html.includes('daily-chart-credit'), "每日判讀應有信用結構圖容器");
 assert.ok(html.includes('daily-chart-bitcoin-gold'), "每日判讀應有比特幣與黃金圖容器");
 assert.ok(html.includes('比特幣 × 黃金'), "每日判讀應標示比特幣與黃金圖表");
+assert.ok(html.includes('daily-chart-cftc-positioning'), "每日判讀應有 CFTC 持倉圖容器");
+assert.ok(html.includes('機構／槓桿基金持倉水位（CFTC）'), "CFTC 圖必須標示正確持倉口徑");
+assert.ok(html.includes('data-daily-cftc-market'), "CFTC 圖必須提供市場切換按鈕");
 assert.ok(html.includes('IG 指數殖利率、10Y 美債殖利率、HY 指數殖利率'), "信用結構圖必須標示殖利率三條線");
 assert.ok(html.includes('IG 利差（OAS）、BBB 利差（OAS）、HY 利差（OAS）'), "信用結構圖必須標示 OAS 三條線");
 assert.ok(html.includes('data-daily-chart-range'), "每日判讀的圖表必須提供時間範圍按鈕");

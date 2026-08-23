@@ -147,8 +147,9 @@
   .daily-chart-grid{display:grid;grid-template-columns:1fr;gap:14px}.daily-chart-card{min-width:0;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--panel);box-shadow:var(--shadow)}
   .daily-chart-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.daily-chart-controls{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}.daily-chart-controls .ntab{padding:3px 7px;font-size:10px}
   .daily-chart-title{font-size:15px;font-weight:780;color:var(--ink);margin:0 0 10px}.daily-chart{height:360px;width:100%}.daily-real-gold-chart{height:430px}
+  .daily-cftc-markets{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 8px}.daily-cftc-markets .ntab{padding:3px 7px;font-size:10px}.daily-cftc-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.daily-cftc-metric{border:1px solid var(--line);border-radius:8px;padding:7px;background:var(--panel2)}.daily-cftc-metric b{display:block;font-size:13px;color:var(--ink)}.daily-cftc-metric small{color:var(--muted);font-size:10px}
   @media(max-width:980px){.daily-chart{height:310px}.daily-real-gold-chart{height:365px}}
-  @media(max-width:680px){.macro-tabs{overflow-x:auto;padding-bottom:2px}.macro-tabs .ntab{white-space:nowrap}.daily-read-info,.daily-read-grid{grid-template-columns:1fr}.daily-read-title{font-size:18px}.daily-checklist-table{font-size:11px}.daily-chart-card{padding:9px}}
+  @media(max-width:680px){.macro-tabs{overflow-x:auto;padding-bottom:2px}.macro-tabs .ntab{white-space:nowrap}.daily-read-info,.daily-read-grid{grid-template-columns:1fr}.daily-read-title{font-size:18px}.daily-checklist-table{font-size:11px}.daily-chart-card{padding:9px}.daily-cftc-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .news-list{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden}
   .news-row{display:block;background:var(--panel);padding:10px 14px;text-decoration:none;color:inherit;transition:background .12s}
   .news-row:hover{background:#f3f6fb}
@@ -1865,7 +1866,8 @@ function _dailyChecklistTable(data){
   }).join('')).join('');
   return '<div class="daily-checklist-wrap"><table class="daily-checklist-table"><thead><tr><th>變數</th><th>現值・資料日</th><th>今日</th><th>1D</th><th>5D</th><th>20D</th><th>水平</th><th>判讀結論</th><th>註記</th><th>狀態</th><th>資料來源</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
-const DAILY_CHART_WINDOWS={rates:'1y',real_gold:'1y',bitcoin_gold:'1y',risk:'1y',credit:'1y',internals:'1y',japan:'1y'};
+const DAILY_CHART_WINDOWS={rates:'1y',real_gold:'1y',bitcoin_gold:'1y',cftc_positioning:'1y',risk:'1y',credit:'1y',internals:'1y',japan:'1y'};
+let DAILY_CFTC_MARKET='sp500';
 const DAILY_CHART_RANGE_DAYS={"1m":31,"3m":93,"6m":184,"1y":366,"3y":1096,"5y":1827,all:null};
 function _dailyRangeStart(block,win){
   const days=DAILY_CHART_RANGE_DAYS[win]; if(!days) return null;
@@ -1937,11 +1939,34 @@ function renderDailyBitcoinGoldChart(id,block,win='all'){
   },true);
   if(el._ro) window.removeEventListener('resize',el._ro); el._ro=()=>ch.resize(); window.addEventListener('resize',el._ro);
 }
+function _dailyCftcMarketControls(block){
+  const labels=(block&&block.market_labels)||{};
+  return '<div class="daily-cftc-markets">'+Object.entries(labels).map(([key,label])=>'<button class="ntab'+(DAILY_CFTC_MARKET===key?' on':'')+'" data-daily-cftc-market="'+esc(key)+'">'+esc(label)+'</button>').join('')+'</div>';
+}
+function _dailyCftcMetrics(block,market){
+  const item=((block&&block.markets)||{})[market]||{}, metrics=item.metrics||{};
+  const number=value=>value==null?'—':Number(value).toFixed(1)+'%';
+  const delta=value=>value==null?'—':(Number(value)>0?'+':'')+Number(value).toFixed(1)+'pp';
+  const values=Object.entries(metrics).map(([label,m])=>'<div class="daily-cftc-metric"><small>'+esc(label)+' 最新水位</small><b>'+number(m.last)+'</b><small>4W '+delta(m.change_4w)+' ・3Y '+(m.percentile_3y==null?'—':m.percentile_3y+'%')+'</small></div>').join('');
+  return values+'<div class="daily-cftc-metric"><small>資料截至（週二持倉）</small><b>'+esc(item.as_of||'—')+'</b><small>'+esc(item.reason||'通常於週五發布')+'</small></div>';
+}
+function renderDailyCftcPositioningChart(id,block,market,win='all'){
+  const el=$('#'+id); if(!el || !window.echarts || !block || !block.markets) return;
+  const item=block.markets[market]||{}, list=Object.entries(item.series||{}).filter(([,s])=>s&&s.dates&&s.values&&s.values.length);
+  if(!list.length){el.innerHTML='<div class="legend">'+esc(item.reason||'CFTC 資料待補')+'</div>';return;}
+  const old=echarts.getInstanceByDom(el); if(old) old.dispose();
+  const colors=['#2563eb','#d97706'], start=_dailyRangeStart(item,win);
+  const series=list.map(([name,s],index)=>({name,type:'line',smooth:true,showSymbol:false,connectNulls:false,lineStyle:{width:2},itemStyle:{color:colors[index]},data:s.dates.map((date,i)=>[new Date(date+'T00:00:00').getTime(),s.values[i]]).filter(point=>start==null||point[0]>=start)}));
+  const ch=echarts.init(el,null,{renderer:'canvas'});
+  ch.setOption({animation:false,color:colors,grid:{left:55,right:18,top:30,bottom:30},legend:{top:0,textStyle:{fontSize:10},itemWidth:14,itemHeight:7},tooltip:{trigger:'axis',valueFormatter:value=>value==null?'—':Number(value).toFixed(2)+'%'},xAxis:{type:'time',axisLabel:{fontSize:9}},yAxis:{type:'value',name:'Net OI %',nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:9,formatter:value=>Number(value).toFixed(0)+'%'},splitLine:{lineStyle:{opacity:.3}}},series},true);
+  if(el._ro) window.removeEventListener('resize',el._ro); el._ro=()=>ch.resize(); window.addEventListener('resize',el._ro);
+}
 function renderDailyCharts(data){
   if(!data || !data.charts) return;
   renderDailyChart('daily-chart-rates',data.charts.rates,false,DAILY_CHART_WINDOWS.rates);
   renderDailyRealGoldChart('daily-chart-real-gold',data.charts.real_gold,DAILY_CHART_WINDOWS.real_gold);
   renderDailyBitcoinGoldChart('daily-chart-bitcoin-gold',data.charts.bitcoin_gold,DAILY_CHART_WINDOWS.bitcoin_gold);
+  renderDailyCftcPositioningChart('daily-chart-cftc-positioning',data.charts.cftc_positioning,DAILY_CFTC_MARKET,DAILY_CHART_WINDOWS.cftc_positioning);
   renderDailyChart('daily-chart-risk',data.charts.risk,false,DAILY_CHART_WINDOWS.risk);
   renderDailyChart('daily-chart-credit',data.charts.credit,false,DAILY_CHART_WINDOWS.credit);
   renderDailyChart('daily-chart-internals',data.charts.internals,true,DAILY_CHART_WINDOWS.internals);
@@ -1978,6 +2003,7 @@ function renderDailyRead(vm){
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">利率結構</h3>'+_dailyChartControls('rates')+'</div><div id="daily-chart-rates" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">實際利率 × 黃金</h3>'+_dailyChartControls('real_gold')+'</div><div id="daily-chart-real-gold" class="daily-chart daily-real-gold-chart"></div><div class="legend">主圖：10Y TIPS 實際利率與黃金期貨（雙軸）。下圖：實際利率日變動與黃金日報酬的 20 日滾動相關；灰色虛線為 0、-0.35、-0.60 判讀門檻。</div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">比特幣 × 黃金</h3>'+_dailyChartControls('bitcoin_gold')+'</div><div id="daily-chart-bitcoin-gold" class="daily-chart daily-real-gold-chart"></div><div class="legend">主圖：比特幣與黃金期貨（雙軸）。下圖：兩者日報酬的 20 日滾動相關；灰色虛線為 0。</div></article>'+
+        '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">機構／槓桿基金持倉水位（CFTC）</h3>'+_dailyChartControls('cftc_positioning')+'</div>'+_dailyCftcMarketControls(vm.checklist&&vm.checklist.charts&&vm.checklist.charts.cftc_positioning)+'<div id="daily-chart-cftc-positioning" class="daily-chart"></div><div class="daily-cftc-metrics">'+_dailyCftcMetrics(vm.checklist&&vm.checklist.charts&&vm.checklist.charts.cftc_positioning,DAILY_CFTC_MARKET)+'</div><div class="legend">Net OI %＝（多單－空單）÷ 未平倉量。金融期貨的「槓桿基金」為對沖基金可觀測代理；持倉日為週二，通常於週五發布。</div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">波動與信用壓力</h3>'+_dailyChartControls('risk')+'</div><div id="daily-chart-risk" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">信用結構：IG 指數殖利率、10Y 美債殖利率、HY 指數殖利率<br>IG 利差（OAS）、BBB 利差（OAS）、HY 利差（OAS）</h3>'+_dailyChartControls('credit')+'</div><div id="daily-chart-credit" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">股票內部（起點＝100）</h3>'+_dailyChartControls('internals')+'</div><div id="daily-chart-internals" class="daily-chart"></div></article>'+
@@ -1992,6 +2018,10 @@ function renderDailyRead(vm){
     DAILY_CHART_WINDOWS[key]=range;
     box.querySelectorAll('[data-daily-chart-key="'+key+'"]').forEach(item=>item.classList.toggle('on',item===button));
     renderDailyCharts(vm.checklist);
+  });
+  if(box.querySelectorAll) box.querySelectorAll('[data-daily-cftc-market]').forEach(button=>button.onclick=()=>{
+    DAILY_CFTC_MARKET=button.dataset.dailyCftcMarket||'sp500';
+    renderDailyRead(vm);
   });
   if(vm.checklist && typeof window!=='undefined' && window.echarts) setTimeout(()=>renderDailyCharts(vm.checklist),0);
 }

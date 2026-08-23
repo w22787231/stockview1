@@ -234,6 +234,7 @@ jobs:
           if [ ! -s ../data/daily_checklist.json ]; then
             curl -fsS "https://stockview1.pages.dev/data/daily_checklist.json" -o ../data/daily_checklist.json && echo "[daily-checklist] 已沿用線上" || echo "[daily-checklist] 線上沿用也失敗"
           fi
+          python -c "import json; d=json.load(open('../data/daily_checklist.json',encoding='utf-8')); c=(d.get('charts') or {}).get('cftc_positioning') or {}; m=c.get('markets') or {}; assert set(('sp500','nasdaq','ust10','usd','vix','gold')) <= set(m), 'CFTC 持倉資料結構不完整'"
 
       - name: Export financial stress index (OFR FSI)
         if: ${{ github.event.inputs.web_only != 'true' }}

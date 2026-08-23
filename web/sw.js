@@ -4,7 +4,8 @@
 //  - 同源靜態(icon/manifest/json/css/js)：stale-while-revalidate(秒開、背景更新)
 //  - echarts CDN：cache-first(離線圖表可用)
 //  - /api/*：network-only(永遠抓即時報價,失敗才回快取)
-const VERSION = "sv-v1";
+// 版本變動時會淘汰舊的離線資產，避免已安裝 App 停留在舊版圖表。
+const VERSION = "sv-v2";
 const SHELL = "shell-" + VERSION;
 const STATIC = "static-" + VERSION;
 const SHELL_URLS = ["/", "/index.html", "/manifest.json",

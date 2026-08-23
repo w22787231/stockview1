@@ -37,6 +37,8 @@ gold_corr = D.real_gold_correlation(real_fixture, gold_fixture)
 assert len(gold_corr.dropna()) == 5, "20日黃金相關在25個交易日中應有5筆有效值"
 assert len(D.real_gold_correlation(real_fixture, gold_fixture, window=5).dropna()) == 20, "5日黃金相關在25個交易日中應有20筆有效值"
 assert len(D.real_gold_correlation(real_fixture, gold_fixture, window=10).dropna()) == 15, "10日黃金相關在25個交易日中應有15筆有效值"
+btc_corr = D.asset_return_correlation(real_fixture * 50000, gold_fixture, window=20)
+assert len(btc_corr.dropna()) == 5, "比特幣與黃金的20日報酬相關在25個交易日中應有5筆有效值"
 
 # VIX9D/VIX > 1 代表短期期限結構倒掛；即使 VIX9D 自身20日均值橫盤仍須示警。
 vix_dates = pd.date_range("2026-01-01", periods=21, freq="B")
@@ -102,6 +104,7 @@ fixture_prices = pd.DataFrame({
     "^VIX3M": [19.0] * 25,
     "^VIX9D": [20.0] * 25,
     "GC=F": [2000.0 + 2 * i + (i % 3) for i in range(25)],
+    "BTC-USD": [80000.0 + 300 * i + (i % 4) * 100 for i in range(25)],
     "JPY=X": [150.0 + 0.1 * i for i in range(25)],
     "SPY": [100.0 + i for i in range(25)],
     "RSP": [100.0 + 2 * i for i in range(25)],
@@ -130,5 +133,8 @@ assert all(series["values"] for series in built["charts"]["credit"]["series"].va
 assert len(built["charts"]["real_gold"]["series"]["5日相關"]["values"]) == 20, "5日相關應略過前5個無法計算的交易日"
 assert len(built["charts"]["real_gold"]["series"]["10日相關"]["values"]) == 15, "10日相關應略過前10個無法計算的交易日"
 assert len(built["charts"]["real_gold"]["series"]["20日相關"]["values"]) == 5, "20日相關應略過前20個無法計算的交易日"
+assert built["charts"]["bitcoin_gold"]["series"]["比特幣（BTC-USD）"]["values"], "build 必須輸出比特幣圖表序列"
+assert built["charts"]["bitcoin_gold"]["series"]["黃金期貨"]["values"], "build 必須輸出比特幣對照黃金序列"
+assert len(built["charts"]["bitcoin_gold"]["series"]["20日相關"]["values"]) == 5, "比特幣與黃金20日相關應略過前20個無法計算的交易日"
 
 print("✅ test_daily_checklist 通過：交易日差、相對強弱、bps 與比值口徑")

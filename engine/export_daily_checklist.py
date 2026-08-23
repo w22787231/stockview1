@@ -177,7 +177,7 @@ def vix9d_row(vix9d, vix):
     return dict(result, note="%s；VIX9D/VIX %.3f" % (result["note"], latest))
 
 
-def chart_series(series, keep=520):
+def chart_series(series, keep=1400):
     """前端圖表用的日期和值；來源缺失時仍回傳空序列。"""
     if series is None:
         return {"dates": [], "values": []}
@@ -194,6 +194,16 @@ def real_gold_correlation(real_yield, gold, window=20):
     if len(aligned) < window + 1:
         return pd.Series(dtype=float)
     return aligned["real_yield"].diff().rolling(window).corr(aligned["gold"].pct_change())
+
+
+def asset_return_correlation(left, right, window=20):
+    """Rolling correlation of two asset daily returns on shared trading dates."""
+    if left is None or right is None:
+        return pd.Series(dtype=float)
+    aligned = pd.concat([left.rename("left"), right.rename("right")], axis=1).dropna()
+    if len(aligned) < window + 1:
+        return pd.Series(dtype=float)
+    return aligned["left"].pct_change().rolling(window).corr(aligned["right"].pct_change())
 
 
 def relative_row(symbol, asset, benchmark):
@@ -224,11 +234,12 @@ def relative_row(symbol, asset, benchmark):
 def build():
     bei, hy_oas, ig_oas, ig_yield, bbb_oas, hy_yield, y2, y10, y30, tips, jgb10 = (fred_series(x) for x in (
         "T10YIE", "BAMLH0A0HYM2", "BAMLC0A0CM", "BAMLC0A0CMEY", "BAMLC0A4CBBB", "BAMLH0A0HYM2EY", "DGS2", "DGS10", "DGS30", "DFII10", "IRLTLT01JPM156N"))
-    prices = P.fetch_yf_close(["^MOVE", "^VIX", "^VIX3M", "^VIX9D", "GC=F", "JPY=X", "SPY", "RSP", "IWM", "KRE"], START)
+    prices = P.fetch_yf_close(["^MOVE", "^VIX", "^VIX3M", "^VIX9D", "GC=F", "BTC-USD", "JPY=X", "SPY", "RSP", "IWM", "KRE"], START)
     col = lambda name: P._col(prices, name)
     real_gold_corr5 = real_gold_correlation(tips, col("GC=F"), window=5)
     real_gold_corr10 = real_gold_correlation(tips, col("GC=F"), window=10)
     real_gold_corr20 = real_gold_correlation(tips, col("GC=F"), window=20)
+    bitcoin_gold_corr20 = asset_return_correlation(col("BTC-USD"), col("GC=F"), window=20)
     groups = [
         {"title": "利率／通膨", "rows": [
             row("y2", "2Y 名目利率", y2, "%", "FRED DGS2", change_unit="bps", kind="yield"),
@@ -252,6 +263,7 @@ def build():
                 "risk": {"title": "波動與信用壓力", "series": {"MOVE": chart_series(col("^MOVE")), "VIX": chart_series(col("^VIX")), "VIX9D": chart_series(col("^VIX9D")), "VIX9D/VIX": chart_series(ratio_series(col("^VIX9D"), col("^VIX"))), "HY OAS": chart_series(hy_oas)}},
                 "credit": {"title": "信用結構", "series": {"IG 指數殖利率": chart_series(ig_yield), "10Y 美債殖利率": chart_series(y10), "HY 指數殖利率": chart_series(hy_yield), "IG 利差（OAS）": chart_series(ig_oas), "BBB 利差（OAS）": chart_series(bbb_oas), "HY 利差（OAS）": chart_series(hy_oas)}},
                 "real_gold": {"title": "實際利率與黃金", "corr_windows": [5, 10, 20], "series": {"10Y 實質利率": chart_series(tips), "黃金期貨": chart_series(col("GC=F")), "5日相關": chart_series(real_gold_corr5), "10日相關": chart_series(real_gold_corr10), "20日相關": chart_series(real_gold_corr20)}},
+                "bitcoin_gold": {"title": "比特幣與黃金", "corr_windows": [20], "series": {"比特幣（BTC-USD）": chart_series(col("BTC-USD")), "黃金期貨": chart_series(col("GC=F")), "20日相關": chart_series(bitcoin_gold_corr20)}},
                 "internals": {"title": "股票內部相對強弱", "series": {"SPY": chart_series(spy), "RSP": chart_series(col("RSP")), "IWM": chart_series(col("IWM")), "KRE": chart_series(col("KRE"))}},
                 "japan": {"title": "日本匯率與長債", "dual_axis": True, "series": {"USD/JPY": chart_series(col("JPY=X")), "日本 10Y 殖利率（月頻）": chart_series(jgb10)}},
             }}

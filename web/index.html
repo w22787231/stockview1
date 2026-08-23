@@ -1865,7 +1865,7 @@ function _dailyChecklistTable(data){
   }).join('')).join('');
   return '<div class="daily-checklist-wrap"><table class="daily-checklist-table"><thead><tr><th>變數</th><th>現值・資料日</th><th>今日</th><th>1D</th><th>5D</th><th>20D</th><th>水平</th><th>判讀結論</th><th>註記</th><th>狀態</th><th>資料來源</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
-const DAILY_CHART_WINDOWS={rates:'1y',real_gold:'1y',risk:'1y',credit:'1y',internals:'1y',japan:'1y'};
+const DAILY_CHART_WINDOWS={rates:'1y',real_gold:'1y',bitcoin_gold:'1y',risk:'1y',credit:'1y',internals:'1y',japan:'1y'};
 const DAILY_CHART_RANGE_DAYS={"1m":31,"3m":93,"6m":184,"1y":366,"3y":1096,"5y":1827,all:null};
 function _dailyRangeStart(block,win){
   const days=DAILY_CHART_RANGE_DAYS[win]; if(!days) return null;
@@ -1915,10 +1915,33 @@ function renderDailyRealGoldChart(id,block,win='all'){
   },true);
   if(el._ro) window.removeEventListener('resize',el._ro); el._ro=()=>ch.resize(); window.addEventListener('resize',el._ro);
 }
+function renderDailyBitcoinGoldChart(id,block,win='all'){
+  const el=$('#'+id); if(!el || !window.echarts || !block || !block.series) return;
+  const bitcoin=block.series['比特幣（BTC-USD）']||{}, gold=block.series['黃金期貨']||{}, corr=block.series['20日相關']||{};
+  if(!(bitcoin.dates||[]).length || !(gold.dates||[]).length){el.innerHTML='<div class="legend">資料待補</div>';return;}
+  const old=echarts.getInstanceByDom(el); if(old) old.dispose();
+  const ch=echarts.init(el,null,{renderer:'canvas'}), toMs=d=>new Date(d+'T00:00:00').getTime(), start=_dailyRangeStart(block,win);
+  const points=series=>(series.dates||[]).map((d,i)=>[toMs(d),series.values[i]]).filter(point=>start==null||point[0]>=start);
+  const xfmt=v=>{const d=new Date(v),m=d.getMonth();return m===0?d.getFullYear()+'年':(m+1)+'月';};
+  ch.setOption({
+    animation:false,grid:[{left:62,right:65,top:34,height:220},{left:62,right:65,top:305,height:82}],
+    legend:{top:0,textStyle:{fontSize:11},data:['比特幣（BTC-USD）','黃金期貨','20日相關']},
+    tooltip:{trigger:'axis',axisPointer:{link:[{xAxisIndex:'all'}]}},axisPointer:{link:[{xAxisIndex:'all'}]},
+    xAxis:[{type:'time',gridIndex:0,axisLabel:{show:false},axisTick:{show:false}},{type:'time',gridIndex:1,axisLabel:{fontSize:9,hideOverlap:true,formatter:xfmt}}],
+    yAxis:[{type:'value',gridIndex:0,name:'BTC USD',nameTextStyle:{fontSize:10},scale:true,axisLabel:{fontSize:9}},{type:'value',gridIndex:0,name:'黃金 USD/oz',nameTextStyle:{fontSize:10},scale:true,position:'right',axisLabel:{fontSize:9},splitLine:{show:false}},{type:'value',gridIndex:1,name:'相關係數',min:-1,max:1,interval:1,axisLabel:{fontSize:9},splitLine:{lineStyle:{opacity:.25}}}],
+    series:[
+      {name:'比特幣（BTC-USD）',type:'line',smooth:true,showSymbol:false,xAxisIndex:0,yAxisIndex:0,data:points(bitcoin),lineStyle:{color:'#f7931a',width:2},itemStyle:{color:'#f7931a'},areaStyle:{color:'#f7931a',opacity:.05}},
+      {name:'黃金期貨',type:'line',smooth:true,showSymbol:false,xAxisIndex:0,yAxisIndex:1,data:points(gold),lineStyle:{color:'#c98a00',width:1.8},itemStyle:{color:'#c98a00'}},
+      {name:'20日相關',type:'line',smooth:true,showSymbol:false,connectNulls:false,xAxisIndex:1,yAxisIndex:2,data:points(corr),lineStyle:{color:'#2563eb',width:2.2},itemStyle:{color:'#2563eb'},areaStyle:{color:'#2563eb',opacity:.06},markLine:{symbol:'none',silent:true,lineStyle:{color:'#8b949e',type:'dashed',opacity:.6},label:{show:true,fontSize:9,formatter:p=>Number(p.value).toFixed(2)},data:[{yAxis:0}]}}
+    ]
+  },true);
+  if(el._ro) window.removeEventListener('resize',el._ro); el._ro=()=>ch.resize(); window.addEventListener('resize',el._ro);
+}
 function renderDailyCharts(data){
   if(!data || !data.charts) return;
   renderDailyChart('daily-chart-rates',data.charts.rates,false,DAILY_CHART_WINDOWS.rates);
   renderDailyRealGoldChart('daily-chart-real-gold',data.charts.real_gold,DAILY_CHART_WINDOWS.real_gold);
+  renderDailyBitcoinGoldChart('daily-chart-bitcoin-gold',data.charts.bitcoin_gold,DAILY_CHART_WINDOWS.bitcoin_gold);
   renderDailyChart('daily-chart-risk',data.charts.risk,false,DAILY_CHART_WINDOWS.risk);
   renderDailyChart('daily-chart-credit',data.charts.credit,false,DAILY_CHART_WINDOWS.credit);
   renderDailyChart('daily-chart-internals',data.charts.internals,true,DAILY_CHART_WINDOWS.internals);
@@ -1954,6 +1977,7 @@ function renderDailyRead(vm){
       '<section><div class="sec-head"><h2>結構圖表</h2><span class="tag">可切換時間範圍</span></div><div class="daily-chart-grid">'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">利率結構</h3>'+_dailyChartControls('rates')+'</div><div id="daily-chart-rates" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">實際利率 × 黃金</h3>'+_dailyChartControls('real_gold')+'</div><div id="daily-chart-real-gold" class="daily-chart daily-real-gold-chart"></div><div class="legend">主圖：10Y TIPS 實際利率與黃金期貨（雙軸）。下圖：實際利率日變動與黃金日報酬的 20 日滾動相關；灰色虛線為 0、-0.35、-0.60 判讀門檻。</div></article>'+
+        '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">比特幣 × 黃金</h3>'+_dailyChartControls('bitcoin_gold')+'</div><div id="daily-chart-bitcoin-gold" class="daily-chart daily-real-gold-chart"></div><div class="legend">主圖：比特幣與黃金期貨（雙軸）。下圖：兩者日報酬的 20 日滾動相關；灰色虛線為 0。</div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">波動與信用壓力</h3>'+_dailyChartControls('risk')+'</div><div id="daily-chart-risk" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">信用結構：IG 指數殖利率、10Y 美債殖利率、HY 指數殖利率<br>IG 利差（OAS）、BBB 利差（OAS）、HY 利差（OAS）</h3>'+_dailyChartControls('credit')+'</div><div id="daily-chart-credit" class="daily-chart"></div></article>'+
         '<article class="daily-chart-card"><div class="daily-chart-head"><h3 class="daily-chart-title">股票內部（起點＝100）</h3>'+_dailyChartControls('internals')+'</div><div id="daily-chart-internals" class="daily-chart"></div></article>'+

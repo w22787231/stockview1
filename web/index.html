@@ -4588,13 +4588,13 @@ function renderStock(d){
         (d.overall==="強"?"基本面強健":(d.overall==="中"?"基本面中性，需配合題材或技術面":"基本面偏弱，留意"))+'</div>'+
       '<div class="notes-list">'+(d.notes||[]).map(n=>'<div class="note-row '+esc(n.level)+'">'+
         '<span class="ntag">'+esc(n.tag)+'</span><span>'+esc(n.text)+'</span></div>').join("")+'</div></section>' :
-    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+ 
+    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+
       '<div class="legend">⚠️ 此檔基本面指標(PE/ROE/財報)雲端暫時抓不到，僅顯示技術線圖與財務三表。下次更新可能補上。</div></section>';
   const liquidity = window.StockJudgments && window.StockJudgments.liquidityJudgment(d.candles);
   const valuation = window.StockJudgments && window.StockJudgments.valuationJudgment(m);
   const compactMoney = value => value==null ? '—' : (value>=1e9 ? '$'+(value/1e9).toFixed(2)+'B' : value>=1e6 ? '$'+(value/1e6).toFixed(2)+'M' : '$'+Math.round(value).toLocaleString());
   const judgmentCard = (title, item, metric) => !item ? '' :
-    '<article class="judgment-card '+esc(item.tone)+'"><div class="judgment-head"><span class="judgment-title">'+esc(title)+'</span><span class="judgment-label">'+esc(item.label)+'</span></div>'+ 
+    '<article class="judgment-card '+esc(item.tone)+'"><div class="judgment-head"><span class="judgment-title">'+esc(title)+'</span><span class="judgment-label">'+esc(item.label)+'</span></div>'+
       (metric?'<div class="judgment-metrics">'+metric+'</div>':'')+
       '<div class="judgment-detail">'+(item.reasons||[]).map(esc).join(' ').trim()+'</div></article>';
   const judgmentBlock = (liquidity || valuation) ?

@@ -394,6 +394,13 @@
     font-weight:700;margin:2px 0 6px}
   .rating.r強{background:#e6f6ec;color:var(--green)} .rating.r中{background:#fff5db;color:var(--amber)}
   .rating.r弱{background:#fdf0f3;color:var(--red)}
+  .judgment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 16px}
+  .judgment-card{border:1px solid var(--line);border-left:4px solid var(--ink3);border-radius:11px;padding:12px 14px;background:var(--panel)}
+  .judgment-card.good{border-left-color:var(--green)} .judgment-card.risk{border-left-color:var(--red)}
+  .judgment-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.judgment-title{font-size:13px;font-weight:780}.judgment-label{font-size:13px;font-weight:800}
+  .judgment-card.good .judgment-label{color:var(--green)} .judgment-card.risk .judgment-label{color:var(--red)}
+  .judgment-detail{font-size:11.5px;line-height:1.6;color:var(--ink2);margin-top:7px}.judgment-metrics{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-top:7px}
+  @media(max-width:680px){.judgment-grid{grid-template-columns:1fr}}
   .notes-list{display:flex;flex-direction:column;gap:7px}
   .note-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-left-width:4px;
     border-radius:8px;padding:8px 12px;background:var(--panel);font-size:12.5px}
@@ -668,6 +675,7 @@
 #stockReportsView .loading-screen{color:var(--ink2)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="stock-judgments.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -4580,8 +4588,20 @@ function renderStock(d){
         (d.overall==="強"?"基本面強健":(d.overall==="中"?"基本面中性，需配合題材或技術面":"基本面偏弱，留意"))+'</div>'+
       '<div class="notes-list">'+(d.notes||[]).map(n=>'<div class="note-row '+esc(n.level)+'">'+
         '<span class="ntag">'+esc(n.tag)+'</span><span>'+esc(n.text)+'</span></div>').join("")+'</div></section>' :
-    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+
+    '<section><div class="sec-head"><h2>基本面綜合評語</h2></div>'+ 
       '<div class="legend">⚠️ 此檔基本面指標(PE/ROE/財報)雲端暫時抓不到，僅顯示技術線圖與財務三表。下次更新可能補上。</div></section>';
+  const liquidity = window.StockJudgments && window.StockJudgments.liquidityJudgment(d.candles);
+  const valuation = window.StockJudgments && window.StockJudgments.valuationJudgment(m);
+  const compactMoney = value => value==null ? '—' : (value>=1e9 ? '$'+(value/1e9).toFixed(2)+'B' : value>=1e6 ? '$'+(value/1e6).toFixed(2)+'M' : '$'+Math.round(value).toLocaleString());
+  const judgmentCard = (title, item, metric) => !item ? '' :
+    '<article class="judgment-card '+esc(item.tone)+'"><div class="judgment-head"><span class="judgment-title">'+esc(title)+'</span><span class="judgment-label">'+esc(item.label)+'</span></div>'+ 
+      (metric?'<div class="judgment-metrics">'+metric+'</div>':'')+
+      '<div class="judgment-detail">'+(item.reasons||[]).map(esc).join(' ').trim()+'</div></article>';
+  const judgmentBlock = (liquidity || valuation) ?
+    '<section><div class="sec-head"><h2>交易與估值判斷</h2><span class="tag">規則式判讀 · 非買賣建議</span></div><div class="judgment-grid">'+
+      judgmentCard('流動性判斷', liquidity, liquidity&&liquidity.avgDollarVolume!=null ? '20日平均成交額 '+compactMoney(liquidity.avgDollarVolume)+(liquidity.volumeRatio!=null?' · 對前期 '+(liquidity.volumeRatio*100).toFixed(0)+'%':'') : '')+
+      judgmentCard('估值判斷', valuation, valuation&&valuation.inputs!=null ? '可用因子 '+valuation.inputs+' 項 · 評分 '+(valuation.score>0?'+':'')+valuation.score : '')+
+    '</div><div class="legend">流動性以近 20 日成交額與量能變化估算；估值整合 PE、前瞻 PE、PEG、營收成長與 ROE。跨市場與不同幣別不宜只比較單一門檻，請搭配產業、歷史區間與財報驗證。</div></section>' : '';
   $("#content").innerHTML =
     '<div class="backbtn" id="backBtn">← 返回</div>'+
     '<div class="stk-head"><span class="ssym">'+esc(d.sym)+'</span>'+
@@ -4590,6 +4610,7 @@ function renderStock(d){
     '<div class="stk-price '+chgc+'">'+(m.price!=null?fmtNum(m.price,2):fmtNum(d.candles[d.candles.length-1].c,2))+
       (chg!=null?' <span style="font-size:16px">'+sgn(chg,2)+'%</span>':'')+'</div>'+
     metricsBlock+
+    judgmentBlock+
     (function(){
       const sn=(d.ma&&d.ma.short_n)||10, ln=(d.ma&&d.ma.long_n)||50;
       return '<section><div class="sec-head"><h2>技術線圖</h2><span class="tag">日K + 均線交叉指標 · 籌碼分布 · 近5年</span></div>'+

@@ -6822,8 +6822,16 @@ function renderPI(d){
   const allDates = ser.dates   || [];
   const allSp500 = ser.sp500   || [];
   const allPiSer = (ser.pi_by_window||{})[win] || [];
-  const WIN_N = {"1m":21,"3m":63,"6m":126,"1y":252,"3y":756,"5y":1260};
-  const n = Math.min(WIN_N[win] || allDates.length, allDates.length, allSp500.length, allPiSer.length);
+  // PI 為週資料:依日期截取(末日往回 N 個月),不用日頻點數
+  const WIN_M = {"1m":1,"3m":3,"6m":6,"1y":12,"3y":36,"5y":60};
+  let nWin = allDates.length;
+  if(WIN_M[win] && allDates.length){
+    const cut = new Date(allDates[allDates.length-1]+"T00:00:00");
+    cut.setMonth(cut.getMonth()-WIN_M[win]);
+    const cutS = cut.getFullYear()+"-"+String(cut.getMonth()+1).padStart(2,"0")+"-"+String(cut.getDate()).padStart(2,"0");
+    nWin = allDates.filter(x=>x>=cutS).length;
+  }
+  const n = Math.min(nWin, allDates.length, allSp500.length, allPiSer.length);
   const dates  = allDates.slice(-n);
   const sp500  = allSp500.slice(-n);
   const piSer  = allPiSer.slice(-n);

@@ -132,6 +132,7 @@ def build_fsi_json(records, sp_map, today, keep=KEEP):
     """純計算:OFR records + S&P500 map → fsi.json dict(不連網、不寫檔,供測試)。"""
     dates = [r["date"] for r in records]
     fsi = [r["fsi"] for r in records]
+    ma8 = moving_avg(fsi, 8)
     ma20 = moving_avg(fsi, 20)
     ma50 = moving_avg(fsi, 50)
     ma60 = moving_avg(fsi, 60)
@@ -149,6 +150,7 @@ def build_fsi_json(records, sp_map, today, keep=KEEP):
         "default_window": "5y",
         "windows": WINDOWS,
         "current": last["fsi"],
+        "ma8_last": ma8[-1],
         "ma20_last": ma20[-1],
         "ma50_last": ma50[-1],
         "ma60_last": ma60[-1],
@@ -156,6 +158,7 @@ def build_fsi_json(records, sp_map, today, keep=KEEP):
         "series": {
             "dates": tail(dates),
             "fsi": tail(fsi),
+            "ma8": tail(ma8),
             "ma20": tail(ma20),
             "ma50": tail(ma50),
             "ma60": tail(ma60),

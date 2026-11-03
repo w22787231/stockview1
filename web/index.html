@@ -6501,13 +6501,13 @@ function drawCapLines(id,dates,series,unit){
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
 // ── 流動性壓力指數(PI) ── 雙軸折線圖 + 窗切換 + 六因子橫條 ──
-// ── 金融壓力指數(OFR FSI):FSI + 20MA + 50MA + S&P500 四線疊圖 + 窗 + 5類/3地區拆解 ──
+// ── 金融壓力指數(OFR FSI):FSI + 8MA + 20MA + 50MA + S&P500 四線疊圖 + 窗 + 5類/3地區拆解 ──
 let FSI_DATA = null;
 let FSI_WIN  = "5y";
 let FSI_INV  = false;   // 反轉視角:顯示 −FSI(與股市同向)
 const FSI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年","10y":"10年","max":"全部"};
 
-function drawFsiChart(id, dates, fsi, ma20, ma50, ma60, sp500, inv){
+function drawFsiChart(id, dates, fsi, ma8, ma20, ma50, ma60, sp500, inv){
   const el = $("#"+id);
   if(!el || !window.echarts) return;
   const _old = echarts.getInstanceByDom(el); if(_old) _old.dispose();
@@ -6520,7 +6520,7 @@ function drawFsiChart(id, dates, fsi, ma20, ma50, ma60, sp500, inv){
   ch.setOption({
     grid:{left:56, right:56, top:30, bottom:30},
     legend:{top:0, textStyle:{fontSize:10}, itemWidth:16, itemHeight:8,
-      data:[fsiName,"FSI 20MA","FSI 50MA","FSI 60MA","S&P 500"]},
+      data:[fsiName,"FSI 8MA","FSI 20MA","FSI 50MA","FSI 60MA","S&P 500"]},
     tooltip:{trigger:"axis"},
     xAxis:{type:"time", axisLabel:{fontSize:9, hideOverlap:true,
       formatter:(val)=>{const dt=new Date(val);const m=dt.getMonth();return m===0?dt.getFullYear()+"年":(m+1)+"月";}}},
@@ -6539,6 +6539,8 @@ function drawFsiChart(id, dates, fsi, ma20, ma50, ma60, sp500, inv){
          {yAxis:sgn*-1, lineStyle:{color:"#e11d48",type:[8,6],width:1.4,opacity:.85},
           label:{formatter:(inv?"+1":"−1"),position:"insideEndTop",color:"#e11d48",fontSize:10}}
        ]}},
+      {name:"FSI 8MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma8),
+       lineStyle:{color:"#ec4899", width:1.2, type:"dotted"}, itemStyle:{color:"#ec4899"}},
       {name:"FSI 20MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma20),
        lineStyle:{color:"#f59e0b", width:1.4}, itemStyle:{color:"#f59e0b"}},
       {name:"FSI 50MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma50),
@@ -6552,6 +6554,17 @@ function drawFsiChart(id, dates, fsi, ma20, ma50, ma60, sp500, inv){
   if(el._ro) window.removeEventListener("resize", el._ro);
   el._ro = ()=>ch.resize();
   window.addEventListener("resize", el._ro);
+}
+
+// 8MA:優先用 fsi.json 的 series.ma8;舊檔沒有時由 series.fsi 前端補算(前 7 點為 null)
+function fsiMa8(ser){
+  if(ser.ma8) return ser.ma8;
+  const f = ser.fsi || [];
+  return f.map((_,i)=>{
+    if(i<7) return null;
+    const seg = f.slice(i-7, i+1);
+    return seg.some(x=>x==null) ? null : Math.round(seg.reduce((a,b)=>a+b,0)/8*1e4)/1e4;
+  });
 }
 
 // 拆解橫條(中心 0,正=壓力紅、負=低於常態綠);items=[{key,val}],ref=共用刻度
@@ -6579,6 +6592,7 @@ function renderFsi(d){
   const win = FSI_WIN, inv = FSI_INV, sgn = inv ? -1 : 1;
   const cur = d.current;
   const ma20 = d.ma20_last, ma50 = d.ma50_last, ma60 = d.ma60_last;
+  const ma8s = fsiMa8(d.series||{}), ma8 = d.ma8_last!=null ? d.ma8_last : ma8s[ma8s.length-1];
   // 顯示值:反轉時取負(數值卡與線一致);顏色仍依原始壓力(紅=壓力、綠=平靜)
   const dv = x => x==null ? "—" : ((sgn*x)>0?"+":"")+(sgn*x).toFixed(3);
   const fsiColor = (cur!=null && cur>0) ? "#e11d48" : "#16a34a";
@@ -6615,6 +6629,8 @@ function renderFsi(d){
       '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
         '<div style="'+card+'"><div class="cap-lab">'+curLab+'</div>'+
           '<div class="cap-big" style="color:'+fsiColor+'">'+esc(dv(cur))+'</div></div>'+
+        '<div style="'+card+'"><div class="cap-lab">8 日均線</div>'+
+          '<div class="cap-big" style="color:#ec4899">'+dv(ma8)+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">20 日均線</div>'+
           '<div class="cap-big">'+dv(ma20)+'</div></div>'+
         '<div style="'+card+'"><div class="cap-lab">50 日均線</div>'+
@@ -6645,7 +6661,7 @@ function renderFsi(d){
   const sl = a => (a||[]).slice(-n);
   const dates = sl(allDates);
   if(dates.length>=2){
-    drawFsiChart("fsiChart", dates, sl(ser.fsi), sl(ser.ma20), sl(ser.ma50), sl(ser.ma60), sl(ser.sp500), inv);
+    drawFsiChart("fsiChart", dates, sl(ser.fsi), sl(ma8s), sl(ser.ma20), sl(ser.ma50), sl(ser.ma60), sl(ser.sp500), inv);
   } else {
     const c=$("#fsiChart"); if(c) c.innerHTML='<div class="legend">資料點不足,無法繪圖。</div>';
   }

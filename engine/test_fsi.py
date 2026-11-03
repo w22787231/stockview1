@@ -75,6 +75,8 @@ def test_build_fsi_json_shape():
     assert s["ma60"][0] is None             # 視窗開頭(整體第20點)不足 60 → None
     assert s["ma60"][-1] is not None        # 末點(整體第60點)有值
     assert s["ma20"][-1] is not None   # 末點 MA 有值
+    assert len(s["ma8"]) == 40 and s["ma8"][-1] == j["ma8_last"]   # 8MA 序列對齊
+    assert j["ma8_last"] == round(sum(r["fsi"] for r in recs[-8:]) / 8, 4)
     cats = {c["key"]: c["val"] for c in j["breakdown"]["categories"]}
     assert cats["信用"] == -1.0 and "波動" in cats
     regs = {r["key"]: r["val"] for r in j["breakdown"]["regions"]}

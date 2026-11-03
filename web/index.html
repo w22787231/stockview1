@@ -6500,7 +6500,7 @@ function drawCapLines(id,dates,series,unit){
       areaStyle:single?{color:s[2],opacity:.08}:undefined}))},true);
   if(!el._ro){ el._ro=()=>ch.resize(); window.addEventListener("resize",el._ro); }
 }
-// ── 流動性壓力指數(PI) ── PI + 8MA + S&P500 雙軸折線圖 + 窗切換 + 六因子橫條 ──
+// ── 流動性壓力指數(PI) ── PI + 8MA + 21MA + S&P500 雙軸折線圖 + 窗切換 + 六因子橫條 ──
 // ── 金融壓力指數(OFR FSI):FSI + 8MA + 20MA + 50MA + S&P500 四線疊圖 + 窗 + 5類/3地區拆解 ──
 let FSI_DATA = null;
 let FSI_WIN  = "5y";
@@ -6540,7 +6540,7 @@ function drawFsiChart(id, dates, fsi, ma8, ma20, ma50, ma60, sp500, inv){
           label:{formatter:(inv?"+1":"−1"),position:"insideEndTop",color:"#e11d48",fontSize:10}}
        ]}},
       {name:"FSI 8MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma8),
-       lineStyle:{color:"#ec4899", width:1.2, type:"dotted"}, itemStyle:{color:"#ec4899"}},
+       lineStyle:{color:"#ec4899", width:1.2}, itemStyle:{color:"#ec4899"}},
       {name:"FSI 20MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma20),
        lineStyle:{color:"#f59e0b", width:1.4}, itemStyle:{color:"#f59e0b"}},
       {name:"FSI 50MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0, data:L(ma50),
@@ -6700,7 +6700,7 @@ let PI_WIN  = "5y";
 let PI_INV  = false;   // 反轉視角:顯示 −PI(與股市同向)
 const PI_WIN_LABEL = {"1m":"1月","3m":"3月","6m":"6月","1y":"1年","3y":"3年","5y":"5年"};
 
-function drawPiChart(id, dates, piArr, ma8Arr, sp500Arr, inv){
+function drawPiChart(id, dates, piArr, ma8Arr, ma21Arr, sp500Arr, inv){
   const el = $("#"+id);
   if(!el || !window.echarts) return;
   // dispose 舊實例後重建，避免 innerHTML 重建後 stale 重用
@@ -6729,7 +6729,10 @@ function drawPiChart(id, dates, piArr, ma8Arr, sp500Arr, inv){
        markLine:{symbol:"none",silent:true,lineStyle:{color:"#8b949e",type:"dashed",opacity:.6},data:[{yAxis:0}]}},
       {name:"PI 8MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0,
        data:dates.map((d,i)=>[toMs(d), ma8Arr[i]==null?null:sgn*ma8Arr[i]]),
-       lineStyle:{color:"#ec4899", width:1.2, type:"dotted"}, itemStyle:{color:"#ec4899"}},
+       lineStyle:{color:"#ec4899", width:1.2}, itemStyle:{color:"#ec4899"}},
+      {name:"PI 21MA", type:"line", smooth:true, showSymbol:false, yAxisIndex:0,
+       data:dates.map((d,i)=>[toMs(d), ma21Arr[i]==null?null:sgn*ma21Arr[i]]),
+       lineStyle:{color:"#9333ea", width:1.4}, itemStyle:{color:"#9333ea"}},
       {name:"S&P 500", type:"line", smooth:true, showSymbol:false, yAxisIndex:1,
        data:dates.map((d,i)=>[toMs(d), sp500Arr[i]]),
        lineStyle:{color:"#2563eb", width:1.5, type:"dashed"}, itemStyle:{color:"#2563eb"}}
@@ -6750,10 +6753,11 @@ function renderPI(d){
   const pct = cur.pctile != null ? cur.pctile.toFixed(1) : "—";
   const comps = cur.components || {};
   const meta  = d.factors_meta || [];
-  // 8MA(PI 為週資料 → 8 週):用當前窗的完整 PI 序列計算,再隨圖截取;卡片取末值
-  const piMa8 = sma(((d.series||{}).pi_by_window||{})[win], 8);
-  const ma8Raw = piMa8.length ? piMa8[piMa8.length-1] : null;
-  const ma8 = ma8Raw != null ? (sgn*ma8Raw).toFixed(2) : "—";
+  // 8MA/21MA(PI 為週資料 → 8 週/21 週):用當前窗的完整 PI 序列計算,再隨圖截取;卡片取末值
+  const piFull = ((d.series||{}).pi_by_window||{})[win];
+  const piMa8 = sma(piFull, 8), piMa21 = sma(piFull, 21);
+  const lastFmt = a => { const v = a.length ? a[a.length-1] : null; return v != null ? (sgn*v).toFixed(2) : "—"; };
+  const ma8 = lastFmt(piMa8), ma21 = lastFmt(piMa21);
 
   // 窗切換按鈕
   const wins = d.windows || ["1m","3m","6m","1y","3y","5y"];
@@ -6805,6 +6809,10 @@ function renderPI(d){
           '<div class="cap-big" style="color:#ec4899">'+esc(ma8)+'</div>'+
         '</div>'+
         '<div style="'+piCardStyle+'">'+
+          '<div class="cap-lab">21 週均線</div>'+
+          '<div class="cap-big" style="color:#9333ea">'+esc(ma21)+'</div>'+
+        '</div>'+
+        '<div style="'+piCardStyle+'">'+
           '<div class="cap-lab">歷史分位('+esc(PI_WIN_LABEL[win]||win)+')</div>'+
           '<div class="cap-big">'+esc(pct)+'%</div>'+
         '</div>'+
@@ -6836,7 +6844,7 @@ function renderPI(d){
   const sp500  = allSp500.slice(-n);
   const piSer  = allPiSer.slice(-n);
   if(dates.length>=2 && piSer.length>=2){
-    drawPiChart("piChart", dates, piSer, piMa8.slice(-n), sp500, inv);
+    drawPiChart("piChart", dates, piSer, piMa8.slice(-n), piMa21.slice(-n), sp500, inv);
   } else {
     const c=$("#piChart"); if(c) c.innerHTML='<div class="legend">資料點不足，無法繪圖。</div>';
   }
